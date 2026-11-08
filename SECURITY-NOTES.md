@@ -106,7 +106,7 @@ explicit `ValueError`.
 
 ---
 
-## Not fixed here (tracked in `Radix-Workspace-Review.md`)
+## Not fixed here (tracked in `archive/candidate-a/Radix-Workspace-Review.md`)
 
 - Quadratic block validation / lack of an incremental persistent tree (§3.I1).
 - No seed/mnemonic wallet recovery (§3.I3).

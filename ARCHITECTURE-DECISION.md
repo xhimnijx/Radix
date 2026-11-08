@@ -1,7 +1,7 @@
 # Architecture decision: how to reach a Monero-class, post-quantum, device-runnable coin
 
 **Status:** decision record (ADR-001). **Date:** 2026-11-08.
-**Supersedes:** the implicit assumption in `PLAN.md` M3 that Candidate A's
+**Supersedes:** the implicit assumption in `archive/candidate-a/PLAN.md` M3 that Candidate A's
 monolithic STARK is the route to the goal.
 
 ---
@@ -22,7 +22,7 @@ architecture.
 
 ## 2. The measured facts that constrain the choice
 
-From `MEASUREMENTS.md` (blowup 2, the pinned *test* FRI configuration):
+From `archive/candidate-a/MEASUREMENTS.md` (blowup 2, the pinned *test* FRI configuration):
 
 | Profile | Peak | Time |
 |---|---:|---:|
@@ -31,7 +31,7 @@ From `MEASUREMENTS.md` (blowup 2, the pinned *test* FRI configuration):
 | Predicted full relation (`RDXL64P1`), 4.0x / 9.5x | 15.3 / 36.3 GiB | not run |
 
 Model predictions for the two optimisations, **corrected 2026-11-08** after the Rust
-suite finally ran (`LEAN-RELATION.md` Part B): the real trace width is 14,173, not
+suite finally ran (`archive/candidate-a/LEAN-RELATION.md` Part B): the real trace width is 14,173, not
 14,477/15,629, and the path witness is 1,024 bits, not 8,192. Packing the sibling
 saves 480 columns, not ~7,800. The corrected production-blowup predictions are:
 
@@ -67,7 +67,7 @@ lattice polynomial commitment scheme reporting 58-68 KB proofs, 22-109x faster
 verification than Greyhound at matched security, and prover memory that grows
 sublinearly in the committed polynomial. If a Candidate-A-style global-tree
 relation were proved with such a PCS instead of FRI, the two blockers measured in
-`MEASUREMENTS.md` (a 3.5 GiB LDE floor and a 4.9 GiB path-only peak) would no
+`archive/candidate-a/MEASUREMENTS.md` (a 3.5 GiB LDE floor and a 4.9 GiB path-only peak) would no
 longer apply, because the FRI LDE is the dominant term. This does not make it
 easy: Akita commits polynomials; a transaction proof still needs a PIOP and an
 integration (the paper describes a Jolt zkVM integration). It is worth pricing
@@ -108,7 +108,7 @@ the gate now refuses a profile that does not declare ZK, transparency, PQ
 assumptions, and a <= 1 GiB prover budget (`radix_core/launch.py`).
 
 **D-ADR-6. Candidate C has been priced and is archived as the primary fallback.**
-`AKITA-ASSESSMENT.md` evaluated the Akita PCS (58-68 KB PCS proofs, sublinear prover
+`archive/candidate-c/AKITA-ASSESSMENT.md` evaluated the Akita PCS (58-68 KB PCS proofs, sublinear prover
 memory) as a Jolt zkVM backend. It cannot be dropped into Candidate A - Plonky3's
 univariate FRI PCS and Akita's multilinear PCS are different interfaces - so it is a
 new architecture, Candidate C. Measured Jolt numbers (p. 119) put peak RAM at about
@@ -130,7 +130,7 @@ happens, the honest claim is "Monero-equivalent anonymity *design target*", not
 
 ## 6. The experiment that decides B
 
-Before writing a protocol, run the same discipline that produced `LEAN-RELATION.md`:
+Before writing a protocol, run the same discipline that produced `archive/candidate-a/LEAN-RELATION.md`:
 
 | Step | Deliverable | Pass rule (pre-registered) |
 |---|---|---|

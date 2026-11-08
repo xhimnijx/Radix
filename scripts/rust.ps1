@@ -37,7 +37,7 @@ Install it with:
 
 $env:PATH = "$selfContained;$env:PATH"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-Push-Location (Join-Path $repoRoot 'proof_harness')
+Push-Location (Join-Path $repoRoot 'archive\candidate-a\proof_harness')
 try {
     # Cargo writes progress to stderr; under $ErrorActionPreference='Stop' Windows
     # PowerShell promotes that to a terminating NativeCommandError. Use the exit

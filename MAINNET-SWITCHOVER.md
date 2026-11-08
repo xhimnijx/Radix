@@ -39,9 +39,9 @@ therefore invalidates every previous attestation.
 ## 2. Preconditions (all must be true before touching the switch)
 
 1. Two independent cryptographic reviews covering **soundness, zero-knowledge,
-   QROM, consensus, and recipient privacy** — see `AUDIT-PACKET.md`.
+   QROM, consensus, and recipient privacy** — see `archive/candidate-a/AUDIT-PACKET.md`.
 2. A complete transaction relation that proves on the reference hardware class
-   (see `PLAN.md` M3). Today it does not.
+   (see `archive/candidate-a/PLAN.md` M3). Today it does not.
 3. A production FRI parameter set (the gate requires `log_blowup ≥ 3`,
    `num_queries ≥ 100`, `query PoW ≥ 16`). Today the provers use a 2-query test
    config and are refused by the gate.
@@ -144,7 +144,7 @@ If any check differs, the launch is aborted until resolved.
 - Publish the parameter block, parameter hash, reviewer keys, attestations, genesis
   hash, release checksums, and reproducible-build instructions.
 - Monitor proof rejection rate, block validation time, chain growth, and pool
-  concentration against the pre-declared thresholds (`PLAN.md` §3).
+  concentration against the pre-declared thresholds (`archive/candidate-a/PLAN.md` §3).
 - Keep the pre-launch commit tagged; keep the previous release runnable.
 
 ---

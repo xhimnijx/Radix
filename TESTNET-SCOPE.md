@@ -97,7 +97,7 @@ recipient-privacy construction, not in the node.
 2. A documented genesis and block 1 reproduced by all three.
 3. A wallet restored from a phrase recovers its notes.
 4. A 30-day soak with a published incident log.
-5. Every resource claim in `MEASUREMENTS.md` re-measured on testnet hardware.
+5. Every resource claim in `archive/candidate-a/MEASUREMENTS.md` re-measured on testnet hardware.
 6. The launch gate is still closed, and `MAINNET-SWITCHOVER.md` preconditions are
    listed as open.
 

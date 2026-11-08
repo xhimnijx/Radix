@@ -15,10 +15,16 @@ Shor's algorithm does not break it. It contains two tracks, and one is parked.
 
 Start here:
 
+- `PLAIN-ENGLISH.md` - what the project actually has, with no jargon and no optimism.
+- `ROADMAP.md` - the milestones ahead, each with a pass rule written before the work.
 - `STATUS.md` - the dated single source of truth: test counts, measured numbers, what is broken.
 - `ARCHITECTURE-DECISION.md` - why B, the measurements behind that, and where B actually stands (section 8).
 - `AUDIT-PACKET-LATTICE.md` - the review surface for the post-quantum layer: every deviation, every gap, and what to check first.
-- `PLAN.md` - the milestone ladder.
+
+The two abandoned tracks live in `archive/`: `candidate-a/` holds the original
+STARK design and the measurements that retired it, `candidate-c/` the zkVM
+fallback. They are kept because a project that hides its dead ends cannot be
+trusted about its live ones.
 
 ## Running the tests
 
@@ -72,13 +78,13 @@ python -m pytest -q
 The pre-existing research artifacts remain independent checks:
 
 ```powershell
-python .\Radix-Serialization-Test-Vectors.py
-python .\Radix-Gate-1-Reference-Model.py
+python .\archive/candidate-a/Radix-Serialization-Test-Vectors.py
+python .\archive/candidate-a/Radix-Gate-1-Reference-Model.py
 ```
 
 ## Explicit non-implementations / blockers
 
-- No recipient-key privacy construction has been selected: the current static-address ML-KEM design still permits candidate-view-key testing and does not establish key privacy/anonymity. ML-KEM IND-CCA is not a substitute for that analysis; see the [Gate 1 privacy blocker](<Radix-Gate-1-Feasibility-Log.md>). The available key parser/canonical-coefficient and keypair-consistency checks are implementation safeguards, not production validation certification. There is no deterministic seed/mnemonic recovery, address rotation/subaddress scheme, authenticated chain synchronization/checkpointed scanning, transaction builder, production transaction-proof verifier, production key custody, or host/runtime entropy attestation. The encrypted file format and SQLite nonce history are non-production reference helpers; OS ACLs, robust backups, rollback protection and independent implementation review remain outstanding. The Python/OpenSSL entropy interfaces are not independently attested, and Python cannot reliably zeroize secrets.
+- No recipient-key privacy construction has been selected: the current static-address ML-KEM design still permits candidate-view-key testing and does not establish key privacy/anonymity. ML-KEM IND-CCA is not a substitute for that analysis; see the [Gate 1 privacy blocker](<archive/candidate-a/Radix-Gate-1-Feasibility-Log.md>). The available key parser/canonical-coefficient and keypair-consistency checks are implementation safeguards, not production validation certification. There is no deterministic seed/mnemonic recovery, address rotation/subaddress scheme, authenticated chain synchronization/checkpointed scanning, transaction builder, production transaction-proof verifier, production key custody, or host/runtime entropy attestation. The encrypted file format and SQLite nonce history are non-production reference helpers; OS ACLs, robust backups, rollback protection and independent implementation review remain outstanding. The Python/OpenSSL entropy interfaces are not independently attested, and Python cannot reliably zeroize secrets.
 - There is no complete Candidate-A transaction proof accepted by consensus, consensus proof verifier, quantified soundness analysis, or demonstrated transaction-level zero-knowledge guarantee. `radix_core/transaction_relation.py` contains host-side oracles for input-note membership/nullifier and for canonical-statement one-input/one-output value conservation; neither proves an output opening nor authorizes consensus. `proof_harness/` includes component proofs and the experimental `RDXL64P1` single-AIR profile. RDXL composes Candidate-A source/note/path/nullifier relations, an output-note opening, exact one-input = output + fee arithmetic, and canonical statement binding. For its fixed empty-memo profile, it also constrains output KDF/AES-CTR for the first 140 public ciphertext bytes; the output owner remains a free witness, not derived from recipient keys. These are material prototype relations, not a complete or security-reviewed transaction proof. Remaining blockers include input ML-KEM decapsulation, output ML-KEM encapsulation and recipient binding, AES-GCM/GHASH authentication, complete state/consensus checks, and a production-suitable hiding/soundness analysis. The integrated high-memory RDXL proof test remains deferred; its device-budget fit and end-to-end proving/verification performance are unestablished. The existing amount-opening demo still uses a weak BabyBear/Poseidon2 commitment with no adequate amount-privacy claim, and all proof profiles remain experimental. The concrete cryptography adapter uses CSPRNG encapsulation and does not expose deterministic encapsulation randomness. Do not treat an AIR subrelation, host oracle, or statement-bound prototype envelope as consensus authorization or a production privacy/security guarantee.
 - The block executor is a reference transition only. It does not track cumulative monetary supply, persist state/reorg data, or choose mint/subsidy/genesis rules. A separate helper evaluates the illustrative integer emission proposal, but consensus still receives subsidy as an explicit caller-supplied input. Transfer-count and aggregate-fee ceilings are caller-supplied parameters, not selected consensus values. Empty transfer lists are allowed by this model because the protocol draft has not fixed the rule.
 - **Proof roles are separate from mining:** if this private-transaction design is adopted, the spending wallet (or a deliberately designed delegate) must create the transaction proof; full validating nodes check it. A block producer would include an already-proved transaction, not generate its spend proof. This repo has no complete wallet prover or consensus verifier, and no PoW/mining design. Ordinary remote proving exposes the private witness to the service; privacy-preserving delegation is not implemented. A research note reviews miner-paid proving, privacy-preserving outsourcing, MPC, and quantum/anonymity constraints in [`proof_harness/DELEGATED-PROVING-RESEARCH.md`](proof_harness/DELEGATED-PROVING-RESEARCH.md). Current RDXL payload estimates are 3.598 GiB (3,684.25 MiB) for the PCS LDE alone and 4.497 GiB for the hypothetical randomized-matrix-plus-LDE coexistence, against provisional 1-GiB mobile / 4-GiB desktop process budgets; these are allocation estimates, not measured RSS or a proof that a different implementation cannot fit. End-to-end proving time and mobile fit remain unknown. See [`proof_harness/README.md`](proof_harness/README.md).

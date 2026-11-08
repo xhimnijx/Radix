@@ -3,7 +3,7 @@ from math import prod
 from pathlib import Path
 
 
-PROOF_HARNESS_SRC = Path(__file__).resolve().parents[1] / "proof_harness" / "src"
+PROOF_HARNESS_SRC = Path(__file__).resolve().parents[1] / "archive" / "candidate-a" / "proof_harness" / "src"
 BOUNDED_CALL = re.compile(r"crate::bounded_postcard::from_proof_bytes\s*\(")
 DIRECT_POSTCARD_CALL = re.compile(r"postcard::from_bytes\s*(?:::<[^;]+?>)?\s*\(")
 

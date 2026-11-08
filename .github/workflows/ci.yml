@@ -37,22 +37,22 @@ jobs:
         run: python -m pytest -q ${{ matrix.pytest-args }}
       - name: Standalone vectors
         run: |
-          python Radix-Serialization-Test-Vectors.py
-          python Radix-Gate-1-Reference-Model.py
+          python archive/candidate-a/Radix-Serialization-Test-Vectors.py
+          python archive/candidate-a/Radix-Gate-1-Reference-Model.py
       - name: Wallet demo
         run: python -m examples.wallet_note_demo > /dev/null
 
   rust:
-    name: rust (build, lint, non-ignored tests)
+    name: rust (archived Candidate-A harness - build, lint, non-ignored tests)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: proof_harness
+        working-directory: archive/candidate-a/proof_harness
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: proof_harness
+          workspaces: archive/candidate-a/proof_harness
       - name: Toolchain (from rust-toolchain.toml)
         run: rustup show
       - name: Format

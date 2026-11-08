@@ -2,7 +2,7 @@
 #
 # Usage (from the repository root):
 #   pwsh -File experiments/measure_rust_test.ps1 `
-#     -Binary proof_harness/target/release/deps/radix_proof_harness-<hash>.exe `
+#     -Binary archive/candidate-a/proof_harness/target/release/deps/radix_proof_harness-<hash>.exe `
 #     -TestName depth64_path_opening::tests::proves_and_verifies_private_depth64_path
 #
 # Why: the local toolchain has no linker, so we cannot build a fresh test binary.

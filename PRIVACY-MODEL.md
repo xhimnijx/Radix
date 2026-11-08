@@ -81,10 +81,10 @@ Shor). **This is the whole reason the project exists.**
 
 ### The correction to the project's risk register
 
-`Radix-Gate-1-Feasibility-Log.md` section 3 lists as P0: *"An observer who obtains a
+`archive/candidate-a/Radix-Gate-1-Feasibility-Log.md` section 3 lists as P0: *"An observer who obtains a
 candidate recipient's viewing secret can decapsulate each KEM ciphertext ... and test
 it."* That is **G3**, and Monero has exactly the same property. Game 9 in
-`Radix-Gate-A-Cryptographic-Review.md` section 2.4 formalises it as a distinguishing
+`archive/candidate-a/Radix-Gate-A-Cryptographic-Review.md` section 2.4 formalises it as a distinguishing
 game where the adversary **is given** candidate viewing secrets and must still be
 unable to tell which recipient a ciphertext is for. **No scan-based design can pass
 that game, including Monero.** It should be replaced by G2 plus the disclosure in G3.

@@ -5,13 +5,28 @@ fixed, and the mainnet launch gate exists and ships **closed**. The proof side i
 still a component prototype: no complete transaction proof exists, and the
 flagship RDXL profile is fail-closed by design.
 
+## Repository layout (2026-11-08)
+
+The tree now has one active design and one archive:
+
+- root - Candidate B, the shared Python core, the launch gate, and the live documents
+  (`PLAIN-ENGLISH.md`, `ROADMAP.md`, `STATUS.md`, `ARCHITECTURE-DECISION.md`,
+  `AUDIT-PACKET-LATTICE.md`, `SECURITY-NOTES.md`, `PRIVACY-MODEL.md`, `TESTNET-SCOPE.md`).
+- `archive/candidate-a/` - the original STARK design, its measurements, its review
+  documents, its standalone reference scripts, and the Rust proof harness that produced
+  the numbers. The harness still builds and its non-ignored tests still run in CI.
+- `archive/candidate-c/` - the Akita / Jolt zkVM fallback assessment.
+
+Nothing was deleted. `archive/README.md` explains why, and `ROADMAP.md` replaces the
+archived `PLAN.md` as the forward plan.
+
 ## Verify it
 
 ```powershell
 python -m pytest -q                                  # 404 passed (~7 min)
 python -m pytest -q -m "not slow"                     # 373 passed (~16 s)
-python Radix-Serialization-Test-Vectors.py           # passes
-python .\Radix-Gate-1-Reference-Model.py             # passes
+python archive/candidate-a/Radix-Serialization-Test-Vectors.py           # passes
+python .\archive/candidate-a/Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
 python -m examples.launch_gate_check                 # prints why mainnet is locked
 python -m experiments.lean_relation_sizing           # corrected cost model
@@ -20,7 +35,7 @@ python -m experiments.lean_relation_sizing           # corrected cost model
 & .\scripts\rust.ps1 test --locked                   # 46 passed, 7 ignored, 0 failed
 & .\scripts\rust.ps1 check --locked --all-targets    # exit 0
 
-# Measured prover peaks (prebuilt 2026-11-01 binary; see MEASUREMENTS.md)
+# Measured prover peaks (prebuilt 2026-11-01 binary; see archive/candidate-a/MEASUREMENTS.md)
 & .\experiments\measure_rust_test.ps1 `
   -Binary "proof_harness\target\release\deps\radix_proof_harness-a6743722e416b94c.exe" `
   -TestName "depth64_path_opening::tests::proves_and_verifies_private_depth64_path"
@@ -39,7 +54,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | SHAKE256 Candidate-A hashes | implemented, known-answer vectors |
 | ML-KEM-768 + AES-256-GCM adapters (`cryptography==50.0.2`) | real providers, round-trip and negative tests |
 | Wallet keygen, note create/recover, bounded and authenticated scan | implemented; scan containment fixed and regression-tested |
-| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `Radix-Workspace-Review.md` §3.I1) |
+| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `archive/candidate-a/Radix-Workspace-Review.md` §3.I1) |
 | Nonce registries (process-local + SQLite) | implemented; default is now unbounded |
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
@@ -67,7 +82,7 @@ better — recorded honestly rather than hidden:
 
 ## Decision: the M3 lean-relation experiment (executed 2026-11-08)
 
-`python -m experiments.lean_relation_sizing` and `LEAN-RELATION.md` record a
+`python -m experiments.lean_relation_sizing` and `archive/candidate-a/LEAN-RELATION.md` record a
 decision-grade result:
 
 | Profile | Peak @4x (single proof) | Peak @9.5x (planning) | Desktop 4 GiB | Phone 1 GiB |
@@ -79,14 +94,14 @@ decision-grade result:
 | RDXZ64P1 path-only floor | 4.9 GiB | 11.7 GiB | 2.9x over | 4.9x over |
 
 All at production blowup (log_blowup=3); at the test blowup of 2 every figure halves.
-Measured on this host (`MEASUREMENTS.md`): a single focused path-only proof peaks at
+Measured on this host (`archive/candidate-a/MEASUREMENTS.md`): a single focused path-only proof peaks at
 **2.49 GiB / 17.9 s** at blowup 2 (LDE 0.62 GiB, ratio 4.04x); a composed multi-proof
 test peaks at **8.61 GiB / 60.0 s** (LDE 0.92 GiB, ratio 9.39x).
 
 - The measured path-only floor fits the desktop gate **only at the test blowup**;
   at production parameters it is already 4.9 GiB.
 - Dropping in-circuit KEM/AEAD is justified by the soundness note (Part A of
-  `LEAN-RELATION.md`), but it is not sufficient: 8.5 GiB at production.
+  `archive/candidate-a/LEAN-RELATION.md`), but it is not sufficient: 8.5 GiB at production.
 - **Correction (2026-11-08, after the suite ran):** an earlier version of this table
   claimed packing the path witness would bring the relation to 1.0-2.4 GiB. That was
   wrong on two inputs - the real width is 14,173 (not 15,629) and the path witness is
@@ -240,7 +255,7 @@ C** = Candidate-A relation as a Rust guest + Jolt zkVM + Akita. Jolt's measured
 memory is ~1 GiB at 2^21 cycles and 6.4 GiB at 2^25, so the zkVM trace dominates and
 the 1 GiB phone cap becomes marginal, while Candidate B needs kilobytes. **B stays
 the active path; C is the designated fallback** with explicit re-open triggers. See
-`AKITA-ASSESSMENT.md`.
+`archive/candidate-c/AKITA-ASSESSMENT.md`.
 
 ## Not implemented (unchanged blockers)
 

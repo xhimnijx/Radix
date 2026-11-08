@@ -62,7 +62,7 @@ def test_envelope_payload_fit_flag_uses_unwrapped_exact_capacity():
 
 def test_rdxl_envelope_model_caps_match_rust_decoder_limits():
     root = Path(__file__).resolve().parents[1]
-    rust_source = (root / "proof_harness" / "src" / "depth64_path_opening.rs").read_text(
+    rust_source = (root / "archive" / "candidate-a" / "proof_harness" / "src" / "depth64_path_opening.rs").read_text(
         encoding="utf-8"
     )
     statement_match = re.search(
