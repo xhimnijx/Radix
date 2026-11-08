@@ -20,6 +20,7 @@ Start here:
 - `STATUS.md` - the dated single source of truth: test counts, measured numbers, what is broken.
 - `ARCHITECTURE-DECISION.md` - why B, the measurements behind that, and where B actually stands (section 8).
 - `AUDIT-PACKET-LATTICE.md` - the review surface for the post-quantum layer: every deviation, every gap, and what to check first.
+- `REVIEW-REQUEST.md` - the brief to hand a cryptographer: five questions, in priority order, with what would count as an answer.
 
 The two abandoned tracks live in `archive/`: `candidate-a/` holds the original
 STARK design and the measurements that retired it, `candidate-c/` the zkVM
