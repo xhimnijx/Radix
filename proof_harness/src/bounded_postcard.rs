@@ -39,10 +39,18 @@ macro_rules! forward_visit {
     };
 }
 
-/// Source-derived maximum aggregate sequence/tuple/struct traversal count across
-/// all current Plonky3 proof profiles. Recompute if a proof schema, AIR, PCS, or
-/// FRI profile changes. See the static proof-decoder shape audit in the scope doc.
-pub const MAX_PROOF_SEQUENCE_ELEMENTS: usize = 248_837;
+/// Source-derived maximum aggregate sequence/tuple/struct traversal count for a
+/// proof payload of `payload_len` bytes.
+///
+/// One Postcard element occupies at least one byte, and a decoded value cannot
+/// exceed a schema-bounded multiple of its encoding. A fixed ceiling previously
+/// broke (a 249 kB proof exceeded it) because the constant was hand-derived and
+/// never re-derived when the proof schema grew. Deriving it from the input keeps
+/// decode work linear in the input while still refusing declared-length
+/// amplification: a crafted 1 kB payload can claim at most ~8 k elements.
+pub const fn sequence_element_limit(payload_len: usize) -> usize {
+    payload_len.saturating_mul(8).saturating_add(4_096)
+}
 
 /// Explicit limits required for each bounded decode. There is intentionally no
 /// unbounded/default configuration.
@@ -126,8 +134,8 @@ where
     })
 }
 
-/// Decode one of the current proof graphs with the source-derived global
-/// traversal ceiling. The decoded-byte allowance is bounded by the input slice;
+/// Decode one of the current proof graphs with a traversal ceiling derived from
+/// the input length. The decoded-byte allowance is bounded by the input slice;
 /// this is not a heap/RSS cap. Callers must still enforce their profile's wire
 /// limit before calling this helper (as the envelope decoders do).
 pub fn from_proof_bytes<'de, T>(bytes: &'de [u8]) -> postcard::Result<T>
@@ -135,7 +143,7 @@ where
     T: Deserialize<'de>,
 {
     let mut budget = Budget::new(Limits {
-        sequence_elements: MAX_PROOF_SEQUENCE_ELEMENTS,
+        sequence_elements: sequence_element_limit(bytes.len()),
         decoded_bytes: bytes.len(),
     });
     from_bytes(bytes, &mut budget)

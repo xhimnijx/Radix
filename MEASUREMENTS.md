@@ -7,7 +7,36 @@ This file records what was actually executed and observed, as opposed to modelle
 Everything else in the repository that says "predicted" comes from
 `experiments/lean_relation_sizing.py`, which is calibrated on the numbers below.
 
-## Why these are the measurements available
+## Update 2026-11-08: the Rust suite now builds and runs
+
+The linking problem was solved without downloading anything. `rust-mingw` ships a
+complete MinGW set in
+`~/.rustup/toolchains/stable-x86_64-pc-windows-gnu/lib/rustlib/x86_64-pc-windows-gnu/bin/self-contained`
+(`gcc`, `ld`, `dlltool`, and `rust-lld`); putting that directory on PATH makes the
+GNU toolchain self-sufficient. `scripts/rust.ps1` wraps it.
+
+```
+& .\scripts\rust.ps1 test --locked
+-> 46 passed; 0 failed; 7 ignored; finished in 165.59s
+```
+
+Running the suite corrected two things this repository had asserted without
+executing:
+
+1. **RDXL trace width is 14,173**, not 14,477 (and certainly not the 15,629 this
+   review's first revert predicted). `cargo run -- rdxl-resource-report` prints
+   `8192x14173`; the pinned test now asserts it.
+2. **`MAX_PROOF_SEQUENCE_ELEMENTS = 248_837` was too small.** Four component tests
+   failed with `Malformed("invalid proof serialization")` because a ~249 kB proof
+   exceeded the hand-derived ceiling on decode. The decoder now derives its element
+   budget from the input length (`8x + 4096`, still linear and still refusing
+   declared-length amplification) instead of a constant that rots when a schema
+   grows.
+
+The peak/LDE ratios below (4.04x single proof, 9.39x multi-proof test) were measured
+before this and are unaffected.
+
+## Why these were the only measurements available at the time
 
 The local toolchain cannot link a Rust binary: the MSVC linker (`link.exe`) is not
 installed and no MinGW `gcc`/`dlltool` is present. `cargo check` and

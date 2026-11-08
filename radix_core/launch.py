@@ -57,8 +57,23 @@ REVIEWED_DISCOVERY = frozenset(
     }
 )
 
+#: Provision for a single proof on a phone-class device. The owner's requirement
+#: is that the coin runs on "most devices"; this is the hard cap a mainnet
+#: configuration may declare, not a measured value.
+MAINNET_DEVICE_BUDGET_BYTES = 1024**3
+
+#: A mainnet transaction proof must stay small enough to relay and store.
+MAINNET_MAX_PROOF_BYTES = 4 * 1024**2
+
 REQUIRED_MAINNET_SCOPES = frozenset(
-    {"soundness", "zero-knowledge", "qrom", "consensus", "recipient-privacy"}
+    {
+        "soundness",
+        "zero-knowledge",
+        "qrom",
+        "consensus",
+        "recipient-privacy",
+        "device-fit",
+    }
 )
 MINIMUM_MAINNET_REVIEWERS = 2
 
@@ -115,6 +130,46 @@ PRODUCTION_PROOF_PROFILE = ProofProfile(
 
 
 @dataclass(frozen=True)
+class SecurityProfile:
+    """The security properties a network claims, as data rather than prose.
+
+    This is what makes the owner's non-negotiables enforceable: a mainnet gate
+    refuses a configuration that does not establish zero knowledge, does not use
+    a transparent setup, declares no post-quantum assumptions, or claims a prover
+    peak above the device budget.
+    """
+
+    name: str
+    proof_system: str
+    zero_knowledge_established: bool
+    transparent_setup: bool
+    post_quantum_assumptions: tuple[str, ...]
+    max_prover_peak_bytes: int
+    max_proof_bytes: int
+
+    def __post_init__(self) -> None:
+        if type(self.name) is not str or not self.name:
+            raise ValueError("security profile needs a name")
+        if type(self.proof_system) is not str or not self.proof_system:
+            raise ValueError("security profile needs a proof system")
+        if type(self.zero_knowledge_established) is not bool:
+            raise ValueError("zero_knowledge_established must be a bool")
+        if type(self.transparent_setup) is not bool:
+            raise ValueError("transparent_setup must be a bool")
+        if type(self.post_quantum_assumptions) is not tuple:
+            raise ValueError("post_quantum_assumptions must be a tuple")
+        if any(
+            type(assumption) is not str or not assumption
+            for assumption in self.post_quantum_assumptions
+        ):
+            raise ValueError("each post-quantum assumption must be a non-empty string")
+        for name in ("max_prover_peak_bytes", "max_proof_bytes"):
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+
+
+@dataclass(frozen=True)
 class LaunchParameters:
     """The complete frozen consensus parameter block for one network."""
 
@@ -130,6 +185,7 @@ class LaunchParameters:
     min_anchor_age_blocks: int
     max_anchor_age_blocks: int
     proof_profile: ProofProfile
+    security: SecurityProfile
     memo_profile: str
     recipient_discovery: str
 
@@ -166,6 +222,8 @@ class LaunchParameters:
             raise ValueError("minimum anchor age cannot exceed maximum anchor age")
         if type(self.proof_profile) is not ProofProfile:
             raise ValueError("proof_profile must be a ProofProfile")
+        if type(self.security) is not SecurityProfile:
+            raise ValueError("security must be a SecurityProfile")
         if type(self.memo_profile) is not str or not self.memo_profile:
             raise ValueError("memo_profile must be a non-empty string")
         if type(self.recipient_discovery) is not str or not self.recipient_discovery:
@@ -193,6 +251,16 @@ class LaunchParameters:
                 u64(p.log_blowup),
                 u64(p.num_queries),
                 u64(p.query_proof_of_work_bits),
+                self.security.name.encode("ascii"),
+                self.security.proof_system.encode("ascii"),
+                u64(1 if self.security.zero_knowledge_established else 0),
+                u64(1 if self.security.transparent_setup else 0),
+                u64(self.security.max_prover_peak_bytes),
+                u64(self.security.max_proof_bytes),
+                u64(len(self.security.post_quantum_assumptions)),
+            ]
+            + [item.encode("ascii") for item in self.security.post_quantum_assumptions]
+            + [
                 self.memo_profile.encode("ascii"),
                 self.recipient_discovery.encode("ascii"),
             ],
@@ -328,6 +396,24 @@ class LaunchGate:
             reasons.append(
                 f"proof profile {self.parameters.proof_profile.name!r} is test-grade"
             )
+        if not self.parameters.security.zero_knowledge_established:
+            reasons.append("zero knowledge is not established for the proof system")
+        if not self.parameters.security.transparent_setup:
+            reasons.append("proof system requires a trusted setup")
+        if not self.parameters.security.post_quantum_assumptions:
+            reasons.append("no post-quantum assumptions are declared")
+        if self.parameters.security.max_prover_peak_bytes > MAINNET_DEVICE_BUDGET_BYTES:
+            reasons.append(
+                "declared prover peak "
+                f"({self.parameters.security.max_prover_peak_bytes} B) exceeds the "
+                f"device budget ({MAINNET_DEVICE_BUDGET_BYTES} B)"
+            )
+        if self.parameters.security.max_proof_bytes > MAINNET_MAX_PROOF_BYTES:
+            reasons.append(
+                "declared proof size "
+                f"({self.parameters.security.max_proof_bytes} B) exceeds the relay cap "
+                f"({MAINNET_MAX_PROOF_BYTES} B)"
+            )
         if self.parameters.recipient_discovery not in REVIEWED_DISCOVERY:
             reasons.append("recipient discovery construction is not reviewed")
         return tuple(reasons)
@@ -391,6 +477,35 @@ def _match_trusted_key(
 
 _RESEARCH_CHAIN_ID = b"radix-research-chain-id-v1\x00\x00\x00\x00\x00\x00\x00"[:32]
 
+#: Research/testnet claim only what is established: the proof system has a
+#: witness-hiding interface, but no ZK argument exists, and the device budget has
+#: never been measured for a complete transaction.
+RESEARCH_SECURITY = SecurityProfile(
+    name="research-test-stark",
+    proof_system="plonky3-fri-uni-stark",
+    zero_knowledge_established=False,
+    transparent_setup=True,
+    post_quantum_assumptions=("SHAKE256/Keccak as a hash", "FRI/STARK soundness heuristic"),
+    max_prover_peak_bytes=4 * 1024**3,
+    max_proof_bytes=4 * 1024**2,
+)
+
+#: The profile a mainnet would have to ship. Values are targets, not measurements;
+#: the `device-fit` review scope exists so a reviewer must attest to them.
+MAINNET_SECURITY = SecurityProfile(
+    name="mainnet-pq-zk-candidate",
+    proof_system="transparent-pq-zk",
+    zero_knowledge_established=True,
+    transparent_setup=True,
+    post_quantum_assumptions=(
+        "SHAKE256 as a collision-resistant hash",
+        "ML-KEM-768 module-LWE",
+        "FRI/STARK in the quantum random-oracle model",
+    ),
+    max_prover_peak_bytes=MAINNET_DEVICE_BUDGET_BYTES,
+    max_proof_bytes=MAINNET_MAX_PROOF_BYTES,
+)
+
 RESEARCH_PARAMETERS = LaunchParameters(
     mode=NetworkMode.RESEARCH,
     version=1,
@@ -404,6 +519,7 @@ RESEARCH_PARAMETERS = LaunchParameters(
     min_anchor_age_blocks=60,
     max_anchor_age_blocks=10_000,
     proof_profile=RESEARCH_PROOF_PROFILE,
+    security=RESEARCH_SECURITY,
     memo_profile="v1-variable",
     recipient_discovery=UNRESOLVED_DISCOVERY,
 )
@@ -423,6 +539,7 @@ MAINNET_PARAMETERS = replace(
     max_transfers_per_block=64,
     max_outputs_per_block=64,
     proof_profile=PRODUCTION_PROOF_PROFILE,
+    security=MAINNET_SECURITY,
     memo_profile="v1-padded-652",
     recipient_discovery=UNRESOLVED_DISCOVERY,
 )

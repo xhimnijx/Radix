@@ -76,12 +76,13 @@ The core of the project. Two candidate relations, priced:
 - **R-lean:** the same *safety* relation with in-circuit KEM/AEAD removed — a
   1.55 GiB floor, ~11.8 GiB predicted peak.
 
-**Result (see `LEAN-RELATION.md`):** lean alone is necessary but not sufficient
-(2.9x over the desktop gate). The binding cost is the 8,192 bit-sliced path
-columns, not the crypto banks. Packing the path witness into 16-bit limbs predicts
-**2.4 GiB**, which fits the desktop gate and still misses mobile. Decision:
-NO-GO for the monolithic AIR as structured; implement R-lean + packed path next,
-with a measured <= 4 GiB pass rule.
+**Result (see `LEAN-RELATION.md`, revised after the suite ran):** lean is necessary
+but not sufficient. Corrected width is 14,173 (not 14,477); the path witness is
+1,024 bits, so packing saves 480 columns, not ~7,800. At production blowup even the
+path-only floor predicts 4.9 GiB and lean 8.5 GiB, against a 4 GiB laptop cap and a
+1 GiB phone cap. Decision: **NO-GO for the monolithic AIR as the product
+architecture**; phone-class proving needs recursion or a different proof family
+(`ARCHITECTURE-DECISION.md`).
 
 **Exit artifacts:** `LEAN-RELATION.md`, `MEASUREMENTS.md`,
 `experiments/lean_relation_sizing.py`, `experiments/measure_rust_test.ps1`,

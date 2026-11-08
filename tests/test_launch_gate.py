@@ -12,7 +12,10 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from radix_core.launch import (
+    MAINNET_DEVICE_BUDGET_BYTES,
+    MAINNET_MAX_PROOF_BYTES,
     MAINNET_PARAMETERS,
+    MAINNET_SECURITY,
     MAINNET_SWITCH,
     REQUIRED_MAINNET_SCOPES,
     RESEARCH_PARAMETERS,
@@ -24,6 +27,7 @@ from radix_core.launch import (
     LaunchRefused,
     NetworkMode,
     PENDING_GENESIS,
+    SecurityProfile,
     finalize_genesis,
     open_launch_gate,
     with_mode,
@@ -173,6 +177,9 @@ def test_research_and_testnet_do_not_require_the_gate():
 def test_parameters_hash_covers_every_field():
     base = _resolved_mainnet()
     seen = {base.parameters_hash()}
+    mutated_security = replace(
+        base.security, post_quantum_assumptions=("SHAKE256",)
+    )
     mutations = (
         {"block_interval_seconds": 60},
         {"max_transfers_per_block": 1},
@@ -186,7 +193,62 @@ def test_parameters_hash_covers_every_field():
         {"version": 2},
         {"chain_id": b"\x22" * 32},
         {"genesis_hash": b"\x33" * 32},
+        {"security": mutated_security},
     )
     for mutation in mutations:
         seen.add(replace(base, **mutation).parameters_hash())
     assert len(seen) == len(mutations) + 1
+
+
+# ---------------------------------------------------------------------------
+# The owner's non-negotiables: ZK, transparency, post-quantum, device budget.
+# ---------------------------------------------------------------------------
+
+
+def test_shipped_mainnet_security_profile_meets_the_non_negotiables():
+    assert MAINNET_SECURITY.zero_knowledge_established is True
+    assert MAINNET_SECURITY.transparent_setup is True
+    assert MAINNET_SECURITY.post_quantum_assumptions
+    assert MAINNET_SECURITY.max_prover_peak_bytes <= MAINNET_DEVICE_BUDGET_BYTES
+    assert MAINNET_SECURITY.max_proof_bytes <= MAINNET_MAX_PROOF_BYTES
+
+
+def _refusal_for_security(security: SecurityProfile) -> str:
+    parameters = replace(_resolved_mainnet(), security=security)
+    alice, bob = Signer("alice"), Signer("bob")
+    gate = LaunchGate(parameters, (alice.public, bob.public))
+    with pytest.raises(LaunchRefused) as error:
+        open_launch_gate(gate, _manifest(parameters, (alice, bob)))
+    return str(error.value)
+
+
+def test_gate_refuses_a_profile_without_established_zero_knowledge():
+    assert "zero knowledge is not established" in _refusal_for_security(
+        replace(MAINNET_SECURITY, zero_knowledge_established=False)
+    )
+
+
+def test_gate_refuses_a_trusted_setup():
+    assert "trusted setup" in _refusal_for_security(
+        replace(MAINNET_SECURITY, transparent_setup=False)
+    )
+
+
+def test_gate_refuses_a_profile_with_no_post_quantum_assumptions():
+    assert "no post-quantum assumptions" in _refusal_for_security(
+        replace(MAINNET_SECURITY, post_quantum_assumptions=())
+    )
+
+
+def test_gate_refuses_a_prover_budget_above_the_phone_cap():
+    assert "device budget" in _refusal_for_security(
+        replace(
+            MAINNET_SECURITY, max_prover_peak_bytes=MAINNET_DEVICE_BUDGET_BYTES + 1
+        )
+    )
+
+
+def test_gate_refuses_a_proof_larger_than_the_relay_cap():
+    assert "relay cap" in _refusal_for_security(
+        replace(MAINNET_SECURITY, max_proof_bytes=MAINNET_MAX_PROOF_BYTES + 1)
+    )

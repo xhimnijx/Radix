@@ -5525,16 +5525,16 @@ mod tests {
             AES256_BLOCK_SBOX_OUTPUT_BITS_OFFSET
         );
         assert_eq!(AES256_SBOX_WITNESS_OFFSET, AES256_BLOCK_SBOX_WITNESS_OFFSET);
-        assert_eq!((report.trace_rows, report.trace_width), (8_192, 15_629));
-        assert_eq!(report.trace_payload_bytes, 512_131_072);
+        assert_eq!((report.trace_rows, report.trace_width), (8_192, 14_173));
+        assert_eq!(report.trace_payload_bytes, 464_420_864);
         assert_eq!(
             (report.randomized_rows, report.randomized_width),
-            (16_384, 15_633)
+            (16_384, 14_177)
         );
-        assert_eq!(report.randomized_payload_bytes, 1_024_524_288);
-        assert_eq!((report.lde_rows, report.lde_width), (65_536, 15_633));
-        assert_eq!(report.lde_payload_bytes, 4_098_097_152);
-        assert_eq!(report.randomized_plus_lde_payload_bytes, 5_122_621_440);
+        assert_eq!(report.randomized_payload_bytes, 929_103_872);
+        assert_eq!((report.lde_rows, report.lde_width), (65_536, 14_177));
+        assert_eq!(report.lde_payload_bytes, 3_716_415_488);
+        assert_eq!(report.randomized_plus_lde_payload_bytes, 4_645_519_360);
         assert_eq!(report.desktop_process_budget_bytes, 4_294_967_296);
         assert_eq!(report.mobile_process_budget_bytes, 1_073_741_824);
     }
@@ -5549,7 +5549,7 @@ mod tests {
         assert_eq!(
             error,
             Depth64PathProofError::ResourceBudgetExceeded {
-                estimated_workspace_bytes: 5_122_621_440,
+                estimated_workspace_bytes: 4_645_519_360,
                 process_budget_bytes: 1_073_741_824,
             }
         );
