@@ -60,7 +60,7 @@ by Keccak (2,937 columns) plus the KDF/AEAD banks (5,500).
 | **C. Split AIRs + recursive aggregation** | max sub-relation only | Plausible (largest subproof < 1 GiB) | Yes | Yes | Yes (recursive STARK) | No recursion in Plonky3; new stack; composition/soundness work |
 | **D. zkVM (RISC Zero/SP1)-style** | program, not AIR | Unlikely on phone (prover ~4-8 GiB) | Yes if STARK-only (Groth16 wrap is not PQ) | Yes | Yes | Phone memory; proof size; dependency risk |
 | **E. Algebraic in-circuit hash (Poseidon2/Monolith)** | 5,284 with lean | No (5.2 GiB at production) | Yes (no Shor; Grover only) | Yes | Yes | Changes the consensus hash; younger cryptanalysis; re-vectorises everything |
-| **F. Lattice PCS (Akita) + zkVM/SNARK** | hash-circuit no longer dominates | **Plausible**: 58-68 KB proofs, sublinear prover memory, but only if a full proof system is built around the PCS | Yes (Module-SIS) | Yes | Yes | Akita is a PCS, not a transaction proof; needs an arithmetisation and a SNARK/zkVM integration; 2026 research |
+| **F. Candidate C: lattice PCS (Akita) + zkVM** | hash-circuit no longer dominates | **Plausible but marginal**: 82-94 KB Jolt proofs, ~1 GiB at 2^21 cycles, 6.4 GiB at 2^25 | Yes (Module-SIS) | Yes | Yes | Akita is a PCS, not a transaction proof; Jolt + 2026 PCS maturity; trace memory is the binding cost |
 
 **Option F, added 2026-11-08 after reading `studies/2026-1983.pdf`.** Akita is a
 lattice polynomial commitment scheme reporting 58-68 KB proofs, 22-109x faster
@@ -107,12 +107,16 @@ build.
 the gate now refuses a profile that does not declare ZK, transparency, PQ
 assumptions, and a <= 1 GiB prover budget (`radix_core/launch.py`).
 
-**D-ADR-6. Price option F (Akita-class lattice PCS) before B2 goes deep.** SMILE
-and Akita are the two credible PQ routes with small proofs; SMILE gives ring
-anonymity, Akita could give the stronger global anonymity set with 58-68 KB proofs
-and bounded prover memory. Spend one week after B2's arithmetic scaffold (already
-done) estimating the Akita integration; if it is tractable, evaluate it before
-committing a year to SMILE. Do not run both to completion in parallel.
+**D-ADR-6. Candidate C has been priced and is archived as the primary fallback.**
+`AKITA-ASSESSMENT.md` evaluated the Akita PCS (58-68 KB PCS proofs, sublinear prover
+memory) as a Jolt zkVM backend. It cannot be dropped into Candidate A - Plonky3's
+univariate FRI PCS and Akita's multilinear PCS are different interfaces - so it is a
+new architecture, Candidate C. Measured Jolt numbers (p. 119) put peak RAM at about
+1 GiB for 2^21 cycles and 6.4 GiB at 2^25, so the zkVM **trace**, not the PCS,
+becomes the device constraint. That is marginal on the 1 GiB phone cap, whereas
+Candidate B's prover is kilobytes-to-megabytes. **Continue with B; C is the
+designated fallback** and re-opens only if a Jolt guest measures under 2^20 cycles
+with peak RSS below 512 MiB, or if SMILE review fails (D-C-1..4).
 
 ## 5. What "matches Monero" means, precisely
 

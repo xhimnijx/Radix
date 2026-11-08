@@ -132,6 +132,14 @@ could remove the FRI LDE that killed the Candidate-A device budget. Recorded as
 option F in `ARCHITECTURE-DECISION.md` with D-ADR-6: price it before committing a
 year to SMILE.
 
+**Akita assessed (2026-11-08):** it cannot be swapped into Candidate A (univariate
+FRI PCS versus multilinear PCS), so using it means a new architecture - **Candidate
+C** = Candidate-A relation as a Rust guest + Jolt zkVM + Akita. Jolt's measured
+memory is ~1 GiB at 2^21 cycles and 6.4 GiB at 2^25, so the zkVM trace dominates and
+the 1 GiB phone cap becomes marginal, while Candidate B needs kilobytes. **B stays
+the active path; C is the designated fallback** with explicit re-open triggers. See
+`AKITA-ASSESSMENT.md`.
+
 ## Not implemented (unchanged blockers)
 
 - A complete transaction proof, an ML-KEM relation, GCM/GHASH authentication.
