@@ -225,3 +225,36 @@ Both raise the proof size by roughly `ell` full elements (about 6.6 KB) and both
 need a linear-consistency argument of the kind Fig. 5 provides for `k` inputs.
 That is the real content of B3, and it is why B3 is a research milestone rather
 than a missing `if` statement.
+
+### 8.2 The fix, implemented: `lattice/tag.py` (2026-11-08)
+
+The commitment route works. With the mask committed under its own key
+`(B_0^m ; b^m_1..b^m_ell)`, the prover sends `u_j = <b^m_j, r_m> + y'_j` and the
+tag `T = <A', s>`; the verifier derives
+
+    u_der = <A', u> - (<A', z'> - c' T) = <b'_j, r_m> + c' (T - <A', s>)
+
+and checks a BDLOP opening proof that `(t_m ; u_der)` opens to **zero** under the
+derived key `(B_0^m ; b')`, with `b' = sum_j A'_j * b^m_j`. That forces
+`c' (T - <A', s>) = 0`, and the verifier separately checks that `c'` is a unit of
+`R_q` (every NTT coordinate non-zero, which for this modulus is exactly
+invertibility). So `T = <A', s>` is forced: two spends of one note carry the same
+tag, and the attack that broke the naive version is dead.
+
+Measured: the tagged ring signature is **51,584 B** at a 1024-member ring
+(+19,072 B for the mask commitment, the tag, and its opening proof), 20 s to
+prove and 20 s to verify in Python. Tests: 7 for the tag alone, 5 for the tagged
+signature, including a forged tag being rejected and a tagged proof being
+*refused* by a verifier that does not ask for the tag.
+
+Still open, and now sharply defined:
+
+1. **Tag collision hardness.** `T = <A', s>` is a single polynomial, so the map
+   from `s` to `T` has a huge kernel; two distinct notes colliding needs a short
+   kernel vector, i.e. Module-SIS. That assumption has to be priced, not assumed.
+2. **Composition.** The tag is a second proof bound to the signature by `c'` and
+   `t_0`, not one witness shared with the set-membership proof. One joint proof
+   is B5.
+3. **Cost.** 19 KB for linkability is 59% of the base signature; a Dimithium-style
+   compression of `t_0` and a smaller mask commitment are the obvious next cuts.
+

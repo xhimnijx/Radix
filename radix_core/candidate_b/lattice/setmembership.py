@@ -42,7 +42,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from . import recursion as R, ring, subring, transcript
+from . import recursion as R, ring, subring, tag as tagmod, transcript
 from .params import SMILE, SmileParameters
 from .ring import Poly
 
@@ -198,6 +198,7 @@ class Proof:
     challenge_prime: Poly
     response_prime: tuple[Poly, ...]
     response: tuple[Poly, ...]
+    tag_proof: "tagmod.TagProof | None" = None
 
     def encode(self) -> bytes:
         """Challenges are ternary, so they are stored as one byte per coefficient."""
@@ -208,11 +209,11 @@ class Proof:
             + self.response_prime
             + self.response
         )
-        return (
-            body
-            + bytes(coefficient + 1 for coefficient in self.challenge)
-            + bytes(coefficient + 1 for coefficient in self.challenge_prime)
-        )
+        body += bytes(coefficient + 1 for coefficient in self.challenge)
+        body += bytes(coefficient + 1 for coefficient in self.challenge_prime)
+        if self.tag_proof is not None:
+            body += self.tag_proof.encode()
+        return body
 
     @property
     def size_bytes(self) -> int:
@@ -277,6 +278,16 @@ def _head(message: bytes, w: tuple[Poly, ...], commitment: tuple[Poly, ...], p: 
     return tx
 
 
+
+def _tag_context(c_prime: Poly, t0: Poly, p: SmileParameters) -> bytes:
+    """Bind the tag proof to this signature: its c' and its t_0."""
+    return (
+        PROOF_TAG
+        + bytes(coefficient + 1 for coefficient in c_prime)
+        + ring.encode(t0, p)
+    )
+
+
 def prove(
     keys: Keys,
     statement: Statement,
@@ -285,8 +296,9 @@ def prove(
     message: bytes,
     rng: random.Random,
     parameters: SmileParameters | None = None,
+    tag_keys: "tagmod.TagKeys | None" = None,
 ) -> Proof:
-    """Fig. 7, with the Fig. 8 recursion and the Fig. 9 challenge order."""
+    """Fig. 7 with the Fig. 8 recursion, Fig. 9's checks, and an optional B3 tag."""
     sm = _p(parameters)
     depth = keys.depth
     if depth != statement.depth:
@@ -458,6 +470,18 @@ def prove(
     )
     if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in response):
         raise SetMembershipError("masking bound produced an oversized response")
+    tag_proof = None
+    if tag_keys is not None:
+        tag_proof = tagmod.prove_tag(
+            tag_keys,
+            secret,
+            mask_prime,
+            c_prime,
+            response_prime,
+            _tag_context(c_prime, commitment[0], sm),
+            rng,
+            sm,
+        )
     return Proof(
         commitment=tuple(commitment),
         h=h,
@@ -466,6 +490,7 @@ def prove(
         challenge_prime=c_prime,
         response_prime=response_prime,
         response=response,
+        tag_proof=tag_proof,
     )
 
 
@@ -475,8 +500,9 @@ def verify(
     proof: Proof,
     message: bytes,
     parameters: SmileParameters | None = None,
+    tag_keys: "tagmod.TagKeys | None" = None,
 ) -> bool:
-    """Fig. 9 lines 01-15."""
+    """Fig. 9 lines 01-15, plus the optional B3 tag proof."""
     sm = _p(parameters)
     try:
         depth = keys.depth
@@ -636,6 +662,24 @@ def verify(
         prefix = sm.ring_degree // SLOTS
         if any(proof.h[i] != 0 for i in range(prefix)):
             return False
+
+        if tag_keys is None:
+            # A tagged proof must be checked as tagged: silently ignoring the tag
+            # would let a ledger accept a signature whose linkability was never
+            # verified.
+            return proof.tag_proof is None
+        if tag_keys is not None:
+            if proof.tag_proof is None:
+                return False
+            if not tagmod.verify_tag(
+                tag_keys,
+                proof.tag_proof,
+                proof.challenge_prime,
+                proof.response_prime,
+                _tag_context(proof.challenge_prime, proof.commitment[0], sm),
+                sm,
+            ):
+                return False
         return True
     except (TypeError, ValueError, KeyError, IndexError):
         return False
