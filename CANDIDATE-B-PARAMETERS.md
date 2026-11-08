@@ -111,3 +111,34 @@ Transcribed from the paper so the work is scoped rather than hand-waved:
 
 Each item is days of careful work with the paper open, not hours, and none of it
 can be validated by the tests that exist today until item 5 is reachable.
+
+## 6. The exact blocker for Fig. 6 (recorded 2026-11-08)
+
+Reading pp. 7, 14-15 and 20-23 pins the *shape* of the recursion but not the
+normalisation of two objects, and both have to be exact or the resulting proof is
+wrong while still passing its own tests:
+
+1. **The lift `NTT^-1 : Z_q^l -> R_q`.** The paper commits to `NTT^-1(v_i)` for a
+   binary vector `v_i` of length `l = 32` inside a ring of degree `d = 128`, so
+   `d/l = 4`. Which 32 of the 128 positions that vector occupies decides whether
+   a vanishing coefficient condition is a dot product at all.
+2. **The functional `g`.** p. 7 defines `g(y) = 32(y_0 + y_1 X + y_2 X^2 + y_3 X^3)`
+   as "the sum of the NTT's of the polynomial"; p. 21 then uses
+   `g(y) = 0 iff the first d/l coefficients vanish`.
+
+In this implementation's convention, `sum_j NTT(y)_j = d * y_0 = 128 * y_0`
+(asserted in `tests/test_candidate_b_ntt.py::test_sum_of_evaluations_is_degree_times_constant_term`).
+That is **not** the paper's `g`. The difference is a slot weighting, not a bug:
+it means the paper uses a different (partial, slot-wise) transform, and guessing
+which one would yield a proof whose key lemma is false -- exactly the failure
+mode this project refuses to ship.
+
+Unblocking needs one of:
+
+- the full protocol figure (Figs. 7-10), which would state the transform;
+- the lemma's source, `[15]`, and its use of `[7, 20]`;
+- a reference implementation to diff against.
+
+Until one of those lands, Fig. 6 stays unimplemented, `aggregation.py` (Fig. 5)
+stays the frontier, and the 19 KB aggregation proof is the last sound artefact in
+the Candidate-B stack.

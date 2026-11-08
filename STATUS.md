@@ -158,6 +158,10 @@ stubbed, faked, or marked done. `aggregation.py` is the layer Fig. 6 keeps uncha
 the set-membership step swaps the revealed index for that relation. The NTT
 substrate that the recursive argument is written in is now in place, so the next
 component can be written against it instead of being rewritten afterwards.
+`CANDIDATE-B-PARAMETERS.md` section 6 records the precise remaining blocker: the
+paper's `g` normalisation does not match this transform's (`sum NTT = 128 y_0`),
+so the lift `Z_q^32 -> R_q` must be pinned from the full protocol figure or the
+cited lemma before Fig. 6 can be built without guessing.
 
 **New option recorded.** `studies/2026-1983.pdf` turned out to be *Akita*, a 2026
 lattice polynomial commitment scheme (58-68 KB proofs, sublinear prover memory,

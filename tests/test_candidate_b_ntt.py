@@ -83,6 +83,21 @@ def test_supports_reports_missing_roots():
     assert ring.mul(left, right, unsupported) == ring.mul_naive(left, right, unsupported)
 
 
+def test_sum_of_evaluations_is_degree_times_constant_term():
+    """sum_j forward(y)_j = d * y_0, which pins this transform's normalisation.
+
+    The paper's `g` is stated as 32*(y_0 + y_1 X + y_2 X^2 + y_3 X^3) in its own
+    convention, so its NTT is normalised differently from this one. Recording the
+    identity that *does* hold here is what makes that difference explicit and
+    checkable rather than assumed. See CANDIDATE-B-PARAMETERS.md section 6.
+    """
+    q = ntt.transform().modulus
+    degree = params.SMILE.ring_degree
+    for _ in range(2):
+        poly = ring.sample_uniform(RNG)
+        assert sum(ntt.forward(poly)) % q == degree * poly[0] % q
+
+
 def test_malformed_inputs_are_rejected():
     with pytest.raises(ntt.TransformError):
         ntt.forward((1, 2, 3))
