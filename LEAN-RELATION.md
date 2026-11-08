@@ -11,11 +11,17 @@ resulting smaller circuit enough to fit the project's own device budget?
 1. **No.** Supply integrity, double-spend resistance, and recipient detection do
    not depend on in-circuit KEM or AEAD. The constraints buy third-party
    ciphertext auditability, which no consensus rule consumes.
-2. **Not by itself.** Removing them cuts trace width 35 % and predicts about
-   11.8 GiB peak, still 2.9x over the 4 GiB desktop gate.
+2. **Not by itself.** Removing them cuts trace width 35 % and predicts 4.9 GiB
+   (single-proof ratio) to 11.8 GiB (conservative) - still over the 4 GiB desktop
+   gate in both cases.
 3. The quantified path to desktop fit is **also packing the depth-64 path witness**
-   (bit-sliced 8,192 columns -> 384 limb columns): predicted 2.4 GiB, which fits
-   desktop at every multiplier we tested, and still misses mobile by 2.4x.
+   (bit-sliced 8,192 columns -> 384 limb columns): predicted 1.0-2.4 GiB, which fits
+   desktop across the measured range and lands at the mobile cap in the optimistic
+   case only.
+
+**Measured on this host (2026-11-08):** a single focused path-only proof peaks at
+2.49 GiB for a 0.62 GiB LDE (**4.04x**); a composed multi-proof test peaks at
+8.61 GiB for a 0.92 GiB LDE (**9.39x**). See `MEASUREMENTS.md`.
 
 Reproduce: `python -m experiments.lean_relation_sizing`.
 
@@ -111,37 +117,41 @@ change *provided* A6 is written and reviewed - not a silent optimisation.
 
 Inputs and sources are in `experiments/lean_relation_sizing.py`. The model uses the
 project's own dimension arithmetic (2x randomized rows, blowup 2, +4 ZK codewords,
-4-byte BabyBear) and converts the LDE floor to a predicted peak with a **9.5x
-multiplier** derived from the two published focused runs:
+4-byte BabyBear) and converts the LDE floor to a peak with two **measured**
+multipliers (see `MEASUREMENTS.md`):
 
-- `RDXI64P1`: LDE 871,440,128 B, measured peak 7,911.7 MiB -> 9.52x
-- `RDXJ64P1`: LDE 985,006,080 B, measured peak 9,518.0 MiB -> 10.13x
+- **4.04x** - one focused proof, `RDXZ64P1`, 2.49 GiB peak for 0.62 GiB LDE. This
+  is what a wallet does: prove one transaction.
+- **9.39x** - a composed test that builds several proofs in one process, `RDXK64P1`,
+  8.61 GiB for 0.92 GiB LDE. This is the regime the project's own published ~9.5 GiB
+  figures came from.
 
-Both were test-process peaks (trace + proof + harness), so 9.5x is conservative for
-a single isolated proving call.
+The conservative 9.5x is used for planning; the single-proof 4.0x is reported
+alongside it because it is the operationally relevant number.
 
-| Profile | Rows | Width | LDE | Predicted peak | Desktop 4 GiB | Mobile 1 GiB |
-|---|---:|---:|---:|---:|---|---|
-| R-fat (current RDXL64P1) | 8,192 | 15,629 | 3.82 GiB | 36.3 GiB | 9.1x over | 36x over |
-| R-lean (no KDF/AEAD) | 4,096 | 10,129 | 1.24 GiB | 11.8 GiB | 2.9x over | 11.8x over |
-| **R-lean + packed path** | 4,096 | **2,065** | 0.25 GiB | **2.4 GiB** | **FITS (0.6x)** | 2.4x over |
-| RDXZ64P1 path-only floor | 4,096 | 5,043 | 0.62 GiB | 5.9 GiB | 1.5x over | 5.9x over |
+| Profile | Rows | Width | LDE | Peak @4x | Peak @9.5x | Desktop 4 GiB | Mobile 1 GiB |
+|---|---:|---:|---:|---:|---:|---|---|
+| R-fat (current RDXL64P1) | 8,192 | 15,629 | 3.82 GiB | 15.3 GiB | 36.3 GiB | 3.8x over | 15x over |
+| R-lean (no KDF/AEAD) | 4,096 | 10,129 | 1.24 GiB | 4.9 GiB | 11.8 GiB | 1.2x over | 4.9x over |
+| **R-lean + packed path** | 4,096 | **2,065** | 0.25 GiB | **1.0 GiB** | **2.4 GiB** | **FITS** | at cap / 2.4x over |
+| RDXZ64P1 path-only floor | 4,096 | 5,043 | 0.62 GiB | 2.5 GiB | 5.9 GiB | fits at 4x | 2.5x over |
 
 Sensitivity to the multiplier (predicted peak, GiB):
 
-| Profile | 5.0x | 7.5x | 9.5x | 12.0x |
-|---|---:|---:|---:|---:|
-| R-fat | 19.1 | 28.6 | 36.3 | 45.8 |
-| R-lean | 6.2 | 9.3 | 11.8 | 14.8 |
-| R-lean + packed | 1.3 | 1.9 | 2.4 | 3.0 |
-| Path-only floor | 3.1 | 4.6 | 5.9 | 7.4 |
+| Profile | 4.0x | 5.0x | 7.5x | 9.5x | 12.0x |
+|---|---:|---:|---:|---:|---:|
+| R-fat | 15.3 | 19.1 | 28.6 | 36.3 | 45.8 |
+| R-lean | 4.9 | 6.2 | 9.3 | 11.8 | 14.8 |
+| R-lean + packed | 1.0 | 1.3 | 1.9 | 2.4 | 3.0 |
+| Path-only floor | 2.5 | 3.1 | 4.6 | 5.9 | 7.4 |
 
 Two results matter more than the rest:
 
-- **The path-only floor already exceeds the desktop budget.** The smallest proof
-  the harness has ever measured - depth-64 membership and nothing else - predicts
-  5.9 GiB, 1.5x the gate. So "remove features until it fits" cannot work: the
-  *representation* of the path is itself the problem.
+- **The measured floor fits, but barely.** The path-only proof measured **2.49 GiB
+  and 17.9 s** on this laptop. It fits the 4 GiB gate with about 1.5 GiB of headroom
+  - which the note, nullifier, output, balance and KEM relations must all share.
+  The model's 5.9 GiB for this profile at 9.5x describes a multi-proof test process,
+  not a wallet.
 - **The width ceiling is brutal.** At 4,096 rows the desktop gate allows width
   <= 3,445 and the mobile gate <= 858. R-lean is 10,129.
 
@@ -174,19 +184,24 @@ relation and retained only as an optional, separately versioned auditability
 extension. Rationale: Part A. Consequence: a new relation version (`RDXM`), new
 vectors, and a written A6 argument before it is used for anything.
 
-**D-M3-2.** The monolithic-AIR route is **NO-GO for desktop as currently
-structured**. Even the lean relation is 2.9x over the gate, and the smallest measured
-profile is 1.5x over. This closes the "shave rows and hope" plan.
+**D-M3-2.** The **R-fat** monolithic relation is **NO-GO for desktop**: 15.3 GiB at
+the measured single-proof ratio and 36.3 GiB conservative, against a 4 GiB gate.
+Dropping KEM/AEAD alone (**R-lean**) is marginal - 4.9 GiB at 4x - so it is
+necessary but not sufficient. One earlier draft of this note claimed even the
+path-only floor exceeded desktop; the measurement disproved that (2.49 GiB), and
+the correction is recorded here rather than quietly dropped.
 
 **D-M3-3.** The next implementation target is **R-lean + packed path**, with a
 pre-registered pass rule: predicted peak <= 4 GiB *and* a measured single-proof peak
-<= 4 GiB on the reference laptop class. Predicted 2.4 GiB makes the measurement
-worth doing.
+<= 4 GiB on the reference laptop class. Predicted **1.0-2.4 GiB** makes the
+measurement the obvious next step.
 
-**D-M3-4.** **Mobile remains out of reach** (needs width <= 858 at 4,096 rows, or
-1,024 rows at width <= 3,445). No combination of packing and lean gets there. Mobile
-self-custody requires a different hash (algebraic, about 10-20x fewer columns) or
-recursive aggregation / a zkVM. Do not promise a phone wallet on this architecture.
+**D-M3-4.** **Mobile is not established.** The packed profile lands at 1.0 GiB at
+the single-proof ratio - exactly the cap, with no room for a production FRI
+configuration (128 queries, blowup 3, which increases both proof size and prover
+work) or for the wallet's own allocations. It needs either a 16,384-query-class
+engineering budget or a different hash/recursion. Do not promise a phone wallet
+until it is measured with production parameters.
 
 **D-M3-5.** If the packed measurement fails, the fallback order is: (1) split AIRs +
 recursive aggregation, (2) zkVM with a Keccak/ML-KEM precompile, (3) algebraic hash
@@ -197,11 +212,13 @@ re-costed with this model before implementation.
 
 ## Part D - what would falsify this analysis
 
-- A measured single-proof peak far below the 9.5x multiplier (for example the 5x
-  column): R-lean would then be about 6.2 GiB - still over, so D-M3-2 holds; the
-  packed profile would be about 1.3 GiB, strengthening D-M3-3.
-- Evidence that the path bit columns can be eliminated without adding them back
-  elsewhere: strengthens D-M3-3.
+- **Already observed:** the single-proof ratio measured 4.04x, not 9.5x. That moved
+  R-lean from 11.8 GiB to 4.9 GiB (still over the gate) and the packed profile to
+  1.0 GiB, strengthening D-M3-3 without changing D-M3-2. The model now reports both.
+- A packed-path build that adds the limb columns back elsewhere (for example if the
+  Keccak frame forces per-bit expansion across all rows) would erase the gain. This
+  is the single assumption the next milestone must test.
 - A production FRI configuration (more queries, larger blowup) *increases* both
   proof size and prover work; the model's blowup-2 test profile is therefore
-  optimistic. This is another reason to treat 2.4 GiB as a floor, not a promise.
+  optimistic. This is another reason to treat the packed estimate as a floor, not a
+  promise, and to re-measure with production parameters.

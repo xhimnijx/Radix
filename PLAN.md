@@ -83,10 +83,13 @@ columns, not the crypto banks. Packing the path witness into 16-bit limbs predic
 NO-GO for the monolithic AIR as structured; implement R-lean + packed path next,
 with a measured <= 4 GiB pass rule.
 
-**Exit artifacts:** `LEAN-RELATION.md`, `experiments/lean_relation_sizing.py`,
-`STATUS.md` decision record. **Still required for M3 to *pass*:** a measured
-single-proof peak on the reference laptop class (blocked locally by the missing
-Rust linker; must run in CI or on a machine with MSVC Build Tools).
+**Exit artifacts:** `LEAN-RELATION.md`, `MEASUREMENTS.md`,
+`experiments/lean_relation_sizing.py`, `experiments/measure_rust_test.ps1`,
+`STATUS.md` decision record. **Measured 2026-11-08** on the pre-rebuild harness
+(single path proof 2.49 GiB / 17.9 s; composed multi-proof 8.61 GiB / 60.0 s).
+**Still required for M3 to *pass*:** a measured single-proof peak for the
+*packed-path* build with production FRI parameters. That needs a machine with a
+working Rust linker (MSVC Build Tools or MinGW); it cannot run on this host.
 
 ### M4 — End-to-end non-value demo *(conditional on M3 passing)*
 One 1-in/1-out shielded transfer: CLI wallet → real proof → `apply_block` → verify, on one machine, with a measurement table (prove time, verify time, peak RSS, proof bytes).

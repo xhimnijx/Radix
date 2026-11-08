@@ -16,6 +16,11 @@ python -m examples.launch_gate_check                 # prints why mainnet is loc
 
 cd proof_harness
 cargo +stable-x86_64-pc-windows-gnu check --locked --tests   # exit 0
+
+# Measured prover peaks (prebuilt 2026-11-01 binary; see MEASUREMENTS.md)
+& .\experiments\measure_rust_test.ps1 `
+  -Binary "proof_harness\target\release\deps\radix_proof_harness-a6743722e416b94c.exe" `
+  -TestName "depth64_path_opening::tests::proves_and_verifies_private_depth64_path"
 ```
 
 **Local toolchain caveat.** This machine has no MSVC linker and no MinGW linker,
@@ -61,22 +66,27 @@ better — recorded honestly rather than hidden:
 `python -m experiments.lean_relation_sizing` and `LEAN-RELATION.md` record a
 decision-grade result:
 
-| Profile | Predicted peak | Desktop 4 GiB | Mobile 1 GiB |
-|---|---:|---|---|
-| R-fat (current RDXL64P1) | 36.3 GiB | 9.1x over | 36x over |
-| R-lean (drop in-circuit KDF/AEAD) | 11.8 GiB | 2.9x over | 11.8x over |
-| **R-lean + packed path witness** | **2.4 GiB** | **fits (0.6x)** | 2.4x over |
-| RDXZ64P1 path-only floor | 5.9 GiB | 1.5x over | 5.9x over |
+| Profile | Peak @4x (single proof) | Peak @9.5x (planning) | Desktop 4 GiB | Mobile 1 GiB |
+|---|---:|---:|---|---|
+| R-fat (current RDXL64P1) | 15.3 GiB | 36.3 GiB | 3.8x over | 15x over |
+| R-lean (drop in-circuit KDF/AEAD) | 4.9 GiB | 11.8 GiB | 1.2x over | 4.9x over |
+| **R-lean + packed path witness** | **1.0 GiB** | **2.4 GiB** | **fits** | at cap / 2.4x over |
+| RDXZ64P1 path-only floor | 2.5 GiB | 5.9 GiB | fits at 4x | 2.5x over |
+
+Measured on this host (`MEASUREMENTS.md`): a single focused path-only proof peaks at
+**2.49 GiB / 17.9 s** (LDE 0.62 GiB, ratio 4.04x); a composed multi-proof test peaks
+at **8.61 GiB / 60.0 s** (LDE 0.92 GiB, ratio 9.39x). The 4x figure is what a wallet
+does; the 9.4x figure is what a batch/test process does.
 
 - Dropping in-circuit KEM/AEAD is justified by the soundness note (Part A of
-  `LEAN-RELATION.md`) but is **not sufficient** on its own.
+  `LEAN-RELATION.md`), but on its own it is only marginal (4.9 GiB at 4x).
 - The binding constraint is the **8,192 bit-sliced path columns**, not the crypto
-  banks. Packing each digest into 16-bit limbs is the only quantified route to a
-  desktop-fitting transaction proof.
-- **Mobile is out of reach** on this architecture at any combination tested; it
-  needs an algebraic hash, recursion, or a zkVM.
-- All numbers are estimates from a model calibrated on two measured runs
-  (9.5x peak/LDE), not new measurements. The next gate is a measurement.
+  banks. Packing each digest into 16-bit limbs is the quantified route to a
+  desktop-fitting transaction proof (1.0-2.4 GiB predicted).
+- Mobile is **not established**: 1.0 GiB sits exactly on the cap, and a production
+  FRI configuration increases both memory and proving work.
+- The packed-path figure is still a *prediction*. The next gate is a measurement of
+  a packed build with production parameters.
 
 ## Not implemented (unchanged blockers)
 

@@ -30,12 +30,19 @@ ZK_RANDOM_CODEWORDS = 4  # Pcs::new(..., 4, ...)
 DESKTOP_CAP = 4 * 1024**3
 MOBILE_CAP = 1 * 1024**3
 
-#: Measured peak / LDE ratio. Derived from the two published focused runs:
-#:   RDXI64P1: LDE 871,440,128 B, peak 7,911.7 MiB -> 9.52x
-#:   RDXJ64P1: LDE 985,006,080 B, peak 9,518.0 MiB -> 10.13x
-#: Both are *test-process* peaks (trace + proof + harness), so a single isolated
-#: proving call may be lower. Using 9.5x is deliberately conservative.
-EMPIRICAL_PEAK_PER_LDE = 9.5
+#: Peak / LDE ratio. Two regimes, both measured on 2026-11-08 with
+#: `experiments/measure_rust_test.ps1` against prebuilt release test binaries:
+#:
+#:   single focused proof (RDXZ64P1, path only):
+#:       LDE 661,323,776 B, peak 2,669,219,840 B -> 4.04x
+#:   composed test that builds several proofs (RDXK64P1):
+#:       LDE 985,006,080 B, peak 9,242,767,360 B -> 9.39x
+#:
+#: A wallet proves exactly one transaction, so 4.0x is the relevant figure and
+#: 9.5x is the conservative planning bound. Budget checks report both.
+SINGLE_PROOF_MULTIPLIER = 4.0
+PLANNING_MULTIPLIER = 9.5
+EMPIRICAL_PEAK_PER_LDE = PLANNING_MULTIPLIER
 
 #: Width banks that exist only to prove KDF/AEAD consistency. Each entry is a
 #: slice that disappears in the lean relation. Source: depth64_path_opening.rs
@@ -95,13 +102,18 @@ class Profile:
     def predicted_peak_bytes(self) -> int:
         return int(self.lde_bytes * EMPIRICAL_PEAK_PER_LDE)
 
+    @property
+    def single_proof_peak_bytes(self) -> int:
+        return int(self.lde_bytes * SINGLE_PROOF_MULTIPLIER)
+
     def describe(self) -> str:
         return (
             f"{self.name}: active={self.active_rows:,} rows={self.rows:,} "
             f"width={self.width:,} trace={self.trace_bytes/1e6:,.0f} MB "
             f"LDE={self.lde_bytes/2**30:,.2f} GiB "
             f"overlap={self.overlap_bytes/2**30:,.2f} GiB "
-            f"predicted peak={self.predicted_peak_bytes/2**30:,.1f} GiB"
+            f"peak@4x={self.single_proof_peak_bytes/2**30:,.1f} GiB "
+            f"peak@9.5x={self.predicted_peak_bytes/2**30:,.1f} GiB"
         )
 
 
@@ -139,8 +151,8 @@ def main() -> int:
     print("Static cost model for the Candidate-A transaction relation")
     print(f"field={FIELD_BYTES}B extension={EXT_FIELD_BYTES}B blowup=2^"
           f"{LOG_BLOWUP} zk_codewords={ZK_RANDOM_CODEWORDS}")
-    print(f"empirical peak/LDE multiplier: {EMPIRICAL_PEAK_PER_LDE}x "
-          "(focused RDXI/RDXJ test-process peaks)")
+    print(f"empirical peak/LDE multiplier: {SINGLE_PROOF_MULTIPLIER}x single proof, "
+          f"{PLANNING_MULTIPLIER}x conservative planning (measured 2026-11-08)")
     print()
 
     print("Removed column banks in the lean relation:")
@@ -155,19 +167,30 @@ def main() -> int:
 
     print("Budget checks (predicted peak, see LEAN-RELATION.md for caveats):")
     for profile in (rdxl, lean, packed, floor):
+        single = profile.single_proof_peak_bytes
+        conservative = profile.predicted_peak_bytes
+        verdict = (
+            "FITS desktop"
+            if conservative <= DESKTOP_CAP
+            else ("fits desktop only at 4x" if single <= DESKTOP_CAP else "EXCEEDS desktop")
+        )
+        mobile = (
+            "fits mobile at 4x"
+            if single <= MOBILE_CAP
+            else f"{single / MOBILE_CAP:.1f}x mobile cap at 4x"
+        )
         print(
-            f"  {profile.name}: desktop {'FITS' if profile.predicted_peak_bytes <= DESKTOP_CAP else 'EXCEEDS'}"
-            f" ({profile.predicted_peak_bytes / DESKTOP_CAP:.1f}x cap),"
-            f" mobile {'FITS' if profile.predicted_peak_bytes <= MOBILE_CAP else 'EXCEEDS'}"
-            f" ({profile.predicted_peak_bytes / MOBILE_CAP:.1f}x cap)"
+            f"  {profile.name}: {verdict} "
+            f"({single / DESKTOP_CAP:.1f}x cap at 4x, {conservative / DESKTOP_CAP:.1f}x at 9.5x); "
+            f"{mobile}"
         )
     print()
 
     print("Sensitivity: predicted peak under different peak/LDE multipliers")
-    print(f"  {'profile':28s} " + " ".join(f"{m:>7}x" for m in (5.0, 7.5, 9.5, 12.0)))
+    print(f"  {'profile':28s} " + " ".join(f"{m:>7}x" for m in (4.0, 5.0, 7.5, 9.5, 12.0)))
     for profile in (rdxl, lean, packed, floor):
         cells = " ".join(
-            f"{profile.lde_bytes * m / 2**30:7.1f}" for m in (5.0, 7.5, 9.5, 12.0)
+            f"{profile.lde_bytes * m / 2**30:7.1f}" for m in (4.0, 5.0, 7.5, 9.5, 12.0)
         )
         print(f"  {profile.name:28s} {cells}   (GiB)")
     print()
