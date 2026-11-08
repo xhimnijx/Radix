@@ -157,3 +157,47 @@ paper headline; the project already made that mistake once with STARK knobs.
 The next concrete action is B1: transcribe a pinned SMILE revision into a parameter
 manifest, then price B2 with the same model used here. That is a paper-and-spreadsheet
 task, which is why it can proceed before any linker or prover exists.
+
+## 8. Where B actually stands after implementing it (2026-11-08)
+
+**B1 is done.** The SMILE manifest is transcribed with page citations, and every
+dimension is in `CANDIDATE-B-PARAMETERS.md`.
+
+**B2 is partially done, and the half that exists is measured.** The set-membership
+proof of Figs. 7-9 is implemented and tested end to end
+(`lattice/setmembership.py`), behind a ring-signature API and a spend layer.
+At a 1024-member ring: proof **32,512 B**, prove **21 s**, verify **20 s**,
+single-threaded CPython. That is inside the 100 KB pre-registered pass rule for
+size; the time is a Python artifact and says nothing about a Rust build.
+Amount commitments, range proofs and conservation are **not** implemented, so B2
+is not passed.
+
+**B3 is the critical path, and it is exactly as hard as section 7 guessed.**
+Implementing Figs. 7-9 confirmed the hard way: the construction produces **no
+tag**. The signature proves "one of these `l^m` keys is mine" and nothing more,
+so the same key can sign without limit and two signatures are unlinkable. A
+transaction layer cannot be built on that: double spending is undetectable.
+
+The route the algebra suggests -- and the one lattice linkable ring signatures
+use -- is a linear tag `T = A' s` for a second public matrix `A'`, revealed
+through the same masking as `z'`. The prover sends `tau = A' y'`; the verifier
+computes `A' z' - tau = c' * T` and recovers `T`, since `c'` is invertible with
+overwhelming probability. Two accepting transcripts then give `A s* = c* pk` and
+`A' s* = c* T`, so `s*/c*` is a preimage of both claims -- the standard
+key-image argument.
+
+That is a **sketch, not a proof**, and it is recorded as such. Open questions
+before any of it may be claimed:
+
+1. Invertibility of `c'` in `R_q` with the challenge distribution actually used
+   here (dense ternary), not the paper's sparse one.
+2. Whether the extraction survives the *relaxed* relation `A s* = c* pk` when the
+   tag is only known through `c' * T`.
+3. Linkability across arbitrary rings: the same note must give the same `T` even
+   when the ring, the index and `c'` change.
+4. Composition with the set-membership proof: one shared witness, not two
+   independently witnessed statements.
+
+Until those four are settled, B has a ring signature and **no transaction layer**,
+and the distance between the two is a research result rather than an engineering
+task.
