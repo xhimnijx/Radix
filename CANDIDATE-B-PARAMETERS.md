@@ -62,6 +62,7 @@ large prover workspace**.
 | Parameter manifest | done, tested | values above, with provenance |
 | Negacyclic ring `R_q = Z_q[X]/(X^d+1)` | done, tested | naive O(d²) multiplication; identity, distributivity, `X^d = -1`, encoding, centered norms |
 | BDLOP commitment `(t;u) = (B;b)·s + (0;m)` | done, tested | setup, commit, verify, additive homomorphism, k×ℓ shape enforced |
+| Proof of knowledge of a BDLOP opening (Sigma) | done, tested | `lattice/sigma.py`: ternary challenge, 2^20 masking, no rejection, 6.8 KB proof, 10 tests. This is the `pi` of SMILE Fig. 5 |
 | Set-membership proof (the actual SMILE contribution) | **not implemented** | Fig. 6, p. 15 and the protocol figures that follow |
 | Ring-signature transformation | **not implemented** | p. 9 "ring signature from set membership" |
 | Fiat-Shamir with rejection sampling | **not implemented** | distribution and bounds are in the paper's parameter derivation, p. 48 |
