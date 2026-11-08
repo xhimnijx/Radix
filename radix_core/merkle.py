@@ -107,16 +107,30 @@ class OutputTree:
     def append(self, leaf: bytes) -> int:
         return self.append_many((leaf,))[0]
 
-    def append_many(self, leaves: Iterable[bytes]) -> tuple[int, ...]:
+    def append_many(
+        self, leaves: Iterable[bytes], *, limit: int | None = None
+    ) -> tuple[int, ...]:
         self.validate_integrity()
-        items = tuple(leaves)
-        for leaf in items:
+        # Consume at most `min(capacity, limit) + 1` items so an unbounded or
+        # hostile iterable cannot exhaust memory before the capacity check runs.
+        cap = CAPACITY - self.leaf_count
+        if limit is not None:
+            if type(limit) is not int or limit < 0:
+                raise ValueError("append limit must be a nonnegative integer")
+            cap = min(cap, limit)
+        items: list[bytes] = []
+        for leaf in leaves:
+            if len(items) >= cap:
+                raise ValueError(
+                    "append exceeds the declared limit or depth-64 tree capacity"
+                )
             _check_digest(leaf, "tree leaf")
             if leaf == EMPTY_HASHES[0]:
                 raise ValueError("populated leaf equals reserved empty-leaf digest")
-        new_count = check_append_capacity(self.leaf_count, len(items))
+            items.append(leaf)
         if not items:
             return ()
+        new_count = check_append_capacity(self.leaf_count, len(items))
 
         staged = self.clone()
         indices: list[int] = []

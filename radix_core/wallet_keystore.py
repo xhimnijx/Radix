@@ -72,7 +72,10 @@ def seal_wallet_keys_v1(
 ) -> bytes:
     """Encrypt wallet secrets; requires a durable nonce registry and burns use first."""
     _password_bytes(password)
-    if not isinstance(nonce_registry, AeadNonceRegistry) or not nonce_registry.is_persistent:
+    # Exact type plus the unbound method: an isinstance check with a virtual call
+    # lets a subclass report a persistent registry while reserving nothing, which
+    # would silently disable the mandatory nonce-burn guard.
+    if type(nonce_registry) is not AeadNonceRegistry or not nonce_registry.is_persistent:
         raise ValueError("wallet sealing requires a persistent AeadNonceRegistry")
     if type(keys) is not WalletKeysV1:
         raise ValueError("wallet keys must be a WalletKeysV1 record")
@@ -88,7 +91,7 @@ def seal_wallet_keys_v1(
     salt = draw_random_bytes(SALT_BYTES, entropy_source)
     nonce = draw_aead_nonce_v1(entropy_source)
     key = _derive_key(password, salt)
-    nonce_registry.reserve(key, nonce)
+    AeadNonceRegistry.reserve(nonce_registry, key, nonce)
     plaintext = _secret_frame(keys.spend_secret, keys.viewing_public_key, keys.decapsulation_key)
     try:
         ciphertext = AESGCM(key).encrypt(nonce, plaintext, _aad(salt))

@@ -14,12 +14,17 @@ PROPOSED_INITIAL_SUBSIDY = 10 * PROPOSED_BASE_UNITS_PER_RAD
 PROPOSED_TAIL_SUBSIDY = PROPOSED_BASE_UNITS_PER_RAD // 10
 PROPOSED_DECAY_NUMERATOR = 999_525
 PROPOSED_DECAY_DENOMINATOR = 1_000_000
+# A decay multiplier at or above 1.0 would never reach the tail; the loop is
+# bounded so a governance change cannot hang `import radix_core`.
+MAX_PROPOSED_EPOCHS = 100_000
 
 
 def _build_epoch_schedule() -> tuple[int, ...]:
     """Return one exact subsidy per epoch, ending at the first tail epoch."""
     schedule = [PROPOSED_INITIAL_SUBSIDY]
     while schedule[-1] > PROPOSED_TAIL_SUBSIDY:
+        if len(schedule) >= MAX_PROPOSED_EPOCHS:
+            raise ValueError("subsidy schedule does not reach the tail within the epoch bound")
         next_subsidy = (
             schedule[-1] * PROPOSED_DECAY_NUMERATOR
             // PROPOSED_DECAY_DENOMINATOR

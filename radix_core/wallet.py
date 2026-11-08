@@ -26,12 +26,14 @@ from .providers import (
     MlKem768Provider,
     MLKEM768_DECAPSULATION_KEY_BYTES,
     MLKEM768_PUBLIC_KEY_BYTES,
+    NotePlaintextError,
     decapsulate_v1,
     decrypt_note_v1,
     encapsulate_v1,
     encrypt_note_v1,
     generate_keypair_v1,
 )
+from .cryptography_backend import validate_mlkem768_public_key
 from .wire import (
     MAX_OUTPUT_RAW_FIELD_BYTES,
     OutputRecord,
@@ -251,11 +253,15 @@ def _validate_note_output_request(
     memo: bytes,
     nonce_registry: AeadNonceRegistry | None,
 ) -> None:
+    # Canonical ML-KEM-768 encoding is checked here, not delegated to whichever
+    # provider happens to be injected: a non-canonical viewing key yields an
+    # unspendable output that is indistinguishable on-chain from a valid one.
     if (
         type(viewing_public_key) is not bytes
         or len(viewing_public_key) != MLKEM768_PUBLIC_KEY_BYTES
     ):
         raise ValueError("ML-KEM-768 public key must be exactly 1184 bytes")
+    validate_mlkem768_public_key(viewing_public_key)
     if type(value) is not int or not 1 <= value <= U64_MAX:
         raise ValueError("note value must be a nonzero U64")
     if type(memo) is not bytes or len(memo) > MEMO_MAX:
@@ -439,7 +445,8 @@ def _recover_note_from_snapshot_v1(
             snapshot.nonce,
             snapshot.ciphertext,
         )
-    except AeadAuthenticationError:
+    except (AeadAuthenticationError, NotePlaintextError):
+        # Not ours, or ours only under a forged payload: both are non-matches.
         return None
 
     value, rho, randomness, memo = decode_plaintext_v1(plaintext)
@@ -549,14 +556,23 @@ def _recover_scan_snapshots(
 ) -> tuple[ScannedNoteV1, ...]:
     recovered: list[ScannedNoteV1] = []
     for offset, output in enumerate(snapshots):
-        note = _recover_note_from_snapshot_v1(
-            kem_provider,
-            aead_provider,
-            decapsulation_key,
-            spend_secret,
-            spend_public_key,
-            output,
-        )
+        try:
+            note = _recover_note_from_snapshot_v1(
+                kem_provider,
+                aead_provider,
+                decapsulation_key,
+                spend_secret,
+                spend_public_key,
+                output,
+            )
+        except NoteRecoveryError:
+            # An output can authenticate yet fail to open to its public
+            # commitment. Any third party who knows the victim's public address
+            # can construct one, so it must never abort the chunk: treating it as
+            # a non-match is what keeps scan liveness in the control of the owner.
+            # Infrastructure faults (CryptoBackendError, EntropyError, ...) are
+            # deliberately not caught here.
+            continue
         if note is not None:
             recovered.append(ScannedNoteV1(output_index=start_index + offset, note=note))
     return tuple(recovered)

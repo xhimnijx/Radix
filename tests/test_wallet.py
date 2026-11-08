@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+﻿from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
 import pytest
@@ -161,7 +161,7 @@ def test_wallet_creates_canonical_output_and_keeps_local_opening_for_recovery():
     created = create_note_output_v1(
         kem,
         aead,
-        b"p" * 1184,
+        bytes(1184),
         SPEND_SECRET,
         23,
         b"created in test",
@@ -1021,7 +1021,7 @@ def test_wallet_creation_rejects_invalid_inputs_and_entropy_before_kem_call():
         create_note_output_v1(
             kem,
             FakeAeadProvider(),
-            b"p" * 1184,
+            bytes(1184),
             SPEND_SECRET,
             0,
             entropy_source=FixedEntropy([]),
@@ -1032,7 +1032,7 @@ def test_wallet_creation_rejects_invalid_inputs_and_entropy_before_kem_call():
         create_note_output_v1(
             kem,
             FakeAeadProvider(),
-            b"p" * 1184,
+            bytes(1184),
             SPEND_SECRET,
             1,
             entropy_source=FixedEntropy([b"short"]),

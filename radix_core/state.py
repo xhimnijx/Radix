@@ -403,7 +403,7 @@ def apply_block(
             yield output.leaf
 
     try:
-        staged_tree.append_many(block_output_leaves())
+        staged_tree.append_many(block_output_leaves(), limit=output_count)
     except (TypeError, ValueError) as exc:
         _reject(f"block output-tree append failed: {exc}")
 

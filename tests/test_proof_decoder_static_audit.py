@@ -1,4 +1,4 @@
-import re
+﻿import re
 from math import prod
 from pathlib import Path
 
@@ -65,6 +65,13 @@ def _rust_product_constant(source: str, name: str) -> int:
     return prod(factors)
 
 
+def _rust_pinned_u64(source: str, field: str) -> int:
+    """Read a `assert_eq!(report.<field>, N);` pin so Python and Rust agree."""
+    match = re.search(rf"assert_eq!\(report\.{re.escape(field)}, ([0-9_]+)\);", source)
+    assert match is not None, field
+    return int(match.group(1).replace("_", ""))
+
+
 def test_rdxl_overlap_estimate_exceeds_declared_device_budgets():
     source = (PROOF_HARNESS_SRC / "depth64_path_opening.rs").read_text(encoding="utf-8")
     dimensions = re.search(
@@ -88,18 +95,18 @@ def test_rdxl_overlap_estimate_exceeds_declared_device_budgets():
     lde_rows = randomized_rows * (1 << int(blowup.group(1)))
     lde_bytes = lde_rows * randomized_width * 4
     estimated_overlap = randomized_bytes + lde_bytes
-    # Conservative nominal FFT work proxy: each LDE coset applies a full
-    # radix-2 transform of randomized_rows values across every column.
-    dft_stages = randomized_rows.bit_length() - 1
-    cosets = lde_rows // randomized_rows
-    lde_butterfly_proxy = (
-        cosets * randomized_width * (randomized_rows // 2) * dft_stages
-    )
 
     desktop_budget = _rust_product_constant(source, "DESKTOP_PROCESS_BUDGET_BYTES")
     mobile_budget = _rust_product_constant(source, "MOBILE_PROCESS_BUDGET_BYTES")
-    assert estimated_overlap == 4_745_134_080
-    assert lde_butterfly_proxy == 6_643_187_712
+
+    # The Rust resource report pins the same numbers; compare against those pins
+    # instead of duplicating literals here, so the layout cannot drift silently.
+    assert trace_rows * trace_width * 4 == _rust_pinned_u64(source, "trace_payload_bytes")
+    assert randomized_bytes == _rust_pinned_u64(source, "randomized_payload_bytes")
+    assert lde_bytes == _rust_pinned_u64(source, "lde_payload_bytes")
+    assert estimated_overlap == _rust_pinned_u64(
+        source, "randomized_plus_lde_payload_bytes"
+    )
     assert estimated_overlap > desktop_budget == 4_294_967_296
     assert estimated_overlap > mobile_budget == 1_073_741_824
 
@@ -107,7 +114,7 @@ def test_rdxl_overlap_estimate_exceeds_declared_device_budgets():
 def test_rdxl_resource_report_overflow_fails_closed():
     source = (PROOF_HARNESS_SRC / "depth64_path_opening.rs").read_text(encoding="utf-8")
     report = _rust_function_body(source, "fn rdxl_resource_report()")
-    guard = _rust_function_body(source, "fn ensure_rdxl_desktop_process_budget()")
+    guard = _rust_function_body(source, "fn ensure_rdxl_process_budget()")
 
     assert "trace_rows.checked_mul(trace_width)?.checked_mul(field_bytes)?" in re.sub(
         r"\s+", "", report
@@ -131,7 +138,7 @@ def test_rdxl_resource_report_overflow_fails_closed():
 
 def test_rdxl_prover_has_preallocation_process_budget_guard():
     source = (PROOF_HARNESS_SRC / "depth64_path_opening.rs").read_text(encoding="utf-8")
-    guard = _rust_function_body(source, "fn ensure_rdxl_desktop_process_budget()")
+    guard = _rust_function_body(source, "fn ensure_rdxl_process_budget()")
     prover = _rust_function_body(
         source,
         "pub fn prove_source_key_note_nullifier_output_balance_depth64_path_with_output_secret(",
@@ -141,8 +148,8 @@ def test_rdxl_prover_has_preallocation_process_budget_guard():
     assert "randomized_plus_lde_payload_bytes" in guard
     assert "desktop_process_budget_bytes" in guard
     assert "Depth64PathProofError::ResourceBudgetExceeded" in guard
-    assert "ensure_rdxl_desktop_process_budget()?;" in prover
-    guard_offset = prover.index("ensure_rdxl_desktop_process_budget()?;")
+    assert "ensure_rdxl_process_budget()?;" in prover
+    guard_offset = prover.index("ensure_rdxl_process_budget()?;")
     for allocation_marker in (
         "note_commitment_opening::build_trace(",
         "build_source_key_note_nullifier_trace_with_width(",
@@ -170,7 +177,7 @@ def test_rdxl_fixed_156_output_profile_rejects_other_statement_lengths_early():
     profile_check = "if statement.output.ciphertext.len() != OUTPUT_CIPHERTEXT_BYTES"
     assert profile_check in prover and profile_check in public_values
     assert prover.index(profile_check) < prover.index("checked_source_leaf_blocks(source)?")
-    assert prover.index(profile_check) < prover.index("ensure_rdxl_desktop_process_budget()?;")
+    assert prover.index(profile_check) < prover.index("ensure_rdxl_process_budget()?;")
     assert public_values.index(profile_check) < public_values.index("output_leaf_frame(")
 
 

@@ -43,6 +43,16 @@ class AeadAuthenticationError(CryptoBackendError):
     """An AEAD provider reports a ciphertext/tag authentication rejection."""
 
 
+class NotePlaintextError(CryptoBackendError):
+    """A ciphertext authenticated but did not decode as a canonical note plaintext.
+
+    This is attacker-supplied data, not an infrastructure fault: any third party
+    can construct a well-formed ciphertext whose plaintext fails the note rules
+    (for example ``value == 0``). Batch scanners must treat it as a non-match,
+    never as a fatal error, or a single crafted output can halt a wallet.
+    """
+
+
 class NonceReuseError(RuntimeError):
     """An AES-GCM key/nonce pair was already reserved in this registry."""
 
@@ -74,7 +84,7 @@ class AeadNonceRegistry:
 
     def __init__(
         self,
-        max_entries: int | None = 100_000,
+        max_entries: int | None = None,
         *,
         database_path: str | PathLike[str] | None = None,
     ) -> None:
@@ -432,5 +442,8 @@ def decrypt_note_v1(
     try:
         decode_plaintext_v1(plaintext)
     except ValueError as exc:
-        raise CryptoBackendError("AES-256-GCM returned a noncanonical note plaintext") from exc
+        # Authenticated but non-canonical plaintext is attacker-controlled data,
+        # not a backend fault. Keep it distinguishable so batch scanners can skip
+        # it without conflating it with an infrastructure failure.
+        raise NotePlaintextError("AES-256-GCM returned a noncanonical note plaintext") from exc
     return plaintext

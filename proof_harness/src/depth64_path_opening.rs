@@ -109,11 +109,22 @@ const INPUT_NOTE_RHO_RANDOMNESS_BYTES: usize = 128;
 const INPUT_NOTE_RHO_RANDOMNESS_BYTES_OFFSET: usize =
     INPUT_AEAD_SOURCE_BYTES_OFFSET + INPUT_AEAD_SOURCE_BYTES;
 const AES256_EXPANDED_KEY_BITS: usize = 240 * 8;
-const AES256_KEY_SCHEDULE_OVERLAY_BITS: usize = INPUT_KDF_SOURCE_BYTES;
-const AES256_KEY_SCHEDULE_TAIL_BITS: usize =
-    AES256_EXPANDED_KEY_BITS - AES256_KEY_SCHEDULE_OVERLAY_BITS;
+// The expanded AES-256 key schedule occupies one contiguous 1,920-bit bank.
+//
+// An earlier experiment tried to overlay the first 1,152 bits on the input-KDF
+// source-byte bank to save trace width. That split was never made consistent:
+// all fourteen access sites kept a single contiguous `BITS_OFFSET + index`
+// expression, and the two halves do not share a lifetime (the source bytes are
+// still live through the final input-KDF row, while key bits are written from
+// the key-schedule row onward). Rather than half-land the optimisation, the
+// layout is reverted to a dedicated bank. Reintroduce the overlay only together
+// with an accessor, a proven column-lifetime argument, and a test that asserts
+// every `(offset, length)` slice is disjoint except for the documented
+// mutually-exclusive AES S-box reuse below.
+const AES256_KEY_SCHEDULE_TAIL_BITS: usize = AES256_EXPANDED_KEY_BITS;
 const AES256_KEY_SCHEDULE_TAIL_OFFSET: usize =
     INPUT_NOTE_RHO_RANDOMNESS_BYTES_OFFSET + INPUT_NOTE_RHO_RANDOMNESS_BYTES;
+const AES256_KEY_SCHEDULE_BITS_OFFSET: usize = AES256_KEY_SCHEDULE_TAIL_OFFSET;
 const AES256_KEY_SCHEDULE_ACTIVE_OFFSET: usize =
     AES256_KEY_SCHEDULE_TAIL_OFFSET + AES256_KEY_SCHEDULE_TAIL_BITS;
 const AES256_KEY_SCHEDULE_INDEX_BITS_OFFSET: usize = AES256_KEY_SCHEDULE_ACTIVE_OFFSET + 1;
@@ -5478,22 +5489,52 @@ mod tests {
     use std::time::Instant;
 
     #[test]
+    fn aes_key_schedule_bank_is_contiguous_and_disjoint() {
+        // The expanded schedule is one bank of AES256_EXPANDED_KEY_BITS bits,
+        // followed immediately by the key-schedule stage selector and index
+        // bits. A future overlay optimisation must preserve this invariant or
+        // replace it with an accessor plus a column-disjointness test.
+        assert_eq!(
+            AES256_KEY_SCHEDULE_BITS_OFFSET,
+            AES256_KEY_SCHEDULE_TAIL_OFFSET
+        );
+        assert_eq!(
+            AES256_KEY_SCHEDULE_ACTIVE_OFFSET,
+            AES256_KEY_SCHEDULE_BITS_OFFSET + AES256_EXPANDED_KEY_BITS
+        );
+        assert_eq!(
+            AES256_KEY_SCHEDULE_INDEX_BITS_OFFSET,
+            AES256_KEY_SCHEDULE_ACTIVE_OFFSET + 1
+        );
+        assert!(AES256_KEY_SCHEDULE_ACTIVE_OFFSET < RDXL_TRACE_WIDTH);
+    }
+
+    #[test]
     fn rdxl_resource_report_matches_pinned_workspace_dimensions() {
         let report = rdxl_resource_report().expect("fixed dimensions fit usize");
-        assert_eq!(AES256_BLOCK_ACTIVE_OFFSET, AES256_KEY_SCHEDULE_INDEX_BITS_OFFSET + 4);
-        assert_eq!(AES256_SBOX_INPUT_BITS_OFFSET, AES256_BLOCK_STATE_INPUT_BITS_OFFSET);
-        assert_eq!(AES256_SBOX_OUTPUT_BITS_OFFSET, AES256_BLOCK_SBOX_OUTPUT_BITS_OFFSET);
+        assert_eq!(
+            AES256_BLOCK_ACTIVE_OFFSET,
+            AES256_KEY_SCHEDULE_INDEX_BITS_OFFSET + 4
+        );
+        assert_eq!(
+            AES256_SBOX_INPUT_BITS_OFFSET,
+            AES256_BLOCK_STATE_INPUT_BITS_OFFSET
+        );
+        assert_eq!(
+            AES256_SBOX_OUTPUT_BITS_OFFSET,
+            AES256_BLOCK_SBOX_OUTPUT_BITS_OFFSET
+        );
         assert_eq!(AES256_SBOX_WITNESS_OFFSET, AES256_BLOCK_SBOX_WITNESS_OFFSET);
-        assert_eq!((report.trace_rows, report.trace_width), (8_192, 14_477));
-        assert_eq!(report.trace_payload_bytes, 474_382_336);
+        assert_eq!((report.trace_rows, report.trace_width), (8_192, 15_629));
+        assert_eq!(report.trace_payload_bytes, 512_131_072);
         assert_eq!(
             (report.randomized_rows, report.randomized_width),
-            (16_384, 14_481)
+            (16_384, 15_633)
         );
-        assert_eq!(report.randomized_payload_bytes, 949_026_816);
-        assert_eq!((report.lde_rows, report.lde_width), (65_536, 14_481));
-        assert_eq!(report.lde_payload_bytes, 3_796_107_264);
-        assert_eq!(report.randomized_plus_lde_payload_bytes, 4_745_134_080);
+        assert_eq!(report.randomized_payload_bytes, 1_024_524_288);
+        assert_eq!((report.lde_rows, report.lde_width), (65_536, 15_633));
+        assert_eq!(report.lde_payload_bytes, 4_098_097_152);
+        assert_eq!(report.randomized_plus_lde_payload_bytes, 5_122_621_440);
         assert_eq!(report.desktop_process_budget_bytes, 4_294_967_296);
         assert_eq!(report.mobile_process_budget_bytes, 1_073_741_824);
     }
@@ -5501,14 +5542,14 @@ mod tests {
     #[test]
     fn rdxl_proving_preflight_rejects_current_estimate() {
         let report = rdxl_resource_report().expect("fixed dimensions fit usize");
-        let error = ensure_rdxl_process_budget()
-            .expect_err("the current RDXL profile must fail closed");
+        let error =
+            ensure_rdxl_process_budget().expect_err("the current RDXL profile must fail closed");
         assert!(report.randomized_plus_lde_payload_bytes > 1_073_741_824);
         assert!(report.randomized_plus_lde_payload_bytes > 4_294_967_296);
         assert_eq!(
             error,
             Depth64PathProofError::ResourceBudgetExceeded {
-                estimated_workspace_bytes: 4_745_134_080,
+                estimated_workspace_bytes: 5_122_621_440,
                 process_budget_bytes: 1_073_741_824,
             }
         );

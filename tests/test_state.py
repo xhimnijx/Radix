@@ -93,9 +93,9 @@ def test_successful_block_appends_transfers_in_order_then_mint(monkeypatch):
     append_many = OutputTree.append_many
     append_calls = []
 
-    def count_append_calls(tree, leaves):
+    def count_append_calls(tree, leaves, **kwargs):
         append_calls.append(1)
-        return append_many(tree, leaves)
+        return append_many(tree, leaves, **kwargs)
 
     monkeypatch.setattr(OutputTree, "append_many", count_append_calls)
     state = LedgerState.empty()
