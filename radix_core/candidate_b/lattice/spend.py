@@ -112,6 +112,16 @@ class Spend:
         )
 
     @property
+    def tags(self) -> tuple[bytes, ...] | None:
+        """The per-input linkable tags, or None when the spend is untagged."""
+        out = []
+        for signature in self.signatures:
+            if signature.tag_proof is None:
+                return None
+            out.append(ring.encode(signature.tag_proof.tag))
+        return tuple(out)
+
+    @property
     def total_in(self) -> int:
         return sum(self.input_values)
 
@@ -148,6 +158,7 @@ def build_spend(
     anchor: bytes,
     rng: random.Random,
     params: SmileParameters | None = None,
+    tag_keys=None,
 ) -> Spend:
     """Sign one spend: one ring signature per input over the shared message."""
     if not (len(secrets) == len(publics) == len(rings) == len(input_values)):
@@ -156,7 +167,7 @@ def build_spend(
         raise SpendError("anchor must be 32 bytes")
     message = _message(anchor, input_values, outputs, fee, params)
     signatures = tuple(
-        RS.sign(parameters, secret, public, tuple(ring_keys), message, rng, params)
+        RS.sign(parameters, secret, public, tuple(ring_keys), message, rng, params, tag_keys)
         for secret, public, ring_keys in zip(secrets, publics, rings)
     )
     return Spend(
@@ -170,7 +181,10 @@ def build_spend(
 
 
 def verify_spend(
-    parameters: RS.Parameters, spend: Spend, params: SmileParameters | None = None
+    parameters: RS.Parameters,
+    spend: Spend,
+    params: SmileParameters | None = None,
+    tag_keys=None,
 ) -> bool:
     """Check the rings, the balance, and every signature against the message."""
     try:
@@ -178,8 +192,52 @@ def verify_spend(
             return False
         message = spend.message(params)
         return all(
-            RS.verify(parameters, tuple(ring_keys), message, signature, params)
+            RS.verify(parameters, tuple(ring_keys), message, signature, params, tag_keys)
             for ring_keys, signature in zip(spend.rings, spend.signatures)
         )
+    except (TypeError, ValueError):
+        return False
+
+
+class TagSet:
+    """Spent tags. Immutable: ``accept`` returns a new set or raises.
+
+    This is the double-spend check that SMILE's ring signature does not provide on
+    its own. It only works on **tagged** spends: an untagged spend has no
+    linkable handle, so it is refused rather than quietly accepted.
+    """
+
+    __slots__ = ("_tags",)
+
+    def __init__(self, tags: frozenset[bytes] = frozenset()) -> None:
+        self._tags = tags
+
+    @property
+    def tags(self) -> frozenset[bytes]:
+        return self._tags
+
+    def contains(self, tag: bytes) -> bool:
+        return tag in self._tags
+
+    def accept(self, spend: Spend, params: SmileParameters | None = None) -> "TagSet":
+        """Add a spend's tags, refusing a replay or a duplicate within the spend."""
+        if not verify_spend_or_shape(spend):
+            raise SpendError("the spend is malformed")
+        tags = spend.tags
+        if tags is None:
+            raise SpendError("an untagged spend cannot be checked for double spending")
+        fresh = tuple(tags)
+        if len(set(fresh)) != len(fresh):
+            raise SpendError("the spend reuses a tag within itself")
+        for tag in fresh:
+            if tag in self._tags:
+                raise SpendError("this note has already been spent")
+        return TagSet(self._tags | frozenset(fresh))
+
+
+def verify_spend_or_shape(spend: Spend) -> bool:
+    """Cheap structural check used before touching a tag set."""
+    try:
+        return bool(spend.rings) and spend.balanced and len(spend.signatures) == len(spend.rings)
     except (TypeError, ValueError):
         return False
