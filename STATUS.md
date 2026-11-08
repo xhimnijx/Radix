@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation. 47 tests. **No set-membership proof yet.** |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation. 57 tests. **No set-membership proof yet.** |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -133,6 +133,14 @@ so the prototype fixes an NTT-friendly 32-bit prime and sets
 - `tensor.py` is the one-hot / Kronecker indexing that Fig. 6 uses to select a ring
   member without naming it: `n = l^m` up to 2^25, column selection returns exactly
   one column, 9 tests.
+- `ntt.py` is the negacyclic number-theoretic transform: exact integer arithmetic,
+  twist + radix-2, `O(d log d)` instead of `O(d^2)`. It is not an optimisation
+  nicety — the Fig. 6 recursion is stated in the NTT domain (Lemmas 2.1/2.2 are
+  statements about NTT coefficients and the "first `d/l` zero coefficients"), and
+  every honest value there is committed as `NTT^-1` of a short vector. `ring.mul`
+  uses it; `mul_naive` stays as the audited reference and the tests assert they
+  agree coefficient for coefficient. 10 tests. Measured: 1.97 ms -> 1.00 ms per
+  multiplication, full suite 9.97 s -> 5.79 s.
 - `aggregation.py` is **Fig. 5 in full**: `k` input commitments folded into one
   `omega = (f; g_1..g_k; g_w)` under one randomness, with sparse ternary
   challenges, `z = y + sum c_i s_i`, `a* = sum c_i a_i - a_w`,
@@ -147,7 +155,9 @@ quadratic constraints (binary support, the `d/l` zero-coefficient trick,
 `h = g + y_1 + ... + y_m`, and the multiplicative-relation proof between committed
 values). A verifier that skipped it would accept a proof of nothing, so it is not
 stubbed, faked, or marked done. `aggregation.py` is the layer Fig. 6 keeps unchanged;
-the set-membership step swaps the revealed index for that relation.
+the set-membership step swaps the revealed index for that relation. The NTT
+substrate that the recursive argument is written in is now in place, so the next
+component can be written against it instead of being rewritten afterwards.
 
 **New option recorded.** `studies/2026-1983.pdf` turned out to be *Akita*, a 2026
 lattice polynomial commitment scheme (58-68 KB proofs, sublinear prover memory,

@@ -61,6 +61,7 @@ large prover workspace**.
 |---|---|---|
 | Parameter manifest | done, tested | values above, with provenance |
 | Negacyclic ring `R_q = Z_q[X]/(X^d+1)` | done, tested | naive O(d²) multiplication; identity, distributivity, `X^d = -1`, encoding, centered norms |
+| Negacyclic NTT | done, tested | `lattice/ntt.py`: twist + radix-2, exact integer arithmetic; `ring.mul` uses it and `mul_naive` stays as the audited reference; 10 tests; 1.97 ms -> 1.00 ms per multiplication, suite 9.97 s -> 5.79 s |
 | BDLOP commitment `(t;u) = (B;b)·s + (0;m)` | done, tested | setup, commit, verify, additive homomorphism, k×ℓ shape enforced |
 | Proof of knowledge of a BDLOP opening (Sigma) | done, tested | `lattice/sigma.py`: ternary challenge, 2^20 masking, no rejection, 6.8 KB proof, 10 tests. This is the `pi` of SMILE Fig. 5 |
 | Tensor / one-hot indexing | done, tested | `lattice/tensor.py`: one-hot, Kronecker product, base-`l` flat index (`n = l^m`), column selection; 9 tests |

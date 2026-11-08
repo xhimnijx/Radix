@@ -1,18 +1,18 @@
 """Negacyclic ring arithmetic for the SMILE parameter manifest.
 
 R_q = Z_q[X]/(X^d + 1). Polynomials are tuples of `d` integer coefficients,
-always reduced into [0, q). Multiplication is the naive O(d^2) negacyclic
-convolution: correct and easy to audit, not fast. Speed is irrelevant for a
-reference layer; the point is that every later proof component (BDLOP
-commitments, set membership, ring signatures) can be built and tested against
-*exact* arithmetic rather than paper.
-"""
+always reduced into [0, q). Multiplication is exact integer arithmetic; the
+public `mul` uses the negacyclic NTT when (q, d) admits one and falls back to the
+O(d^2) convolution otherwise. `mul_naive` is kept as the auditable reference,
+and the test suite asserts the two agree coefficient for coefficient.
+""" 
 
 from __future__ import annotations
 
 import random
 from typing import Iterable, Sequence
 
+from . import ntt
 from .params import SMILE, SmileParameters
 
 Poly = tuple[int, ...]
@@ -59,8 +59,8 @@ def scalar(value: int, poly: Poly, parameters: SmileParameters | None = None) ->
     return tuple((value * a) % p.modulus for a in poly)
 
 
-def mul(left: Poly, right: Poly, parameters: SmileParameters | None = None) -> Poly:
-    """Negacyclic product: X^d == -1."""
+def mul_naive(left: Poly, right: Poly, parameters: SmileParameters | None = None) -> Poly:
+    """O(d^2) negacyclic product: X^d == -1. Kept as the reference implementation."""
     p = _params(parameters)
     degree = p.ring_degree
     q = p.modulus
@@ -77,6 +77,14 @@ def mul(left: Poly, right: Poly, parameters: SmileParameters | None = None) -> P
             else:
                 out[index - degree] -= a * b
     return tuple(value % q for value in out)
+
+
+def mul(left: Poly, right: Poly, parameters: SmileParameters | None = None) -> Poly:
+    """Negacyclic product: X^d == -1, via the NTT when one exists for (q, d)."""
+    p = _params(parameters)
+    if ntt.supports(p):
+        return ntt.multiply(left, right, p)
+    return mul_naive(left, right, p)
 
 
 def dot(left: Sequence[Poly], right: Sequence[Poly], parameters: SmileParameters | None = None) -> Poly:
