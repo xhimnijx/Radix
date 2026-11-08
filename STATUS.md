@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 225 passed
+python -m pytest -q                                  # 256 passed
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -41,7 +41,8 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `Radix-Workspace-Review.md` §3.I1) |
 | Nonce registries (process-local + SQLite) | implemented; default is now unbounded |
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
-| Launch gate (`radix_core/launch.py`) | implemented, 13 tests; **closed by default** |
+| Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
+| Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -92,6 +93,27 @@ test peaks at **8.61 GiB / 60.0 s** (LDE 0.92 GiB, ratio 9.39x).
   monolithic AIR cannot meet the phone budget in any configuration tested".
 - Mobile is **not reachable** by this architecture: the phone ceiling is about 1,020
   columns at 4,096 rows, and the smallest relation (path-only) is 5,043.
+
+## Candidate B is now the active track (2026-11-08)
+
+Per `ARCHITECTURE-DECISION.md` D-ADR-2, Candidate B (Monero-style ring anonymity)
+is the product architecture; Candidate A is parked as the credibility baseline.
+The first working slice is in `radix_core/candidate_b/`:
+
+- A real **linkable ring signature** (Abe-Ohkubo-Suzuki / Liu-Wei-Wong) over a
+  256-bit group: 15 tests including ring sizes 1-16, tamper rejection, and
+  cross-ring linkability.
+- **Protocol**: notes, equal-value rings, depth-64 anchored membership, tag
+  uniqueness, atomic block application, decoy selection, and canonical message
+  binding. 15 tests including double spend, same-block replay, mixed-value rings,
+  forged roots, and atomicity.
+- **Demo**: `python -m examples.candidate_b_demo` builds and applies a 5-note ring
+  spend (224-byte signature, 3 ms sign, 5 ms validate) and rejects the double spend.
+
+**The PQ gap is explicit and enforced**: the backend is a discrete-log group, so
+Shor breaks it. `CANDIDATE_B_PROTOTYPE_SECURITY` declares no post-quantum
+assumptions, and a launch-gate test asserts that a mainnet configuration using it
+is refused. See `CANDIDATE-B.md` for the swap plan (B1-B5) and the size targets.
 
 ## Not implemented (unchanged blockers)
 

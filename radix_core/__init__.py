@@ -43,6 +43,7 @@ from .providers import (
 )
 from .rules import BlockHeaderRef, anchor_ok, balance_ok
 from .launch import (
+    CANDIDATE_B_PROTOTYPE_SECURITY,
     DEFAULT_GATE,
     MAINNET_PARAMETERS,
     MAINNET_SWITCH,
@@ -104,6 +105,7 @@ from .wallet import (
 __all__ = [
     "Attestation",
     "AuditManifest",
+    "CANDIDATE_B_PROTOTYPE_SECURITY",
     "DEFAULT_GATE",
     "LaunchGate",
     "LaunchParameters",

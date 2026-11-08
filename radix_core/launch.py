@@ -506,6 +506,20 @@ MAINNET_SECURITY = SecurityProfile(
     max_proof_bytes=MAINNET_MAX_PROOF_BYTES,
 )
 
+#: The Candidate-B prototype backend. It is a real linkable ring signature, but it
+#: lives in a 256-bit discrete-log group, so a Shor-capable adversary breaks it.
+#: Declared with no post-quantum assumptions on purpose: the launch gate must
+#: refuse it for mainnet until the lattice backend replaces it.
+CANDIDATE_B_PROTOTYPE_SECURITY = SecurityProfile(
+    name="candidate-b-prototype-classical-lsag",
+    proof_system="lsag-256-schnorr",
+    zero_knowledge_established=True,
+    transparent_setup=True,
+    post_quantum_assumptions=(),
+    max_prover_peak_bytes=64 * 1024**2,
+    max_proof_bytes=1024**2,
+)
+
 RESEARCH_PARAMETERS = LaunchParameters(
     mode=NetworkMode.RESEARCH,
     version=1,

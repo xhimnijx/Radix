@@ -141,7 +141,40 @@ Nothing on that list is delivered by a side project, and pretending otherwise is
 
 ---
 
-## 6. Immediate sequence (next 10 working days)
+## 6. Candidate-B track (active, supersedes M4-M6 for the product path)
+
+Per `ARCHITECTURE-DECISION.md` D-ADR-2, Candidate B is the architecture that can
+reach a phone-scale device budget while staying PQ and ZK. Candidate A remains the
+credibility baseline and is parked.
+
+| Step | Deliverable | Status |
+|---|---|---|
+| **B0** | Protocol prototype: notes, rings, tags, atomic blocks, demo | **done 2026-11-08** (`radix_core/candidate_b/`, 30 tests) |
+| **B1** | Pinned SMILE-class parameter manifest (dimensions, modulus, noise, rejection bounds, challenge space, security claim) | next - needs the paper; no guessed values |
+| **B2** | Lattice linkable ring signature backend behind the same seam, measured against the conformance suite | not started |
+| **B3** | Global cross-ring linkability game and test | not started |
+| **B4** | PQ stealth-address discovery | not started |
+| **B5** | Amount commitments + range proofs, then relax equal-value rings | not started |
+
+Pass rule for B2: proof <= 100 KB, verification <= 100 ms, prover peak <= 1 GiB,
+proving <= 60 s on phone-class hardware. If B2 or B3 fails, fall back to
+`ARCHITECTURE-DECISION.md` options E then C.
+
+### M4 - End-to-end non-value demo *(redefined)*
+One complete Candidate-B spend: wallet builds a ring, signs, a validator applies a
+block, and a double spend is rejected - reproducible from a clean checkout.
+**This is now satisfied by `examples/candidate_b_demo.py`** for the classical
+backend; it must be re-run against the lattice backend before the milestone is
+considered met.
+
+### M5 - Non-value testnet skeleton *(specified only)*
+See `TESTNET-SCOPE.md`. Still out of scope for this project's deliverable.
+
+### M6 - Mainnet gates *(checklist only)*
+See `MAINNET-SWITCHOVER.md` and `AUDIT-PACKET.md`. The gate enforces PQ, ZK,
+transparency and a 1 GiB prover budget; it is closed.
+
+## 7. Immediate sequence (next 10 working days)
 
 | Day | Work | Artifact |
 |---|---|---|

@@ -12,6 +12,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from radix_core.launch import (
+    CANDIDATE_B_PROTOTYPE_SECURITY,
     MAINNET_DEVICE_BUDGET_BYTES,
     MAINNET_MAX_PROOF_BYTES,
     MAINNET_PARAMETERS,
@@ -245,6 +246,15 @@ def test_gate_refuses_a_prover_budget_above_the_phone_cap():
         replace(
             MAINNET_SECURITY, max_prover_peak_bytes=MAINNET_DEVICE_BUDGET_BYTES + 1
         )
+    )
+
+
+def test_gate_refuses_the_classical_candidate_b_prototype():
+    # The working Candidate-B backend is a discrete-log ring signature; Shor
+    # breaks it. The gate must not let it be declared as the mainnet profile.
+    assert CANDIDATE_B_PROTOTYPE_SECURITY.post_quantum_assumptions == ()
+    assert "no post-quantum assumptions" in _refusal_for_security(
+        CANDIDATE_B_PROTOTYPE_SECURITY
     )
 
 
