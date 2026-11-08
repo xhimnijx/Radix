@@ -112,33 +112,41 @@ Transcribed from the paper so the work is scoped rather than hand-waved:
 Each item is days of careful work with the paper open, not hours, and none of it
 can be validated by the tests that exist today until item 5 is reachable.
 
-## 6. The exact blocker for Fig. 6 (recorded 2026-11-08)
+## 6. The transform convention, resolved (2026-11-08)
 
-Reading pp. 7, 14-15 and 20-23 pins the *shape* of the recursion but not the
-normalisation of two objects, and both have to be exact or the resulting proof is
-wrong while still passing its own tests:
+An earlier revision of this section recorded a blocker: the sum of this
+implementation's NTT coefficients is `d * y_0`, while p. 7 states
+`g(y) = 32(y_0 + y_1 X + y_2 X^2 + y_3 X^3)`.
 
-1. **The lift `NTT^-1 : Z_q^l -> R_q`.** The paper commits to `NTT^-1(v_i)` for a
-   binary vector `v_i` of length `l = 32` inside a ring of degree `d = 128`, so
-   `d/l = 4`. Which 32 of the 128 positions that vector occupies decides whether
-   a vanishing coefficient condition is a dot product at all.
-2. **The functional `g`.** p. 7 defines `g(y) = 32(y_0 + y_1 X + y_2 X^2 + y_3 X^3)`
-   as "the sum of the NTT's of the polynomial"; p. 21 then uses
-   `g(y) = 0 iff the first d/l coefficients vanish`.
+p. 6 resolves it. SMILE's `M_q` is **not** `Z_q^d` under a scalar NTT. It is
 
-In this implementation's convention, `sum_j NTT(y)_j = d * y_0 = 128 * y_0`
-(asserted in `tests/test_candidate_b_ntt.py::test_sum_of_evaluations_is_degree_times_constant_term`).
-That is **not** the paper's `g`. The difference is a slot weighting, not a bug:
-it means the paper uses a different (partial, slot-wise) transform, and guessing
-which one would yield a proof whose key lemma is false -- exactly the failure
-mode this project refuses to ship.
+    R_q = prod_{i=1}^{32} Z_q[X] / (X^4 - r_i)
 
-Unblocking needs one of:
+the CRT splitting of `X^128 + 1` into 32 *quartic* factors, whose constant terms
+`r_i` are the roots of `Y^32 = -1`; each slot is `Z_q^4`. The paper's pairing is
 
-- the full protocol figure (Figs. 7-10), which would state the transform;
-- the lemma's source, `[15]`, and its use of `[7, 20]`;
-- a reference implementation to diff against.
+    <w, w'> = g( NTT^-1(w) * NTT^-1(w') ),
 
-Until one of those lands, Fig. 6 stays unimplemented, `aggregation.py` (Fig. 5)
-stays the frontier, and the 19 KB aggregation proof is the last sound artefact in
-the Candidate-B stack.
+"the sum of the NTT's" being the sum of the 32 quartic residues. That sum is
+`32 * (y_0 + y_1 X + y_2 X^2 + y_3 X^3)` because the power sums of the 32 roots of
+`Y^32 + 1` vanish in degrees 1..31 (Vandermonde). So both the "first `d/l`
+coefficients" condition and the `q^-4` soundness error are statements about this
+decomposition, not about a normalisation choice.
+
+`lattice/subring.py` implements it, and 12 tests assert the properties that make
+the recursion meaningful:
+
+| Property | Test |
+|---|---|
+| 32 distinct `r_i` with `r_i^32 = -1` | `test_there_are_thirty_two_distinct_quartic_factors` |
+| `g(y) = 32(y_0 .. y_3)` | `test_g_is_thirty_two_times_the_first_four_coefficients` |
+| the slot map is a ring homomorphism | `test_slot_map_is_a_ring_homomorphism` |
+| `glue` inverts `slots` (so `NTT^-1` is exact CRT) | `test_slots_and_glue_are_inverse` |
+| `<w, w'>` of constant vectors is their scalar dot product | `test_inner_product_of_constant_vectors_is_their_scalar_dot_product` |
+
+**The frontier is now the recursion itself, not a convention.** What remains for
+Fig. 6: the `j = 1..m` recursion (`x_{j+1} = P'^T gamma_j`, then `y_j`), the
+binary and one-hot constraints on the committed `v_j` ("`v * (1 - v) = 0` and the
+NTT coefficients of each polynomial in `v` sum to 1", p. 6, via [1, 15]), and the
+quadratic-relation proofs that carry both. That is protocol work against a known
+target rather than guesswork.

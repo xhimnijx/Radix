@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation. 57 tests. **No set-membership proof yet.** |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation. 69 tests. **No set-membership proof yet.** |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -141,6 +141,13 @@ so the prototype fixes an NTT-friendly 32-bit prime and sets
   uses it; `mul_naive` stays as the audited reference and the tests assert they
   agree coefficient for coefficient. 10 tests. Measured: 1.97 ms -> 1.00 ms per
   multiplication, full suite 9.97 s -> 5.79 s.
+- `subring.py` is the quartic slot decomposition, i.e. SMILE's `M_q`:
+  `R_q = prod_i Z_q[X]/(X^4 - r_i)` over the 32 roots of `Y^32 = -1`. This is the
+  convention the recursion is written in, and it reproduces the paper's lemma
+  exactly: `g(y)`, the sum of the 32 quartic residues, equals
+  `32(y_0 + y_1 X + y_2 X^2 + y_3 X^3)`, so the "first four coefficients vanish"
+  test is the pairing `<v, x> = 0` and not an approximation of it. 12 tests,
+  including that `<w, w'>` of constant vectors is their scalar dot product.
 - `aggregation.py` is **Fig. 5 in full**: `k` input commitments folded into one
   `omega = (f; g_1..g_k; g_w)` under one randomness, with sparse ternary
   challenges, `z = y + sum c_i s_i`, `a* = sum c_i a_i - a_w`,
@@ -158,10 +165,12 @@ stubbed, faked, or marked done. `aggregation.py` is the layer Fig. 6 keeps uncha
 the set-membership step swaps the revealed index for that relation. The NTT
 substrate that the recursive argument is written in is now in place, so the next
 component can be written against it instead of being rewritten afterwards.
-`CANDIDATE-B-PARAMETERS.md` section 6 records the precise remaining blocker: the
-paper's `g` normalisation does not match this transform's (`sum NTT = 128 y_0`),
-so the lift `Z_q^32 -> R_q` must be pinned from the full protocol figure or the
-cited lemma before Fig. 6 can be built without guessing.
+`CANDIDATE-B-PARAMETERS.md` section 6 records how the convention was pinned:
+SMILE's `M_q` is 32 *quartic* slots, so `g(y)` is the sum of the quartic residues
+and is exactly `32(y_0 .. y_3)` - reproduced in `lattice/subring.py` with tests.
+Fig. 6's remaining work is the `j = 1..m` recursion plus the binary/one-hot and
+quadratic-relation proofs, i.e. protocol work against a known target, not a
+convention to guess.
 
 **New option recorded.** `studies/2026-1983.pdf` turned out to be *Akita*, a 2026
 lattice polynomial commitment scheme (58-68 KB proofs, sublinear prover memory,
