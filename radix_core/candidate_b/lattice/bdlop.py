@@ -26,17 +26,37 @@ COMMITMENT_TAG = b"radix/b/lattice/bdlop/v1"
 
 @dataclass(frozen=True)
 class CommitmentKey:
+    """(B ; b) with an explicit shape.
+
+    ``rows`` and ``cols`` default to the SMILE parameters (k and ell). They are
+    explicit because the tag construction of B3 needs a commitment whose key is
+    ``(kappa x W)`` with a ``W``-wide ``b`` row, and the opening proof has to be
+    able to work with any such shape rather than only the paper's ``k x ell``.
+    """
+
     matrix: tuple[tuple[Poly, ...], ...]
     vector: tuple[Poly, ...]
+    rows: int | None = None
+    cols: int | None = None
+
+    @property
+    def height(self) -> int:
+        return SMILE.matrix_rows if self.rows is None else self.rows
+
+    @property
+    def width(self) -> int:
+        return SMILE.matrix_cols if self.cols is None else self.cols
 
     def __post_init__(self) -> None:
-        if len(self.matrix) != SMILE.matrix_rows:
-            raise ValueError("commitment matrix must have k rows")
-        if any(len(row) != SMILE.matrix_cols for row in self.matrix):
-            raise ValueError("commitment matrix must have ell columns")
-        # (B ; b) is (k+1) x ell: the b row is a single row of ell polynomials.
-        if len(self.vector) != SMILE.matrix_cols:
-            raise ValueError("commitment vector must have ell entries")
+        if self.height < 1 or self.width < 1:
+            raise ValueError("commitment key dimensions must be positive")
+        if len(self.matrix) != self.height:
+            raise ValueError("commitment matrix must have the declared number of rows")
+        if any(len(row) != self.width for row in self.matrix):
+            raise ValueError("commitment matrix must have the declared number of columns")
+        # (B ; b) is (rows+1) x cols: the b row is a single row of cols polynomials.
+        if len(self.vector) != self.width:
+            raise ValueError("commitment vector must have the declared width")
 
 
 @dataclass(frozen=True)
@@ -45,8 +65,8 @@ class Commitment:
     u: Poly
 
     def __post_init__(self) -> None:
-        if len(self.t) != SMILE.matrix_rows:
-            raise ValueError("commitment t must have k polynomials")
+        if not self.t:
+            raise ValueError("commitment t must have at least one polynomial")
 
     def encode(self) -> bytes:
         return b"".join(ring.encode(poly) for poly in self.t) + ring.encode(self.u)
@@ -76,8 +96,8 @@ def commit(
     parameters: SmileParameters | None = None,
 ) -> Commitment:
     p = SMILE if parameters is None else parameters
-    if len(randomness) != p.matrix_cols:
-        raise ValueError("randomness must have ell polynomials")
+    if len(randomness) != key.width:
+        raise ValueError("randomness must have one polynomial per key column")
     t = ring.mat_vec(key.matrix, randomness, p)
     u = ring.add(ring.dot(key.vector, randomness, p), message, p)
     return Commitment(t=t, u=u)

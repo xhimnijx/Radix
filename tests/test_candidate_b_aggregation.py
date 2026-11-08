@@ -1,4 +1,4 @@
-"""Tests for aggregation of k BDLOP commitments (SMILE Fig. 5)."""
+﻿"""Tests for aggregation of k BDLOP commitments (SMILE Fig. 5)."""
 
 import random
 from functools import lru_cache
@@ -116,7 +116,7 @@ def test_masked_opening_identity():
     key, inputs, messages, secrets, proof = _fixture()
     challenges = aggregation._challenges(CONTEXT, proof.w, proof.omega)
     p = params.SMILE
-    mask = sigma._mask_vector(random.Random(37), p)
+    mask = sigma._mask_vector(random.Random(37), p.matrix_cols, p)
     w_tilde = ring.dot(key.commitment.vector, mask, p)
     response = tuple(
         ring.add(
@@ -160,3 +160,4 @@ def test_input_without_a_valid_opening_is_refused():
         aggregation.prove(
             key, inputs, messages, (wrong,) + secrets[1:], CONTEXT, random.Random(35)
         )
+

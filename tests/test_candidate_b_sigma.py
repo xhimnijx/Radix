@@ -101,3 +101,33 @@ def test_proving_with_a_wrong_opening_is_refused():
             CONTEXT,
             random.Random(21),
         )
+
+def test_a_non_default_key_shape_is_supported():
+    """The tag construction needs a sigma over a (kappa x W) key, not just k x ell."""
+    rng = random.Random(77)
+    rows, cols = 3, 6
+    key = bdlop.CommitmentKey(
+        matrix=tuple(tuple(ring.sample_uniform(rng) for _ in range(cols)) for _ in range(rows)),
+        vector=tuple(ring.sample_uniform(rng) for _ in range(cols)),
+        rows=rows,
+        cols=cols,
+    )
+    assert key.height == rows and key.width == cols
+    message = ring.sample_small(rng)
+    randomness = ring.sample_vector(rng, cols, small=True)
+    commitment = bdlop.commit(key, message, randomness)
+    assert len(commitment.t) == rows
+    proof = sigma.prove(key, commitment, message, randomness, CONTEXT, rng)
+    assert len(proof.response) == cols
+    assert sigma.verify(key, commitment, message, proof, CONTEXT)
+
+
+def test_a_wrong_declared_shape_is_rejected():
+    rng = random.Random(78)
+    rows, cols = 2, 4
+    matrix = tuple(tuple(ring.sample_uniform(rng) for _ in range(cols)) for _ in range(rows))
+    vector = tuple(ring.sample_uniform(rng) for _ in range(cols))
+    with pytest.raises(ValueError):
+        bdlop.CommitmentKey(matrix=matrix, vector=vector, rows=3, cols=cols)
+    with pytest.raises(ValueError):
+        bdlop.CommitmentKey(matrix=matrix, vector=vector, rows=rows, cols=cols + 1)

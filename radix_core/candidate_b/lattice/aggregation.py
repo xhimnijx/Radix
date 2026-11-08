@@ -1,4 +1,4 @@
-"""Aggregation of k BDLOP commitments into one (SMILE Fig. 5, p. 14).
+﻿"""Aggregation of k BDLOP commitments into one (SMILE Fig. 5, p. 14).
 
 Fig. 5 takes ``k`` commitments
 
@@ -275,7 +275,7 @@ def prove(
         if not bdlop.verify(key.commitment, commitment, message, secret, p):
             raise AggregationError("an input commitment does not match its opening")
 
-    mask = sigma._mask_vector(rng, p)
+    mask = sigma._mask_vector(rng, p.matrix_cols, p)
     w = ring.mat_vec(key.commitment.matrix, mask, p)
     w_tilde = ring.dot(key.commitment.vector, mask, p)
     randomness = bdlop.opening(rng, p)
@@ -420,4 +420,5 @@ def size_bytes(input_count: int, parameters: SmileParameters | None = None) -> i
         + p.ring_degree
         + p.matrix_cols * p.full_element_bytes
     )
+
 

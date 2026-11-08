@@ -90,7 +90,7 @@ def _challenge(
 
 
 def _mask_vector(
-    rng: random.Random, parameters: SmileParameters | None = None
+    rng: random.Random, count: int, parameters: SmileParameters | None = None
 ) -> tuple[Poly, ...]:
     p = SMILE if parameters is None else parameters
     return tuple(
@@ -98,7 +98,7 @@ def _mask_vector(
             rng.randint(-MASK_BOUND, MASK_BOUND) % p.modulus
             for _ in range(p.ring_degree)
         )
-        for _ in range(p.matrix_cols)
+        for _ in range(count)
     )
 
 
@@ -118,7 +118,7 @@ def prove(
     p = SMILE if parameters is None else parameters
     if not bdlop.verify(key, commitment, message, randomness, p):
         raise SigmaError("opening does not match the commitment")
-    mask = _mask_vector(rng, p)
+    mask = _mask_vector(rng, key.width, p)
     w = ring.mat_vec(key.matrix, mask, p)
     w_tilde = ring.dot(key.vector, mask, p)
     challenge = _challenge(context, w, w_tilde, p)
@@ -143,7 +143,7 @@ def verify(
     try:
         if type(proof) is not OpeningProof:
             return False
-        if len(proof.response) != p.matrix_cols:
+        if len(proof.response) != key.width:
             return False
         if not _response_norm_ok(proof.response):
             return False
