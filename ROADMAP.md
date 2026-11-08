@@ -50,8 +50,8 @@ Answer these before building anything large. Each has a failure branch.
 either SMILE's or a justified choice; the three deviations are resolved against a
 reference implementation; the tag assumption is priced.
 
-*Deliverable:* `AUDIT-PACKET-LATTICE.md` turned into a review with answers, not
-just questions. This is the gate the whole project hangs on.
+*Deliverable:* `AUDIT-PACKET-LATTICE.md` turned into a review with answers, not just
+questions. The brief to send is `REVIEW-REQUEST.md`. This is the gate the whole project hangs on.
 
 ### R1 — One composed transaction proof (old B5)
 
