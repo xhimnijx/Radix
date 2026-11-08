@@ -1,4 +1,4 @@
-# Status — 2026-11-08
+﻿# Status â€” 2026-11-08
 
 **One line:** the tree builds, the suite is green, the verified safety defects are
 fixed, and the mainnet launch gate exists and ships **closed**. The proof side is
@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 342 passed
+python -m pytest -q                                  # 360 passed
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -38,12 +38,12 @@ wraps that. This is a real build and a real test run, not a type-check.
 | SHAKE256 Candidate-A hashes | implemented, known-answer vectors |
 | ML-KEM-768 + AES-256-GCM adapters (`cryptography==50.0.2`) | real providers, round-trip and negative tests |
 | Wallet keygen, note create/recover, bounded and authenticated scan | implemented; scan containment fixed and regression-tested |
-| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `Radix-Workspace-Review.md` §3.I1) |
+| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `Radix-Workspace-Review.md` Â§3.I1) |
 | Nonce registries (process-local + SQLite) | implemented; default is now unbounded |
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation, set-membership recursion, calibrated size model. 86 tests. **No full set-membership proof yet.** |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation, set-membership recursion, calibrated size model, Fiat-Shamir transcript. 96 tests. **No full set-membership proof yet.** |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -52,17 +52,17 @@ wraps that. This is a real build and a real test run, not a type-check.
 The half-landed key-schedule overlay was reverted to a contiguous 1,920-bit bank
 (the split was not consistent and the overlay's column lifetime was unproven).
 That costs 1,152 trace columns and makes the fail-closed preflight worse, not
-better — recorded honestly rather than hidden:
+better â€” recorded honestly rather than hidden:
 
 | Quantity | Value |
 |---|---|
-| RDXL trace | 8,192 × 15,629 BabyBear values (512,131,072 B) |
-| Randomized matrix | 16,384 × 15,633 (1,024,524,288 B) |
+| RDXL trace | 8,192 Ã— 15,629 BabyBear values (512,131,072 B) |
+| Randomized matrix | 16,384 Ã— 15,633 (1,024,524,288 B) |
 | PCS LDE payload | 4,098,097,152 B (3.82 GiB) |
 | Randomized + LDE coexistence | 5,122,621,440 B (4.77 GiB) |
 | Cross-target process cap used by the guard | 1,073,741,824 B (1 GiB) |
 | Best measured input-half profile | `RDXJ64P1`, 9,518 MiB peak working set |
-| Component proof sizes | 175,252–327,502 B |
+| Component proof sizes | 175,252â€“327,502 B |
 
 ## Decision: the M3 lean-relation experiment (executed 2026-11-08)
 
@@ -135,7 +135,7 @@ so the prototype fixes an NTT-friendly 32-bit prime and sets
   one column, 9 tests.
 - `ntt.py` is the negacyclic number-theoretic transform: exact integer arithmetic,
   twist + radix-2, `O(d log d)` instead of `O(d^2)`. It is not an optimisation
-  nicety — the Fig. 6 recursion is stated in the NTT domain (Lemmas 2.1/2.2 are
+  nicety â€” the Fig. 6 recursion is stated in the NTT domain (Lemmas 2.1/2.2 are
   statements about NTT coefficients and the "first `d/l` zero coefficients"), and
   every honest value there is committed as `NTT^-1` of a short vector. `ring.mul`
   uses it; `mul_naive` stays as the audited reference and the tests assert they
@@ -206,7 +206,7 @@ the active path; C is the designated fallback** with explicit re-open triggers. 
 | Skipped | Reason | Re-enable when |
 |---|---|---|
 | 7 Rust proof tests (`#[ignore]`) | peak RSS is unbounded and exceeds the provisional device budgets | a profile is measured under a 4 GiB desktop cap |
-| `RDXL64P1` proving | preflight returns `ResourceBudgetExceeded` before allocation | the lean-relation experiment (§ M3) produces a fitting profile |
+| `RDXL64P1` proving | preflight returns `ResourceBudgetExceeded` before allocation | the lean-relation experiment (Â§ M3) produces a fitting profile |
 
 ## Launch posture
 
@@ -227,3 +227,4 @@ multiprocess SQLite test, so contention with the rest of the suite is the likely
 it is unrelated to the lattice work but is recorded rather than silently re-run away.
 If it recurs, the fix is a bounded retry on `SQLITE_BUSY` in the reservation path, not a
 longer sleep.
+
