@@ -11,6 +11,8 @@ import pytest
 
 from radix_core.candidate_b.lattice import params, ring, ring_signature as RS
 
+pytestmark = pytest.mark.slow
+
 P_ = params.SMILE
 DEPTH = 2
 MESSAGE = b"pay 10 to bob"

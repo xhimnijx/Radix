@@ -6,6 +6,8 @@ import pytest
 
 from radix_core.candidate_b.lattice import params, ring, ring_signature as RS, spend as SP, tag as T
 
+pytestmark = pytest.mark.slow
+
 P_ = params.SMILE
 DEPTH = 2
 ANCHOR = bytes(range(32))

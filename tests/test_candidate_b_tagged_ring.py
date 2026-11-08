@@ -6,6 +6,8 @@ import pytest
 
 from radix_core.candidate_b.lattice import params, ring, setmembership as S, tag as T
 
+pytestmark = pytest.mark.slow
+
 P_ = params.SMILE
 DEPTH = 2
 MESSAGE = b"spend once"

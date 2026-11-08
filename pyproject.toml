@@ -19,3 +19,6 @@ include = ["radix_core*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "slow: runs the real set-membership protocol (~20 s per proof); use -m 'not slow' for a fast loop",
+]

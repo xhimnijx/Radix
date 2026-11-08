@@ -12,6 +12,8 @@ import pytest
 
 from radix_core.candidate_b.lattice import params, ring, setmembership as S
 
+pytestmark = pytest.mark.slow
+
 P_ = params.SMILE
 DEPTH = 2
 UPDATED = False
