@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation. 69 tests. **No set-membership proof yet.** |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation, set-membership recursion. 78 tests. **No full set-membership proof yet.** |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -148,6 +148,12 @@ so the prototype fixes an NTT-friendly 32-bit prime and sets
   `32(y_0 + y_1 X + y_2 X^2 + y_3 X^3)`, so the "first four coefficients vanish"
   test is the pairing `<v, x> = 0` and not an approximation of it. 12 tests,
   including that `<w, w'>` of constant vectors is their scalar dot product.
+- `recursion.py` implements equation (7) of p. 6, the reduction the whole scheme
+  rests on: `<P(v_1 (x) ... (x) v_m) - w, gamma> = <v_1, P'(v_2 (x) ... (x) v_m)> - <w, gamma>`,
+  with `P' = [gamma^T P_1 ; ... ; gamma^T P_32]`. Verified numerically at `m = 2`
+  (a 32 x 1024 matrix over `M_q`), including that a wrong witness is rejected.
+  9 tests. This is the "one tensor factor fewer" step that makes the proof size
+  linear in `m`; the quadratic/binary constraints on top of it are what remain.
 - `aggregation.py` is **Fig. 5 in full**: `k` input commitments folded into one
   `omega = (f; g_1..g_k; g_w)` under one randomness, with sparse ternary
   challenges, `z = y + sum c_i s_i`, `a* = sum c_i a_i - a_w`,
