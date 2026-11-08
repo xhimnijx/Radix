@@ -201,3 +201,27 @@ before any of it may be claimed:
 Until those four are settled, B has a ring signature and **no transaction layer**,
 and the distance between the two is a research result rather than an engineering
 task.
+
+### 8.1 The naive tag fails, and `experiments/linear_tag_soundness.py` shows it
+
+The sketch above is **not sound as stated**, and the failure is worth recording
+before anyone builds on it. `tau = A' y'` is not committed to anything, so a
+prover can choose any tag `T` it likes and set `tau = A' z' - c' T`; the equation
+`c' T = A' z' - tau` then holds by construction. The experiment demonstrates it:
+the forged tag passes the same check as the honest one, and two spends of the
+same note can carry unrelated tags. Linkability, which is the entire purpose of
+the tag, evaporates.
+
+The fix is not another check. It is a commitment: the mask `y'` is ephemeral and
+appears nowhere in the commitment, so no linear relation can tie `tau` to it.
+A sound construction has to either
+
+* commit to the mask `y'` and prove `tau = A' y'` as a linear relation between
+  committed values, or
+* commit to the tag `T` itself and prove `c' T = A' z' - w_tau` with `w_tau`
+  committed, which is the same problem one step removed.
+
+Both raise the proof size by roughly `ell` full elements (about 6.6 KB) and both
+need a linear-consistency argument of the kind Fig. 5 provides for `k` inputs.
+That is the real content of B3, and it is why B3 is a research milestone rather
+than a missing `if` statement.
