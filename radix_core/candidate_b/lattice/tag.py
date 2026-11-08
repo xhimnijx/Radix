@@ -1,9 +1,29 @@
-"""A linkable tag for the SMILE ring signature: the committed-mask fix.
+"""KNOWN BROKEN - DO NOT USE. Retained as a documented negative result.
+
+Review finding (2026-11-08), reproduced in ``experiments/tag_forgery_repro.py``:
+the proof below binds only the *derived* row ``u_der = <A', u> - message`` and
+never the individual ``u_j``. A forger therefore picks any tag, any short
+``r_m``, sets ``t = B_0^m r_m``, and chooses ``u`` so that
+``<A', u> = <b', r_m> + message``. Then ``u_der = <b', r_m>``, and an honest
+opening proof to zero -- which the forger can produce, because it chose ``r_m``
+-- verifies. No secret is used, and the forgery succeeds against the real
+verifier.
+
+This is the same free-response failure as the crude construction it replaced,
+one level down: it binds one derived row instead of the ell committed values.
+A sound tag must commit the individual ``u_j`` and prove ``<A', u>`` against
+them -- a linear-consistency argument over committed values, not a single
+derived row. That is redesign work, not a patch.
+
+Everything below is the original documentation of the attempt, kept because the
+failed argument is part of the record.
+
+A linkable tag for the SMILE ring signature: the committed-mask fix.
 
 The naive construction (``experiments/linear_tag_soundness.py``) fails because
 ``tau = A' y'`` is uncommitted, so a prover can pick any tag and solve for
-``tau`` afterwards. This module closes that hole by **committing to the mask**
-and proving a relation against the derived key.
+``tau`` afterwards. This module tried to close that hole by **committing to the
+mask** and proving a relation against the derived key.
 
 Construction, with a single public row ``A'`` (so the tag is one polynomial):
 

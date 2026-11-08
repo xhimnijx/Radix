@@ -7,11 +7,16 @@ dated record and `AUDIT-PACKET-LATTICE.md` is the technical audit.
 ## The one-sentence version
 
 We have a working mathematical proof that lets someone demonstrate *"I am allowed
-to spend one of these 1,024 coins, and I will not tell you which one"* — and a
-little extra machinery that lets the network spot it if they try to spend the same
-coin twice, without learning who they are. It runs, it is tested, and it is
-post-quantum. It is **not** a coin yet: there is no network, no wallet app, no
-mining, and nobody has audited it.
+to spend one of these 1,024 coins, and I will not tell you which one"*, on maths a
+quantum computer cannot break. It runs and it is tested. Two independent
+cryptographers reviewed it in November 2026: the proof itself held up, but they
+found that the parameters do not yet justify a 128-bit security claim, and that
+the serial number meant to catch double spending could be forged — I reproduced
+that forgery, and it has been withdrawn.
+
+So: the privacy half exists and is sound in construction; the anti-double-spend
+half does not exist; the parameters are open. It is **not** a coin: there is no
+network, no wallet app, no mining.
 
 ## What it is trying to be
 
@@ -32,7 +37,7 @@ Think of a coin as a locked box with a public padlock. The owner knows the key.
 |---|---|---|
 | **The lock** (public key) | A padlock derived from a secret key, using lattice maths | works, tested |
 | **The ring signature** | "One of these 1,024 padlocks is mine and I can prove it, without saying which" | **works**, 32.5 KB, ~20 s to make and ~20 s to check in Python |
-| **The tag** | A serial number that is *the same* every time you spend the same coin, but looks random to everyone else — so the network can refuse a second spend | **works**, adds 19 KB, 51.6 KB total |
+| **The tag** | A serial number that is *the same* every time you spend the same coin, so the network can refuse a second spend | **broken**: a review found it can be forged without any key, and I reproduced the forgery. Withdrawn, being redesigned |
 | **The spend** | "Here is a signature, here are the coins I am creating, and the values balance" | works, checks balance and refuses a reused tag |
 | **Encrypted notes / addresses** | The message to the recipient, sealed with post-quantum key exchange and AES | works (inherited from the earlier design), tested |
 | **The mainnet switch** | A deliberately locked door that refuses to open until a human signs off | works, and it is **closed** |
@@ -72,9 +77,8 @@ system.
 - The verifier learns **that** one of 1,024 keys signed, and nothing about which.
   That is the same privacy Monero's ring signature gives, at a ring size of 1,024
   instead of 16.
-- The verifier learns a **tag** that links two spends of the same coin. That is by
-  design — it is how double spending is caught — and it is a random-looking
-  value, not an identity.
+- There is **no working linkability**. The tag we built can be forged without a
+  key, so for now nothing here can catch a double spend.
 - The verifier currently learns the **amount** (see the gap above).
 - Timing and network-level privacy are not addressed at all.
 

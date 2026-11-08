@@ -1,5 +1,10 @@
 # Review request: the lattice ring signature
 
+> **Answered on 2026-11-08.** Two reviews came back: the tag is forgeable and has
+> been withdrawn, the parameters do not achieve 128 bits, and one transcription
+> gap was found and fixed. The record is in `REVIEW-FINDINGS.md`. This brief is
+> kept as it was sent, with the one dangerous sentence about Q1 corrected below.
+
 For the cryptographer. This is a brief, not a paper. It says what the code does,
 what we want answered, and what we already know is wrong, so no time is spent
 rediscovering the parts we have written down.
@@ -75,8 +80,11 @@ CPython at that ring size.
 
 Our claim: in `α₀(Σ F_j − c·f_{k+2m} − c²h) + Σ α_i(f_i² + c·f_i) + f_{k+2m+1} = ω`,
 the `c⁰` coefficient is pinned by `ω` (committed before `c` exists), the `c¹`
-coefficient cancels identically, and only the `c²` coefficient carries constraints.
-So the single evaluation is equivalent to `Σ α_i·v_i(v_i−1) = 0`, i.e. binaryness.
+coefficient is absorbed by `ψ` (committed after `α`, before `c`), and the `c²`
+coefficient carries the constraints. That coefficient is
+`α₀(Σⱼ yⱼ + g − h) + Σᵢ αᵢ vᵢ(vᵢ−1)`; with the `α` drawn before `c` it forces both
+binaryness *and* `h = g + Σ yⱼ`, the latter being what joins the committed `vᵢ` to
+the sent `h`.
 
 **Answer we need:** does that decomposition hold, and does it therefore give the
 soundness the paper claims? If it does not, the protocol proves nothing and

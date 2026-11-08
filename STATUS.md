@@ -5,6 +5,22 @@ fixed, and the mainnet launch gate exists and ships **closed**. The proof side i
 still a component prototype: no complete transaction proof exists, and the
 flagship RDXL profile is fail-closed by design.
 
+## Review outcome (2026-11-08)
+
+Two independent cryptographers reviewed the lattice ring signature. Full record
+in `REVIEW-FINDINGS.md`. Summary:
+
+| Item | Outcome |
+|---|---|
+| Figs. 7-9 transcription | **held up.** The line-13 decomposition and the `e_1` repair were both confirmed |
+| `c` / `c'` unit checks | **missing**, now fixed in code with tests (`test_candidate_b_unit_checks.py`) |
+| Masking without rejection sampling | **soundness failure**: the response bound `2^20`, not `mu = 5`, is the security parameter; the core is roughly `2^50`, not `2^128` |
+| The linkable tag | **forgeable**, reproduced here without any key; withdrawn, `xfail`-guarded |
+| Parameters | open; `beta` and `beta'` must be re-derived and priced with a lattice estimator |
+
+The suite is 409 tests: 408 passing and one strict-xfail that guards the withdrawn tag. Nothing in this repository may claim 128-bit security
+until the masking is restored and the parameters are re-derived.
+
 ## Repository layout (2026-11-08)
 
 The tree now has one active design and one archive:
@@ -304,3 +320,5 @@ each figure and equation, the five deviations from the paper with the risk each
 one carries, the three gaps that keep this from being a transaction layer (no
 nullifier proof, no range proofs, no linkability), and the four things a reviewer
 should check first. It says in the first paragraph that no security claim is made.
+
+

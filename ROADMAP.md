@@ -44,7 +44,13 @@ Answer these before building anything large. Each has a failure branch.
 
 ## Milestone ladder
 
-### R0 — Review packet and frozen parameters
+### R0 — Review packet and frozen parameters *(first pass done, 2026-11-08)*
+
+Two reviews came back. The transcription held; the tag is withdrawn as forgeable;
+the parameters do not achieve 128 bits. `REVIEW-FINDINGS.md` is the record, and the
+remaining R0 work is now concrete: restore the paper's masking, re-derive `beta`
+and `beta'`, price them, unify the challenge distribution, and redesign or drop the
+tag.
 
 **Exit:** a reviewer signs an attestation over `parameters_hash()`; the modulus is
 either SMILE's or a justified choice; the three deviations are resolved against a

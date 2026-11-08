@@ -1,5 +1,11 @@
 # Audit packet: Candidate-B lattice layer
 
+> **Superseded in part on 2026-11-08.** Two reviews are recorded in
+> `REVIEW-FINDINGS.md`. The Fig. 7-9 implementation held up; the **tag is
+> withdrawn** as forgeable; the parameters do not achieve 128 bits; and the
+> missing `c`/`c′` unit checks are fixed in code. Read the findings first, then
+> this packet for the layer map.
+
 Scope: everything under `radix_core/candidate_b/lattice/`. This is the
 post-quantum half of Candidate B. The classical half (`group.py`, `lsag.py`,
 `protocol.py`) is a separate, older prototype and is **not** covered here.
@@ -24,7 +30,7 @@ deviations below are the review surface.
 | Constraint predicates on `v` | `recursion.py` | (same) |
 | Domain-separated Fiat-Shamir transcript | `transcript.py` | 10 |
 | p. 23 quadratic form | `quadratic.py` | 4 |
-| **Set membership, Figs. 7-9** | `setmembership.py` | 8 |
+| **Set membership, Figs. 7-9** | `setmembership.py` | 8, plus the unit checks added after review |
 | **Ring-signature API** | `ring_signature.py` | 8 |
 | **Spend layer** | `spend.py` | 5 |
 
@@ -76,9 +82,11 @@ Python artifact, not an algorithmic statement; the NTT is `O(d log d)`.
 ## 4. Gaps that make this *not* a transaction layer
 
 * **No nullifier proof.** SMILE's ring signature is anonymous but not linkable.
-  Nothing in Figs. 7-9 yields a per-note tag, so double spending cannot be
-  prevented without an additional ZK relation (`tag = PRF(secret, note)`) that
-  is not implemented. This is the single largest gap.
+  Nothing in Figs. 7-9 yields a per-note tag. A tag was attempted (`tag.py`) and
+  **withdrawn on review**: it binds only one derived row, so it is forgeable
+  without a key (`experiments/tag_forgery_repro.py`, recorded in
+  `REVIEW-FINDINGS.md`). Double spending is therefore still unprevented, and the
+  single largest gap is unchanged.
 * **No amount commitments or range proofs** (milestone B5). The spend layer uses
   equal-value rings, so the balance check is sound without them, but the value is
   public per input.

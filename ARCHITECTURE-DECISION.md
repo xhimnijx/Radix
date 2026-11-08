@@ -247,6 +247,17 @@ prove and 20 s to verify in Python. Tests: 7 for the tag alone, 5 for the tagged
 signature, including a forged tag being rejected and a tagged proof being
 *refused* by a verifier that does not ask for the tag.
 
+**Withdrawn on review, 2026-11-08.** Two independent reviews found the
+construction above forgeable and the finding was reproduced here
+(`experiments/tag_forgery_repro.py`): the proof binds only the *derived* row
+`u_der = <A', u> - message`, never the individual `u_j`, so a forger chooses any
+tag, any short `r_m`, sets `t = B_0^m r_m` and solves for `u`. `tag.py` now opens
+with `KNOWN BROKEN - DO NOT USE` and a strict-`xfail` test holds the property we
+want. A sound tag must commit the individual `u_j` and prove `<A', u>` against
+them. The same review found the parameters do not achieve 128 bits (`beta`,
+`beta'` are the real security parameters and this implementation's masks are
+2^20); see `REVIEW-FINDINGS.md`.
+
 Still open, and now sharply defined:
 
 1. **Tag collision hardness.** `T = <A', s>` is a single polynomial, so the map

@@ -87,3 +87,62 @@ def test_wrong_context_and_shapes_are_rejected():
         T.TagKeys(mask_rows0=keys.mask_rows0[:-1], mask_rows=keys.mask_rows, row=keys.row)
     with pytest.raises(T.TagError):
         T.TagKeys(mask_rows0=keys.mask_rows0, mask_rows=keys.mask_rows, row=keys.row[:-1])
+
+# ---------------------------------------------------------------------------
+# Review finding, 2026-11-08: the tag is forgeable. The test below asserts the
+# property we want (a forged tag must not verify) and is marked as a known
+# failure. When someone redesigns the tag, this test will start passing and the
+# strict xfail will fail, forcing the marker to be removed rather than forgotten.
+# ---------------------------------------------------------------------------
+
+
+def _inverse(poly):
+    from radix_core.candidate_b.lattice import ntt
+
+    forward = ntt.forward(poly, P_)
+    if any(coefficient == 0 for coefficient in forward):
+        return None
+    return ntt.inverse(tuple(pow(c, -1, P_.modulus) for c in forward), P_)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="known unsound: tag.py binds only the derived row u_der, not the individual u_j",
+)
+def test_a_forged_tag_does_not_verify():
+    rng = random.Random(4242)
+    keys = T.setup(rng, P_)
+    secret = ring.sample_vector(rng, P_.matrix_cols, small=True)
+    c_prime = ring.sample_small(rng)
+    while not T.invertible(c_prime, P_):
+        c_prime = ring.sample_small(rng)
+    mask = ring.sample_vector(rng, P_.matrix_cols, small=True)
+    response = tuple(
+        ring.add(mask[i], ring.mul(c_prime, secret[i], P_), P_) for i in range(P_.matrix_cols)
+    )
+
+    # The forgery: no secret, free choice of tag and mask randomness.
+    forged_tag = ring.sample_small(rng)
+    randomness = ring.sample_vector(rng, P_.matrix_cols, small=True)
+    t = tuple(ring.mat_vec(keys.mask_rows0, randomness, P_))
+    message = ring.sub(ring.dot(keys.row, response, P_), ring.mul(c_prime, forged_tag, P_), P_)
+    derived = keys.derived_row(P_)
+    target = ring.add(ring.dot(derived, randomness, P_), message, P_)
+    first = _inverse(keys.row[0])
+    assert first is not None
+    u = (ring.mul(target, first, P_),) + tuple(ring.zero(P_) for _ in range(P_.matrix_cols - 1))
+    u_der = ring.sub(ring.dot(keys.row, u, P_), message, P_)
+
+    from radix_core.candidate_b.lattice import bdlop, sigma
+
+    proof = sigma.prove(
+        keys.derived_key(P_),
+        bdlop.Commitment(t=t, u=u_der),
+        ring.zero(P_),
+        randomness,
+        CONTEXT,
+        rng,
+        P_,
+    )
+    forged = T.TagProof(t=t, u=u, tag=forged_tag, proof=proof)
+    assert not T.verify_tag(keys, forged, c_prime, response, CONTEXT, P_)

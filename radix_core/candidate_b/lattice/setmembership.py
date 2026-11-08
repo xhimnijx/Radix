@@ -42,7 +42,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from . import recursion as R, ring, subring, tag as tagmod, transcript
+from . import ntt, recursion as R, ring, subring, tag as tagmod, transcript
 from .params import SMILE, SmileParameters
 from .ring import Poly
 
@@ -109,6 +109,19 @@ def _gamma_elements(gamma: tuple[Poly, ...], p: SmileParameters) -> tuple[tuple[
     for poly in gamma:
         out.extend(subring.slots(poly, p))
     return tuple(out)
+
+
+
+def _is_unit(poly: Poly, p: SmileParameters) -> bool:
+    """Whether `poly` is invertible in R_q.
+
+    For this modulus every quartic factor splits completely, so R_q is isomorphic
+    to Z_q^128 and a polynomial is a unit exactly when none of its NTT coordinates
+    vanish. The verifier must check this: the line-13 argument divides by c^2, and
+    a non-unit c hides a coordinate where the binaryness constraint is vacuous.
+    Review finding, 2026-11-08.
+    """
+    return all(coefficient != 0 for coefficient in ntt.forward(poly, p))
 
 
 def _paper_to_slot(position: int, depth: int, p: SmileParameters) -> int:
@@ -346,6 +359,8 @@ def prove(
 
     tx = _head(message, w, tuple(commitment), sm)
     c_prime = _draw_ternary(tx, b"c-prime", sm)
+    if not _is_unit(c_prime, sm):
+        raise SetMembershipError("c' is not a unit of R_q; re-run with fresh randomness")
     response_prime = tuple(
         ring.add(mask_prime[i], ring.mul(c_prime, secret[i], sm), sm) for i in range(sm.matrix_cols)
     )
@@ -465,6 +480,8 @@ def prove(
     tx.absorb(b"t-psi", ring.encode(commitment[-1], sm))
     tx.absorb(b"omega", ring.encode(omega, sm))
     challenge = _draw_ternary(tx, b"c", sm)
+    if not _is_unit(challenge, sm):
+        raise SetMembershipError("c is not a unit of R_q; re-run with fresh randomness")
     response = tuple(
         ring.add(mask[i], ring.mul(challenge, randomness[i], sm), sm) for i in range(width)
     )
@@ -517,6 +534,11 @@ def verify(
         if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in proof.response):
             return False
         if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in proof.response_prime):
+            return False
+        # The line-13 argument divides by c^2 and the tag argument by c', so both
+        # must be units. Without this check a non-unit challenge leaves a
+        # coordinate where the constraint is vacuous (review finding, 2026-11-08).
+        if not _is_unit(proof.challenge, sm) or not _is_unit(proof.challenge_prime, sm):
             return False
 
         # Fig. 9 line 03 inverted: w = B_0 z - c t_0, so it need not be sent.
