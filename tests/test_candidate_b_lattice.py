@@ -193,3 +193,28 @@ def test_commitment_key_shape_is_enforced():
         bdlop.CommitmentKey(matrix=good.matrix, vector=good.vector[:3])
     with pytest.raises(ValueError):
         bdlop.commit(good, ring.zero(), good.vector[:2])
+
+def test_calibrated_size_reproduces_every_published_point():
+    for m in range(1, 6):
+        size = params.ring_signature_size_bytes_calibrated(32**m)
+        assert size / 1024 == pytest.approx(params.PAPER_RING_SIGNATURE_KB[32**m], abs=0.1)
+
+
+def test_structural_formula_is_a_lower_bound_not_an_estimate():
+    """The (kappa + k + 2m + 2) count is 40-60% BELOW the paper's sizes.
+
+    Recording the ratio stops anyone reading the structural count as a size
+    prediction; `ring_signature_size_bytes_calibrated` is the planning model.
+    """
+    for m in range(1, 6):
+        structural = params.SMILE.ring_signature_size_bytes(32**m, m=m) / 1024
+        paper = params.PAPER_RING_SIGNATURE_KB[32**m]
+        assert 0.5 <= structural / paper <= 0.7
+
+
+def test_tensor_depth_requires_a_power_of_the_subring_dimension():
+    assert params.tensor_depth(32) == 1
+    assert params.tensor_depth(32**3) == 3
+    for bad in (0, -1, 33, 1000):
+        with pytest.raises(ValueError):
+            params.tensor_depth(bad)

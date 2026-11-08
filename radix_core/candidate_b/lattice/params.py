@@ -105,6 +105,40 @@ PAPER_TRANSACTION_KB = {
 }
 
 
+#: Least-squares fit of the paper's Fig. 11 ring-signature sizes:
+#: ``KB(m) = 14.528 + 1.4 * m`` for a set of ``32^m`` elements. It reproduces all
+#: five published points to within 0.03 KB (0.2%), which makes it usable for
+#: budgeting, and it implies about 2.8 full R_q elements per tensor level,
+#: consistent with p. 7's "approximately 2m commitments". It is a calibration of
+#: the published table, NOT a derivation: nothing here may be used as evidence
+#: that an implementation has that size.
+RING_SIGNATURE_FIT_KB = (14.528, 1.4)
+
+
+def tensor_depth(ring_size: int, parameters: SmileParameters | None = None) -> int:
+    """The `m` with ``l^m = ring_size``, or ValueError if it is not a power of l."""
+    p = SMILE if parameters is None else parameters
+    if type(ring_size) is not int or ring_size < 1:
+        raise ValueError("ring size must be a positive integer")
+    depth = 0
+    value = 1
+    while value < ring_size:
+        value *= p.subring_dimension
+        depth += 1
+    if value != ring_size:
+        raise ValueError("ring size must be a power of the subring dimension")
+    return depth
+
+
+def ring_signature_size_bytes_calibrated(
+    ring_size: int, parameters: SmileParameters | None = None
+) -> int:
+    """Size from the fitted Fig. 11 model, for planning only (see the caveat)."""
+    depth = tensor_depth(ring_size, parameters)
+    intercept, slope = RING_SIGNATURE_FIT_KB
+    return int((intercept + slope * depth) * 1024)
+
+
 def estimate_ring_signature_kb(ring_size: int) -> float:
     """Interpolate the paper's Fig. 11 table in log2(ring size)."""
     if ring_size < 1:
