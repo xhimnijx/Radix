@@ -66,6 +66,10 @@ large prover workspace**.
 | Proof of knowledge of a BDLOP opening (Sigma) | done, tested | `lattice/sigma.py`: ternary challenge, 2^20 masking, no rejection, 6.8 KB proof, 10 tests. This is the `pi` of SMILE Fig. 5 |
 | Tensor / one-hot indexing | done, tested | `lattice/tensor.py`: one-hot, Kronecker product, base-`l` flat index (`n = l^m`), column selection; 9 tests |
 | Aggregation of `k` commitments (Fig. 5, p. 14) | done, tested | `lattice/aggregation.py`: `omega`, sparse ternary challenges, `z`, `a*`, `g*`, `pi`; 14 tests; 19,072 B at `k=2`, 20,096 B at `k=4` |
+| Set-membership recursion, equation (7) | done, tested | `lattice/recursion.py`: `M_q` vectors, slot-tagged pairing, tensor, `P' = [γᵀP₁; …]`; 13 tests, including (7) verified at `m=2` and wrong-witness rejection |
+| Binary / one-hot constraints | **predicates only** | `is_binary`, `is_one_hot`, `sum_of_slots`, `one_hot_and_lifted`; `g(NTT⁻¹(v)) = 1` checked end to end. **Not proved in zero knowledge** |
+| Fiat-Shamir transcript | done, tested | `lattice/transcript.py`: domain tag, length-prefixed framing, stateful squeeze, sparse ternary challenge; 10 tests |
+| Multi-message commitment (`omega`) | done, tested | `bdlop.commit_vector` / `verify_vector`: one randomness, one row per message; 5 tests |
 | Set-membership proof (the actual SMILE contribution) | **not implemented** | Fig. 6, p. 15 and the protocol figures that follow |
 | Ring-signature transformation | **not implemented** | p. 9 "ring signature from set membership" |
 | Fiat-Shamir with rejection sampling | **not implemented** | distribution and bounds are in the paper's parameter derivation, p. 48 |
