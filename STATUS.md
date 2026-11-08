@@ -177,7 +177,7 @@ Fig. 9: a BDLOP commitment to `(0_kappa, v_1..v_m, w', x_2..x_m, g, psi)`, the s
 matrix `P = [NTT(-c' pk_j)]` of eq. (31), one challenge and one commitment per
 tensor factor, the garbage commitment and `omega`, and the multi-round
 Fiat-Shamir of p. 43 with the message bound into `c'`. A 1024-member ring
-(`m = 2`) proves in **21 s** and verifies in **19 s**, producing a **37,632-byte**
+(`m = 2`) proves in **21 s** and verifies in **19 s**, producing a **32,512-byte**
 proof.
 
 Three transcription errors were found by test rather than guessed at: Fig. 7
@@ -240,4 +240,5 @@ multiprocess SQLite test, so contention with the rest of the suite is the likely
 it is unrelated to the lattice work but is recorded rather than silently re-run away.
 If it recurs, the fix is a bounded retry on `SQLITE_BUSY` in the reservation path, not a
 longer sleep.
+
 

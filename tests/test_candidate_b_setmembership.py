@@ -1,4 +1,4 @@
-"""Tests for the SMILE set-membership proof (Figs. 7-9).
+﻿"""Tests for the SMILE set-membership proof (Figs. 7-9).
 
 The honest path costs ~20 s to prove and ~20 s to verify at m = 2 (a 1024-member
 ring): it builds a 128 x 1024 set matrix over M_q and runs the Fig. 8 recursion.
@@ -61,7 +61,6 @@ def test_tampered_omega_is_rejected(built):
     keys, statement, _secret, _index, proof = built
     forged = S.Proof(
         commitment=proof.commitment,
-        w=proof.w,
         h=proof.h,
         omega=ring.add(proof.omega, ring.constant(1), P_),
         challenge=proof.challenge,
@@ -76,7 +75,6 @@ def test_tampered_h_is_rejected(built):
     keys, statement, _secret, _index, proof = built
     forged = S.Proof(
         commitment=proof.commitment,
-        w=proof.w,
         h=ring.add(proof.h, ring.constant(1), P_),
         omega=proof.omega,
         challenge=proof.challenge,
@@ -109,3 +107,4 @@ def test_index_vectors_are_one_hot():
         for vector in vectors:
             flat = flat * 32 + vector.index(1)
         assert flat == index
+

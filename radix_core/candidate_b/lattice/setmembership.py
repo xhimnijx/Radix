@@ -192,7 +192,6 @@ def keygen(
 @dataclass(frozen=True)
 class Proof:
     commitment: tuple[Poly, ...]
-    w: tuple[Poly, ...]
     h: Poly
     omega: Poly
     challenge: Poly
@@ -205,7 +204,6 @@ class Proof:
         body = b"".join(
             ring.encode(poly)
             for poly in self.commitment
-            + self.w
             + (self.h, self.omega)
             + self.response_prime
             + self.response
@@ -462,7 +460,6 @@ def prove(
         raise SetMembershipError("masking bound produced an oversized response")
     return Proof(
         commitment=tuple(commitment),
-        w=w,
         h=h,
         omega=omega,
         challenge=challenge,
@@ -489,8 +486,6 @@ def verify(
         width = masking_width(depth, sm)
         if len(proof.commitment) != sm.challenge_dim + rows + 2 * depth + 1:
             return False
-        if len(proof.w) != sm.challenge_dim:
-            return False
         if len(proof.response_prime) != sm.matrix_cols or len(proof.response) != width:
             return False
         if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in proof.response):
@@ -498,24 +493,22 @@ def verify(
         if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in proof.response_prime):
             return False
 
+        # Fig. 9 line 03 inverted: w = B_0 z - c t_0, so it need not be sent.
+        w = tuple(
+            ring.sub(product, scaled, sm)
+            for product, scaled in zip(
+                tuple(ring.dot(row, proof.response, sm) for row in keys.rows0),
+                tuple(
+                    ring.mul(proof.challenge, poly, sm)
+                    for poly in proof.commitment[: sm.challenge_dim]
+                ),
+            )
+        )
         head_length = sm.challenge_dim + depth + rows + 1
-        tx = _head(message, proof.w, proof.commitment[:head_length], sm)
+        tx = _head(message, w, proof.commitment[:head_length], sm)
         if _draw_ternary(tx, b"c-prime", sm) != proof.challenge_prime:
             return False
         tx.absorb(b"z-prime", b"".join(ring.encode(poly, sm) for poly in proof.response_prime))
-
-        # line 03
-        left = tuple(
-            ring.sub(product, masked, sm)
-            for product, masked in zip(
-                tuple(ring.dot(row, proof.response, sm) for row in keys.rows0), proof.w
-            )
-        )
-        right = tuple(
-            ring.mul(proof.challenge, poly, sm) for poly in proof.commitment[: sm.challenge_dim]
-        )
-        if left != right:
-            return False
 
         # line 04: t_{m+i} -= (A z')_i
         slot_of = {
