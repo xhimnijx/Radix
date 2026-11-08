@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 372 passed (~97 s)
+python -m pytest -q                                  # 383 passed (~170 s)
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 complete**: SMILE manifest, negacyclic ring and NTT, quartic slots (`M_q`), BDLOP commitment, Fig. 5 opening proof and aggregation, the Fig. 8 recursion, and **the Fig. 7/9 set-membership proof itself** (m >= 2). 116 tests. Deviations documented, no security claim. |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 complete**: SMILE manifest, negacyclic ring and NTT, quartic slots (`M_q`), BDLOP commitment, Fig. 5 opening proof and aggregation, the Fig. 8 recursion, **the Fig. 7/9 set-membership proof**, the Appendix-C ring-signature API, and a spend layer over a canonical message. 127 tests. Deviations documented, no security claim. |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -190,6 +190,23 @@ Deviations, stated in the module and unchanged: no rejection sampling (masks are
 order-`c` placement makes the honest check unsatisfiable, `m >= 2` only, and the
 message bound into `c'`. Research component: no security claim without
 independent review.
+
+**Ring signature and spend layer (2026-11-08).** `lattice/ring_signature.py` exposes
+RS.Setup / KeyGen / Sign / Ver from Appendix C over the Fig. 7 proof; the
+"ring transform" is the API, the ring lookup and the message binding, because the
+hiding of *which* key is opened is already what the set matrix and the Fig. 8
+recursion do. `lattice/spend.py` signs one ring signature per input over a
+canonical message (anchor, input values, outputs, fee) and enforces
+`sum(inputs) = sum(outputs) + fee`; rings are equal-value, so the balance check
+is sound without a range proof.
+
+**The gap this exposes, stated plainly:** SMILE's ring signature is anonymous but
+**not linkable**. Nothing in Figs. 7-9 produces a per-note tag, so nothing here
+stops the same note being spent twice. Preventing that needs a **nullifier
+proof** -- a zero-knowledge proof that a revealed tag equals `PRF(secret, note)`
+-- which is a separate relation this codebase does not implement. The spend layer
+therefore authorises spends and checks balance without claiming to settle
+double-spends, and says so at the top of the module.
 
 **New option recorded.** `studies/2026-1983.pdf` turned out to be *Akita*, a 2026
 lattice polynomial commitment scheme (58-68 KB proofs, sublinear prover memory,
