@@ -218,3 +218,12 @@ python -m examples.launch_gate_check
 
 No flag, environment variable, or runtime path opens it. See
 `MAINNET-SWITCHOVER.md`.
+
+## Known flake (recorded 2026-11-08)
+
+`tests/test_nonce_multiprocess.py::test_sqlite_nonce_reservation_is_unique_across_processes`
+failed once during a full-suite run and passed 3/3 in isolation and on rerun. It is a
+multiprocess SQLite test, so contention with the rest of the suite is the likely cause;
+it is unrelated to the lattice work but is recorded rather than silently re-run away.
+If it recurs, the fix is a bounded retry on `SQLITE_BUSY` in the reservation path, not a
+longer sleep.
