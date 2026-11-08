@@ -121,3 +121,39 @@ def test_shape_mismatches_are_rejected():
         R.pairing(_one_hot(0), _one_hot(1)[:31])
     with pytest.raises(R.RecursionError):
         R.one_hot_tensor((BLOCK,))
+
+def test_one_hot_satisfies_both_constraints():
+    """(4)/(6): v is binary and its NTT coefficient sum is 1."""
+    for index in (0, 5, 31):
+        vector, _lifted = R.one_hot_and_lifted(index)
+        assert R.is_binary(vector)
+        assert R.is_one_hot(vector)
+        assert R.sum_of_slots(vector) == R.constant(1)
+
+
+def test_lift_of_a_one_hot_has_g_equal_to_one():
+    """The verifier-side form: g(NTT^-1(v)) = 1, checked through the real lift."""
+    from radix_core.candidate_b.lattice import subring
+
+    for index in (0, 17):
+        _vector, lifted = R.one_hot_and_lifted(index)
+        assert subring.g(lifted) == (1, 0, 0, 0)
+
+
+def test_binary_vector_with_two_ones_is_not_one_hot():
+    vector = [R.constant(0) for _ in range(BLOCK)]
+    vector[3] = R.constant(1)
+    vector[4] = R.constant(1)
+    vector = tuple(vector)
+    assert R.is_binary(vector)
+    assert not R.is_one_hot(vector)
+    assert R.sum_of_slots(vector) == R.constant(2)
+
+
+def test_all_zero_and_non_constant_vectors_are_rejected():
+    assert not R.is_one_hot(tuple(R.constant(0) for _ in range(BLOCK)))
+    assert not R.is_binary(((0, 1, 0, 0),) + tuple(R.constant(0) for _ in range(BLOCK - 1)))
+    with pytest.raises(R.RecursionError):
+        R.sum_of_slots(tuple(R.constant(1) for _ in range(BLOCK - 1)))
+    with pytest.raises(R.RecursionError):
+        R.one_hot_and_lifted(BLOCK)

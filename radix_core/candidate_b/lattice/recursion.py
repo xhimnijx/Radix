@@ -134,6 +134,59 @@ def one_hot_tensor(
     return tensor(tuple(factors), p)
 
 
+def sum_of_slots(
+    vector: tuple[Quartic, ...], parameters: SmileParameters | None = None
+) -> Quartic:
+    """g on a single block: the sum of the 32 slot coordinates."""
+    p = _p(parameters)
+    size = slots_per_block(p)
+    if len(vector) != size:
+        raise RecursionError("g needs exactly one block of 32 entries")
+    total = constant(0, p)
+    for element in vector:
+        total = add(total, element, p)
+    return total
+
+
+def is_binary(
+    vector: tuple[Quartic, ...], parameters: SmileParameters | None = None
+) -> bool:
+    """Every entry is a constant 0 or 1: the `v (1 - v) = 0` half of (4)/(6)."""
+    p = _p(parameters)
+    return is_constant_vector(vector, p) and all(
+        element[0] in (0, 1) for element in vector
+    )
+
+
+def is_one_hot(
+    vector: tuple[Quartic, ...], parameters: SmileParameters | None = None
+) -> bool:
+    """Binary and with slot sum 1: constraints (4) and (6) together.
+
+    This is a *predicate on witnesses*, used to check that the honest prover's
+    values satisfy the constraint. It is deliberately not a verifier: proving
+    these in zero knowledge needs the multiplicative-relation layer of [1, 15],
+    which is not implemented, so nothing here may be presented as a proof.
+    """
+    p = _p(parameters)
+    if not is_binary(vector, p):
+        return False
+    return sum_of_slots(vector, p) == constant(1, p)
+
+
+def one_hot_and_lifted(
+    index: int, parameters: SmileParameters | None = None
+) -> tuple[tuple[Quartic, ...], tuple[int, ...]]:
+    """The one-hot slot vector and its ring element NTT^-1(v) for tests and callers."""
+    p = _p(parameters)
+    block = slots_per_block(p)
+    if not 0 <= index < block:
+        raise RecursionError("one-hot index is outside the subring")
+    vector = tuple(constant(1 if position == index else 0, p) for position in range(block))
+    lifted = subring.from_constants(tuple(element[0] for element in vector), p)
+    return vector, lifted
+
+
 def matrix_vector(
     matrix: tuple[tuple[Quartic, ...], ...],
     vector: tuple[Quartic, ...],
