@@ -113,3 +113,58 @@ def add_openings(
     if len(left) != len(right):
         raise ValueError("openings must have the same length")
     return tuple(ring.add(a, b, p) for a, b in zip(left, right))
+
+
+@dataclass(frozen=True)
+class VectorCommitment:
+    """BDLOP commitment to several messages under one randomness.
+
+    Fig. 6 commits to all of ``m^(j)``, the index vectors ``V^(j)``, ``w~`` and
+    ``-w`` at once; Fig. 5 commits to ``m_1..m_k`` plus ``w~``. Both are this
+    object: one randomness, one row per message.
+    """
+
+    components: tuple[Poly, ...]
+
+    def __post_init__(self) -> None:
+        if not self.components:
+            raise ValueError("a vector commitment needs at least one component")
+
+    def encode(self) -> bytes:
+        return b"".join(ring.encode(poly) for poly in self.components)
+
+
+def commit_vector(
+    rows: tuple[tuple[Poly, ...], ...],
+    messages: tuple[Poly, ...],
+    randomness: tuple[Poly, ...],
+    parameters: SmileParameters | None = None,
+) -> VectorCommitment:
+    """component_i = <rows[i], randomness> + messages[i]."""
+    p = SMILE if parameters is None else parameters
+    if len(rows) != len(messages):
+        raise ValueError("one key row is required per message")
+    if len(randomness) != p.matrix_cols:
+        raise ValueError("randomness must have ell polynomials")
+    if any(len(row) != p.matrix_cols for row in rows):
+        raise ValueError("every key row must have ell entries")
+    return VectorCommitment(
+        components=tuple(
+            ring.add(ring.dot(row, randomness, p), message, p)
+            for row, message in zip(rows, messages)
+        )
+    )
+
+
+def verify_vector(
+    rows: tuple[tuple[Poly, ...], ...],
+    commitment: VectorCommitment,
+    messages: tuple[Poly, ...],
+    randomness: tuple[Poly, ...],
+    parameters: SmileParameters | None = None,
+) -> bool:
+    try:
+        return commit_vector(rows, messages, randomness, parameters) == commitment
+    except (TypeError, ValueError):
+        return False
+
