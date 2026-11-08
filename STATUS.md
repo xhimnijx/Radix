@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 303 passed
+python -m pytest -q                                  # 342 passed
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation, set-membership recursion. 78 tests. **No full set-membership proof yet.** |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation, set-membership recursion, calibrated size model. 86 tests. **No full set-membership proof yet.** |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
