@@ -63,6 +63,8 @@ large prover workspace**.
 | Negacyclic ring `R_q = Z_q[X]/(X^d+1)` | done, tested | naive O(d²) multiplication; identity, distributivity, `X^d = -1`, encoding, centered norms |
 | BDLOP commitment `(t;u) = (B;b)·s + (0;m)` | done, tested | setup, commit, verify, additive homomorphism, k×ℓ shape enforced |
 | Proof of knowledge of a BDLOP opening (Sigma) | done, tested | `lattice/sigma.py`: ternary challenge, 2^20 masking, no rejection, 6.8 KB proof, 10 tests. This is the `pi` of SMILE Fig. 5 |
+| Tensor / one-hot indexing | done, tested | `lattice/tensor.py`: one-hot, Kronecker product, base-`l` flat index (`n = l^m`), column selection; 9 tests |
+| Aggregation of `k` commitments (Fig. 5, p. 14) | done, tested | `lattice/aggregation.py`: `omega`, sparse ternary challenges, `z`, `a*`, `g*`, `pi`; 14 tests; 19,072 B at `k=2`, 20,096 B at `k=4` |
 | Set-membership proof (the actual SMILE contribution) | **not implemented** | Fig. 6, p. 15 and the protocol figures that follow |
 | Ring-signature transformation | **not implemented** | p. 9 "ring signature from set membership" |
 | Fiat-Shamir with rejection sampling | **not implemented** | distribution and bounds are in the paper's parameter derivation, p. 48 |
@@ -93,6 +95,10 @@ Transcribed from the paper so the work is scoped rather than hand-waved:
 1. **Set membership** (Fig. 6, p. 15): commit to the `k` messages, the binary
    vectors `V^(j)`, `w̃` and `−w`; challenge; compute `z = y + Σ c^(j)s^(j)` with
    rejection sampling; prove `(Bz − w, g*)` opens to `Σ P^(j)(v^(j) ⊗ …)`.
+   *Status:* the `omega` / challenge / `z` / `a*` / `g*` / `pi` half is implemented
+   and tested in `lattice/aggregation.py` (Fig. 5, with the selected member public).
+   Committing to `V^(j)` and proving the tensor relation is what remains, and it
+   needs item 2 before it can be sound.
 2. **Tensor/`l`-coefficient trick** (p. 23): prove the first `d/l` coefficients
    of each `y_j` are zero and that the `v` vectors are binary, using the masked
    polynomial `h = g + y_1 + … + y_m` and the multiplicative-relation proof.

@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 270 passed
+python -m pytest -q                                  # 303 passed
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1 pinned**: SMILE manifest with page citations, negacyclic ring arithmetic, BDLOP commitment. 14 tests. |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation. 47 tests. **No set-membership proof yet.** |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -124,6 +124,30 @@ from the full version (p. 48, Fig. 11), together with the paper's size tables
 commitment with 14 tests. The exact modulus is only given as "~2^32" in the paper,
 so the prototype fixes an NTT-friendly 32-bit prime and sets
 `MODULUS_FROM_PAPER = False`; no security claim is attached to it.
+
+**B2 layers landed (2026-11-08).** On top of that base, in
+`radix_core/candidate_b/lattice/`:
+
+- `sigma.py` is the opening proof `pi` of Fig. 5: ternary challenge, 2^20 masking,
+  no rejection sampling, 6,784 B, 10 tests.
+- `tensor.py` is the one-hot / Kronecker indexing that Fig. 6 uses to select a ring
+  member without naming it: `n = l^m` up to 2^25, column selection returns exactly
+  one column, 9 tests.
+- `aggregation.py` is **Fig. 5 in full**: `k` input commitments folded into one
+  `omega = (f; g_1..g_k; g_w)` under one randomness, with sparse ternary
+  challenges, `z = y + sum c_i s_i`, `a* = sum c_i a_i - a_w`,
+  `g* = sum c_i g_i - g_w + b.z`, and `pi`. The verifier recomputes every value from
+  public data (no secret needed) via the identity
+  `g* = a*.r + sum_i c_i u_i`. 14 tests. Measured proof: **19,072 B at k=2**,
+  20,096 B at k=4.
+
+**Fig. 6 itself is not implemented.** What is missing is not a corner: hiding *which*
+column of `T` was selected requires proving the tensor relation with the p. 23
+quadratic constraints (binary support, the `d/l` zero-coefficient trick,
+`h = g + y_1 + ... + y_m`, and the multiplicative-relation proof between committed
+values). A verifier that skipped it would accept a proof of nothing, so it is not
+stubbed, faked, or marked done. `aggregation.py` is the layer Fig. 6 keeps unchanged;
+the set-membership step swaps the revealed index for that relation.
 
 **New option recorded.** `studies/2026-1983.pdf` turned out to be *Akita*, a 2026
 lattice polynomial commitment scheme (58-68 KB proofs, sublinear prover memory,
