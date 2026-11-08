@@ -56,6 +56,28 @@ better — recorded honestly rather than hidden:
 | Best measured input-half profile | `RDXJ64P1`, 9,518 MiB peak working set |
 | Component proof sizes | 175,252–327,502 B |
 
+## Decision: the M3 lean-relation experiment (executed 2026-11-08)
+
+`python -m experiments.lean_relation_sizing` and `LEAN-RELATION.md` record a
+decision-grade result:
+
+| Profile | Predicted peak | Desktop 4 GiB | Mobile 1 GiB |
+|---|---:|---|---|
+| R-fat (current RDXL64P1) | 36.3 GiB | 9.1x over | 36x over |
+| R-lean (drop in-circuit KDF/AEAD) | 11.8 GiB | 2.9x over | 11.8x over |
+| **R-lean + packed path witness** | **2.4 GiB** | **fits (0.6x)** | 2.4x over |
+| RDXZ64P1 path-only floor | 5.9 GiB | 1.5x over | 5.9x over |
+
+- Dropping in-circuit KEM/AEAD is justified by the soundness note (Part A of
+  `LEAN-RELATION.md`) but is **not sufficient** on its own.
+- The binding constraint is the **8,192 bit-sliced path columns**, not the crypto
+  banks. Packing each digest into 16-bit limbs is the only quantified route to a
+  desktop-fitting transaction proof.
+- **Mobile is out of reach** on this architecture at any combination tested; it
+  needs an algebraic hash, recursion, or a zkVM.
+- All numbers are estimates from a model calibrated on two measured runs
+  (9.5x peak/LDE), not new measurements. The next gate is a measurement.
+
 ## Not implemented (unchanged blockers)
 
 - A complete transaction proof, an ML-KEM relation, GCM/GHASH authentication.
