@@ -9,7 +9,7 @@ htmlcov/
 venv/
 
 # Rust
-proof_harness/target/
+**/target/
 **/*.rs.bk
 
 # Local tooling / scratch
