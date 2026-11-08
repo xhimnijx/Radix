@@ -74,3 +74,25 @@ def test_parameters_reject_bad_shapes():
         )
     with pytest.raises((RS.RingSignatureError, ValueError)):
         RS.sign(parameters, (), (), tuple(), MESSAGE, rng)
+
+
+def test_replacing_a_non_signer_member_breaks_the_signature(built):
+    """The ring is bound even though it is not hashed: P is derived from it.
+
+    Only the selected column has to match for the tensor relation, but the Fig. 8
+    recursion aggregates *every* column through gamma, so changing another member
+    moves x_2, hence y_1, hence h's zero prefix.
+    """
+    parameters, _secret, _public, ring_keys, signature = built
+    rng = random.Random(31)
+    tampered = list(ring_keys)
+    tampered[5] = tuple(ring.sample_uniform(rng) for _ in range(P_.matrix_rows))
+    assert not RS.verify(parameters, tuple(tampered), MESSAGE, signature)
+
+
+def test_reordering_the_ring_breaks_the_signature(built):
+    """Reordering moves the signer to a different tensor index, which is committed."""
+    parameters, _secret, _public, ring_keys, signature = built
+    reordered = list(ring_keys)
+    reordered[0], reordered[1] = reordered[1], reordered[0]
+    assert not RS.verify(parameters, tuple(reordered), MESSAGE, signature)
