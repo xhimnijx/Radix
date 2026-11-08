@@ -70,7 +70,7 @@ large prover workspace**.
 | Binary / one-hot constraints | **predicates only** | `is_binary`, `is_one_hot`, `sum_of_slots`, `one_hot_and_lifted`; `g(NTT⁻¹(v)) = 1` checked end to end. **Not proved in zero knowledge** |
 | Fiat-Shamir transcript | done, tested | `lattice/transcript.py`: domain tag, length-prefixed framing, stateful squeeze, sparse ternary challenge; 10 tests |
 | Multi-message commitment (`omega`) | done, tested | `bdlop.commit_vector` / `verify_vector`: one randomness, one row per message; 5 tests |
-| Set-membership proof (the actual SMILE contribution) | **not implemented** | Fig. 6, p. 15 and the protocol figures that follow |
+| Set membership, Figs. 7-9 | **implemented, tested** | `lattice/setmembership.py`: `P = [NTT(-c' pk_j)]`, the Fig. 8 recursion, `h`, `psi`, `omega`, all Fig. 9 checks; 8 tests, 1024-member ring, 37,632 B proof. `m >= 2`; see the module docstring for deviations |
 | Ring-signature transformation | **not implemented** | p. 9 "ring signature from set membership" |
 | Fiat-Shamir with rejection sampling | **not implemented** | distribution and bounds are in the paper's parameter derivation, p. 48 |
 | Amount commitments / range proofs | **not implemented** | Candidate B milestone B5 |

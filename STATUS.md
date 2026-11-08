@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 360 passed
+python -m pytest -q                                  # 372 passed (~97 s)
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 arithmetic**: SMILE manifest with page citations, negacyclic ring, negacyclic NTT, quartic slot decomposition (`M_q`), BDLOP commitment, opening proof (Fig. 5 pi), tensor indexing, Fig. 5 aggregation, set-membership recursion, calibrated size model, Fiat-Shamir transcript. 96 tests. **No full set-membership proof yet.** |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 complete**: SMILE manifest, negacyclic ring and NTT, quartic slots (`M_q`), BDLOP commitment, Fig. 5 opening proof and aggregation, the Fig. 8 recursion, and **the Fig. 7/9 set-membership proof itself** (m >= 2). 116 tests. Deviations documented, no security claim. |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -171,12 +171,25 @@ stubbed, faked, or marked done. `aggregation.py` is the layer Fig. 6 keeps uncha
 the set-membership step swaps the revealed index for that relation. The NTT
 substrate that the recursive argument is written in is now in place, so the next
 component can be written against it instead of being rewritten afterwards.
-`CANDIDATE-B-PARAMETERS.md` section 6 records how the convention was pinned:
-SMILE's `M_q` is 32 *quartic* slots, so `g(y)` is the sum of the quartic residues
-and is exactly `32(y_0 .. y_3)` - reproduced in `lattice/subring.py` with tests.
-Fig. 6's remaining work is the `j = 1..m` recursion plus the binary/one-hot and
-quadratic-relation proofs, i.e. protocol work against a known target, not a
-convention to guess.
+**The set-membership proof is implemented (2026-11-08).** `lattice/setmembership.py`
+is the protocol of Fig. 7 with the Fig. 8 recursion and all fifteen checks of
+Fig. 9: a BDLOP commitment to `(0_kappa, v_1..v_m, w', x_2..x_m, g, psi)`, the set
+matrix `P = [NTT(-c' pk_j)]` of eq. (31), one challenge and one commitment per
+tensor factor, the garbage commitment and `omega`, and the multi-round
+Fiat-Shamir of p. 43 with the message bound into `c'`. A 1024-member ring
+(`m = 2`) proves in **21 s** and verifies in **19 s**, producing a **37,632-byte**
+proof.
+
+Three transcription errors were found by test rather than guessed at: Fig. 7
+commits `w'` and line 04 subtracts `A z'` afterwards; `B^T gamma` is the
+*constant* vector `(gamma_0, ..., gamma_0)` and not `gamma * 1`; and `F_1` uses
+`f_{m+i}`, not `f_{m+i-1}`.
+
+Deviations, stated in the module and unchanged: no rejection sampling (masks are
+`2^20`), the `e_1` term of `F_m` placed at order `c^2` because Fig. 9 line 12's
+order-`c` placement makes the honest check unsatisfiable, `m >= 2` only, and the
+message bound into `c'`. Research component: no security claim without
+independent review.
 
 **New option recorded.** `studies/2026-1983.pdf` turned out to be *Akita*, a 2026
 lattice polynomial commitment scheme (58-68 KB proofs, sublinear prover memory,
