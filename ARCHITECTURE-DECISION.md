@@ -60,6 +60,19 @@ by Keccak (2,937 columns) plus the KDF/AEAD banks (5,500).
 | **C. Split AIRs + recursive aggregation** | max sub-relation only | Plausible (largest subproof < 1 GiB) | Yes | Yes | Yes (recursive STARK) | No recursion in Plonky3; new stack; composition/soundness work |
 | **D. zkVM (RISC Zero/SP1)-style** | program, not AIR | Unlikely on phone (prover ~4-8 GiB) | Yes if STARK-only (Groth16 wrap is not PQ) | Yes | Yes | Phone memory; proof size; dependency risk |
 | **E. Algebraic in-circuit hash (Poseidon2/Monolith)** | 5,284 with lean | No (5.2 GiB at production) | Yes (no Shor; Grover only) | Yes | Yes | Changes the consensus hash; younger cryptanalysis; re-vectorises everything |
+| **F. Lattice PCS (Akita) + zkVM/SNARK** | hash-circuit no longer dominates | **Plausible**: 58-68 KB proofs, sublinear prover memory, but only if a full proof system is built around the PCS | Yes (Module-SIS) | Yes | Yes | Akita is a PCS, not a transaction proof; needs an arithmetisation and a SNARK/zkVM integration; 2026 research |
+
+**Option F, added 2026-11-08 after reading `studies/2026-1983.pdf`.** Akita is a
+lattice polynomial commitment scheme reporting 58-68 KB proofs, 22-109x faster
+verification than Greyhound at matched security, and prover memory that grows
+sublinearly in the committed polynomial. If a Candidate-A-style global-tree
+relation were proved with such a PCS instead of FRI, the two blockers measured in
+`MEASUREMENTS.md` (a 3.5 GiB LDE floor and a 4.9 GiB path-only peak) would no
+longer apply, because the FRI LDE is the dominant term. This does not make it
+easy: Akita commits polynomials; a transaction proof still needs a PIOP and an
+integration (the paper describes a Jolt zkVM integration). It is worth pricing
+before committing another year to SMILE, because it keeps the stronger global
+anonymity set rather than a 16-member ring.
 
 Verification cost is not the constraint anywhere: measured verification is 25-71 ms,
 so full nodes are fine under every option. The constraint is the **spender's device**.
@@ -93,6 +106,13 @@ build.
 **D-ADR-5. No value-bearing launch on any option until the launch gate opens**, and
 the gate now refuses a profile that does not declare ZK, transparency, PQ
 assumptions, and a <= 1 GiB prover budget (`radix_core/launch.py`).
+
+**D-ADR-6. Price option F (Akita-class lattice PCS) before B2 goes deep.** SMILE
+and Akita are the two credible PQ routes with small proofs; SMILE gives ring
+anonymity, Akita could give the stronger global anonymity set with 58-68 KB proofs
+and bounded prover memory. Spend one week after B2's arithmetic scaffold (already
+done) estimating the Akita integration; if it is tractable, evaluate it before
+committing a year to SMILE. Do not run both to completion in parallel.
 
 ## 5. What "matches Monero" means, precisely
 

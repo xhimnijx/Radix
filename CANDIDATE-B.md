@@ -88,13 +88,14 @@ width, rejection-sampling bounds, challenge space, hash domains, and claimed
 security. No guessed values. This step needs the paper; if it cannot be retrieved,
 the manifest stays empty and B2 does not start.
 
-*Status 2026-11-08:* the full text could not be retrieved from this environment
-(`par.nsf.gov` fetch failed; the Springer chapter is paywalled). A search surfaced
-a reference to "Table 1. Concrete parameters" but no values that can be transcribed
-without the source. B1 therefore **remains open**, and no lattice parameter has
-been guessed. That is deliberate: a wrong modulus or noise width produces a
-signature scheme that is either insecure or simply does not verify, and neither
-failure is detectable by the tests that exist today.
+*Status 2026-11-08:* **manifest pinned** in `CANDIDATE-B-PARAMETERS.md` from the
+full version: `(q, d, l) = (≈2³², 128, 32)`, `k=4`, `ℓ=13`, `κ=10`, `λ=10`, `µ=5`
+(p. 48, Fig. 11). The exact modulus is only specified as "≈2³²", so the prototype
+fixes `q = 4,294,962,689` and flags `MODULUS_FROM_PAPER = False`. Ring arithmetic
+and the BDLOP commitment are implemented and tested against it
+(`radix_core/candidate_b/lattice/`, 14 tests). The set-membership proof, the
+bimodal-Gaussian rejection sampling and the ring transformation remain open; the
+B2 checklist in `CANDIDATE-B-PARAMETERS.md` §5 scopes them with page references.
 
 **B2 - signature backend.** Implement `sign`/`verify` for the lattice scheme with
 the same external contract:
@@ -131,6 +132,8 @@ proof; then relax the equal-value ring restriction and measure the size cost.
 | Signing time | 3 ms | <= 1 s |
 | Validation time | 5 ms | <= 100 ms |
 | Prover RAM | negligible (no proof system) | <= 1 GiB |
+| **SMILE target (paper, Fig. 11)** | — | **15.96-18.73 KB at ring 2^5-2^15** |
+| **SMILE tx target (paper, Fig. 3)** | — | **30 KB for (2,2) at ring 2^15** |
 
 The reason Candidate B was chosen is visible in that last row: there is no
 FRI-style prover, so the 1 GiB device budget is not the binding constraint. The

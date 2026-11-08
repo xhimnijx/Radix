@@ -18,6 +18,9 @@ proof_harness/target/
 *.log
 *.tmp
 
+# Research papers supplied locally; cited by ePrint id, not redistributed
+studies/
+
 # Local secrets and wallet fixtures produced by examples
 *.wallet
 nonce-history.sqlite*

@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 256 passed
+python -m pytest -q                                  # 270 passed
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -43,6 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1 pinned**: SMILE manifest with page citations, negacyclic ring arithmetic, BDLOP commitment. 14 tests. |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -114,6 +115,22 @@ The first working slice is in `radix_core/candidate_b/`:
 Shor breaks it. `CANDIDATE_B_PROTOTYPE_SECURITY` declares no post-quantum
 assumptions, and a launch-gate test asserts that a mainnet configuration using it
 is refused. See `CANDIDATE-B.md` for the swap plan (B1-B5) and the size targets.
+
+**B1 is now pinned** in `CANDIDATE-B-PARAMETERS.md`: the SMILE manifest
+`(q, d, l) = (~2^32, 128, 32), k=4, ell=13, kappa=10, lambda=10, mu=5` transcribed
+from the full version (p. 48, Fig. 11), together with the paper's size tables
+(15.96-18.73 KB ring signatures; 30 KB for a (2,2) transaction at ring 2^15).
+`radix_core/candidate_b/lattice/` implements the negacyclic ring and the BDLOP
+commitment with 14 tests. The exact modulus is only given as "~2^32" in the paper,
+so the prototype fixes an NTT-friendly 32-bit prime and sets
+`MODULUS_FROM_PAPER = False`; no security claim is attached to it.
+
+**New option recorded.** `studies/2026-1983.pdf` turned out to be *Akita*, a 2026
+lattice polynomial commitment scheme (58-68 KB proofs, sublinear prover memory,
+22-109x faster verification than Greyhound). It is not a transaction proof, but it
+could remove the FRI LDE that killed the Candidate-A device budget. Recorded as
+option F in `ARCHITECTURE-DECISION.md` with D-ADR-6: price it before committing a
+year to SMILE.
 
 ## Not implemented (unchanged blockers)
 
