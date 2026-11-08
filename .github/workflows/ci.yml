@@ -12,10 +12,20 @@ jobs:
   python:
     name: python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          # The full suite runs the real set-membership protocol (~7 min here,
+          # slower on runners), so only one interpreter pays for it. The others
+          # still cover everything that does not depend on a 20 s proof.
+          - python-version: "3.11"
+            pytest-args: '-m "not slow"'
+          - python-version: "3.12"
+            pytest-args: '-m "not slow"'
+          - python-version: "3.13"
+            pytest-args: ""
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,7 +34,7 @@ jobs:
       - name: Install
         run: python -m pip install -e ".[test]"
       - name: Test
-        run: python -m pytest -q
+        run: python -m pytest -q ${{ matrix.pytest-args }}
       - name: Standalone vectors
         run: |
           python Radix-Serialization-Test-Vectors.py

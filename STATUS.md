@@ -1,4 +1,4 @@
-﻿# Status â€” 2026-11-08
+﻿# Status — 2026-11-08
 
 **One line:** the tree builds, the suite is green, the verified safety defects are
 fixed, and the mainnet launch gate exists and ships **closed**. The proof side is
@@ -39,7 +39,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | SHAKE256 Candidate-A hashes | implemented, known-answer vectors |
 | ML-KEM-768 + AES-256-GCM adapters (`cryptography==50.0.2`) | real providers, round-trip and negative tests |
 | Wallet keygen, note create/recover, bounded and authenticated scan | implemented; scan containment fixed and regression-tested |
-| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `Radix-Workspace-Review.md` Â§3.I1) |
+| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `Radix-Workspace-Review.md` §3.I1) |
 | Nonce registries (process-local + SQLite) | implemented; default is now unbounded |
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
@@ -53,17 +53,17 @@ wraps that. This is a real build and a real test run, not a type-check.
 The half-landed key-schedule overlay was reverted to a contiguous 1,920-bit bank
 (the split was not consistent and the overlay's column lifetime was unproven).
 That costs 1,152 trace columns and makes the fail-closed preflight worse, not
-better â€” recorded honestly rather than hidden:
+better — recorded honestly rather than hidden:
 
 | Quantity | Value |
 |---|---|
-| RDXL trace | 8,192 Ã— 15,629 BabyBear values (512,131,072 B) |
-| Randomized matrix | 16,384 Ã— 15,633 (1,024,524,288 B) |
+| RDXL trace | 8,192 × 15,629 BabyBear values (512,131,072 B) |
+| Randomized matrix | 16,384 × 15,633 (1,024,524,288 B) |
 | PCS LDE payload | 4,098,097,152 B (3.82 GiB) |
 | Randomized + LDE coexistence | 5,122,621,440 B (4.77 GiB) |
 | Cross-target process cap used by the guard | 1,073,741,824 B (1 GiB) |
 | Best measured input-half profile | `RDXJ64P1`, 9,518 MiB peak working set |
-| Component proof sizes | 175,252â€“327,502 B |
+| Component proof sizes | 175,252–327,502 B |
 
 ## Decision: the M3 lean-relation experiment (executed 2026-11-08)
 
@@ -136,7 +136,7 @@ so the prototype fixes an NTT-friendly 32-bit prime and sets
   one column, 9 tests.
 - `ntt.py` is the negacyclic number-theoretic transform: exact integer arithmetic,
   twist + radix-2, `O(d log d)` instead of `O(d^2)`. It is not an optimisation
-  nicety â€” the Fig. 6 recursion is stated in the NTT domain (Lemmas 2.1/2.2 are
+  nicety — the Fig. 6 recursion is stated in the NTT domain (Lemmas 2.1/2.2 are
   statements about NTT coefficients and the "first `d/l` zero coefficients"), and
   every honest value there is committed as `NTT^-1` of a short vector. `ring.mul`
   uses it; `mul_naive` stays as the audited reference and the tests assert they
@@ -255,7 +255,7 @@ the active path; C is the designated fallback** with explicit re-open triggers. 
 | Skipped | Reason | Re-enable when |
 |---|---|---|
 | 7 Rust proof tests (`#[ignore]`) | peak RSS is unbounded and exceeds the provisional device budgets | a profile is measured under a 4 GiB desktop cap |
-| `RDXL64P1` proving | preflight returns `ResourceBudgetExceeded` before allocation | the lean-relation experiment (Â§ M3) produces a fitting profile |
+| `RDXL64P1` proving | preflight returns `ResourceBudgetExceeded` before allocation | the lean-relation experiment (§ M3) produces a fitting profile |
 
 ## Launch posture
 

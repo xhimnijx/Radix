@@ -1,4 +1,38 @@
-# Radix Candidate-A Reference Core
+# Radix
+
+**Status: research prototype. Not a coin, not value-bearing, not security reviewed.**
+The launch gate is closed by design (`radix_core/launch.py`) and no flag or
+environment variable opens it. Nothing here should be deployed or assigned value.
+
+This repository is the working record of a G100 side project: a cryptocurrency
+with Monero's privacy goals, designed so that a future quantum computer running
+Shor's algorithm does not break it. It contains two tracks, and one is parked.
+
+| Track | What it is | State |
+|---|---|---|
+| **A** (parked) | global depth-64 Merkle tree plus a transparent STARK over BabyBear (Plonky3/FRI) | measured at 4.9-8.5 GiB peak proving, over the 4 GiB desktop budget; kept as the credibility baseline |
+| **B** (active) | Monero-style ring anonymity with a lattice ring signature (SMILE, ePrint 2021/564) | implemented and tested: set membership (Figs. 7-9), a linking tag, a ring-signature API and a spend layer |
+
+Start here:
+
+- `STATUS.md` - the dated single source of truth: test counts, measured numbers, what is broken.
+- `ARCHITECTURE-DECISION.md` - why B, the measurements behind that, and where B actually stands (section 8).
+- `AUDIT-PACKET-LATTICE.md` - the review surface for the post-quantum layer: every deviation, every gap, and what to check first.
+- `PLAN.md` - the milestone ladder.
+
+## Running the tests
+
+```powershell
+python -m pip install -e ".[test]"
+python -m pytest -q                    # everything, about 7 minutes
+python -m pytest -q -m "not slow"      # 373 tests in about 16 seconds
+```
+
+The slow tests are slow because they run the real protocol: a 128 x 1024 matrix
+over `M_q` and nineteen polynomial commitments per proof, about 20 s to prove and
+20 s to verify per signature in CPython.
+
+## Candidate-A reference core
 
 **Status: experimental, non-value-bearing reference code.** This is an executable specification slice for deterministic Candidate-A rules, not a coin, wallet, node, or security-reviewed implementation. Do not deploy it or assign value to it.
 

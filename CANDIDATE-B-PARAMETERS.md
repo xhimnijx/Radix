@@ -1,7 +1,7 @@
 ﻿# Candidate-B lattice parameters (B1)
 
 **Status:** manifest pinned from the primary source; first components implemented.
-**Source:** `studies/2021-564.pdf` â€” the full version of *SMILE: Set Membership
+**Source:** `studies/2021-564.pdf` — the full version of *SMILE: Set Membership
 from Ideal Lattices with Applications to Ring Signatures and Confidential
 Transactions* (Lyubashevsky, Nguyen, Seiler; CRYPTO 2021, ePrint 2021/564).
 **Date:** 2026-11-08.
@@ -40,7 +40,7 @@ Ring signatures (Fig. 11, p. 48; also Fig. 2, p. 9):
 | 2Â¹â° = 1,024 | 17.27 KB | 32 KB | 31 KB |
 | 2Â¹âµ = 32,768 | 18.73 KB | 35 KB | 59 KB |
 | 2Â²â° | 20.15 KB | 39 KB | 148 KB |
-| 2Â²âµ | 21.53 KB | â€” | â€” |
+| 2Â²âµ | 21.53 KB | — | — |
 
 Transaction proofs (Fig. 3, p. 12), `(M, S)` = input/output accounts:
 
@@ -62,11 +62,11 @@ large prover workspace**.
 | Parameter manifest | done, tested | values above, with provenance |
 | Negacyclic ring `R_q = Z_q[X]/(X^d+1)` | done, tested | naive O(dÂ²) multiplication; identity, distributivity, `X^d = -1`, encoding, centered norms |
 | Negacyclic NTT | done, tested | `lattice/ntt.py`: twist + radix-2, exact integer arithmetic; `ring.mul` uses it and `mul_naive` stays as the audited reference; 10 tests; 1.97 ms -> 1.00 ms per multiplication, suite 9.97 s -> 5.79 s |
-| BDLOP commitment `(t;u) = (B;b)Â·s + (0;m)` | done, tested | setup, commit, verify, additive homomorphism, kÃ—â„“ shape enforced |
+| BDLOP commitment `(t;u) = (B;b)Â·s + (0;m)` | done, tested | setup, commit, verify, additive homomorphism, k×â„“ shape enforced |
 | Proof of knowledge of a BDLOP opening (Sigma) | done, tested | `lattice/sigma.py`: ternary challenge, 2^20 masking, no rejection, 6.8 KB proof, 10 tests. This is the `pi` of SMILE Fig. 5 |
 | Tensor / one-hot indexing | done, tested | `lattice/tensor.py`: one-hot, Kronecker product, base-`l` flat index (`n = l^m`), column selection; 9 tests |
 | Aggregation of `k` commitments (Fig. 5, p. 14) | done, tested | `lattice/aggregation.py`: `omega`, sparse ternary challenges, `z`, `a*`, `g*`, `pi`; 14 tests; 19,072 B at `k=2`, 20,096 B at `k=4` |
-| Set-membership recursion, equation (7) | done, tested | `lattice/recursion.py`: `M_q` vectors, slot-tagged pairing, tensor, `P' = [Î³áµ€Pâ‚; â€¦]`; 13 tests, including (7) verified at `m=2` and wrong-witness rejection |
+| Set-membership recursion, equation (7) | done, tested | `lattice/recursion.py`: `M_q` vectors, slot-tagged pairing, tensor, `P' = [Î³áµ€Pâ‚; …]`; 13 tests, including (7) verified at `m=2` and wrong-witness rejection |
 | Binary / one-hot constraints | **predicates only** | `is_binary`, `is_one_hot`, `sum_of_slots`, `one_hot_and_lifted`; `g(NTTâ»Â¹(v)) = 1` checked end to end. **Not proved in zero knowledge** |
 | Fiat-Shamir transcript | done, tested | `lattice/transcript.py`: domain tag, length-prefixed framing, stateful squeeze, sparse ternary challenge; 10 tests |
 | Multi-message commitment (`omega`) | done, tested | `bdlop.commit_vector` / `verify_vector`: one randomness, one row per message; 5 tests |
@@ -76,7 +76,7 @@ large prover workspace**.
 | Amount commitments / range proofs | **not implemented** | Candidate B milestone B5 |
 
 The two implemented components are the foundation the rest is built on, and they
-are pure arithmetic with exact tests â€” not a proof system, and not claimed as one.
+are pure arithmetic with exact tests — not a proof system, and not claimed as one.
 
 ## 4. Deviation that must be resolved before B2
 
@@ -99,14 +99,14 @@ Transcribed from the paper so the work is scoped rather than hand-waved:
 
 1. **Set membership** (Fig. 6, p. 15): commit to the `k` messages, the binary
    vectors `V^(j)`, `wÌƒ` and `âˆ’w`; challenge; compute `z = y + Î£ c^(j)s^(j)` with
-   rejection sampling; prove `(Bz âˆ’ w, g*)` opens to `Î£ P^(j)(v^(j) âŠ— â€¦)`.
+   rejection sampling; prove `(Bz âˆ’ w, g*)` opens to `Î£ P^(j)(v^(j) âŠ— …)`.
    *Status:* the `omega` / challenge / `z` / `a*` / `g*` / `pi` half is implemented
    and tested in `lattice/aggregation.py` (Fig. 5, with the selected member public).
    Committing to `V^(j)` and proving the tensor relation is what remains, and it
    needs item 2 before it can be sound.
 2. **Tensor/`l`-coefficient trick** (p. 23): prove the first `d/l` coefficients
    of each `y_j` are zero and that the `v` vectors are binary, using the masked
-   polynomial `h = g + y_1 + â€¦ + y_m` and the multiplicative-relation proof.
+   polynomial `h = g + y_1 + … + y_m` and the multiplicative-relation proof.
 3. **Ring transformation** (p. 9): make the verifier see only commitments, not
    `w`, and add the bimodal-Gaussian sign bit `b` as a committed value.
 4. **Fiat-Shamir** over the full transcript, with a domain-separated challenge.
