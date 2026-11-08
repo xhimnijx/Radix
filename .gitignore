@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Rust
+proof_harness/target/
+**/*.rs.bk
+
+# Local tooling / scratch
+.dsh-pdf-reader/
+.dsh/
+*.log
+*.tmp
+
+# Local secrets and wallet fixtures produced by examples
+*.wallet
+nonce-history.sqlite*
