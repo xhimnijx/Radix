@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "radix-candidate-a-reference-core"
+name = "radix-core"
 version = "0.1.0"
-description = "Experimental, non-value Candidate-A reference core"
+description = "Experimental, non-value research prototype: a post-quantum private payment network (Candidate B, lattice ring signatures)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["cryptography==50.0.2"]
