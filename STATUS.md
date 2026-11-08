@@ -8,7 +8,7 @@ flagship RDXL profile is fail-closed by design.
 ## Verify it
 
 ```powershell
-python -m pytest -q                                  # 385 passed (~216 s)
+python -m pytest -q                                  # 399 passed (~308 s)
 python Radix-Serialization-Test-Vectors.py           # passes
 python .\Radix-Gate-1-Reference-Model.py             # passes
 python -m examples.wallet_note_demo                  # real ML-KEM/AES round trip
@@ -43,7 +43,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
 | Candidate-B prototype (`radix_core/candidate_b/`) | **working**: notes, anchored rings, linkable ring signature, tag set, atomic blocks. Classical crypto only. |
-| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 complete**: SMILE manifest, negacyclic ring and NTT, quartic slots (`M_q`), BDLOP commitment, Fig. 5 opening proof and aggregation, the Fig. 8 recursion, **the Fig. 7/9 set-membership proof**, the Appendix-C ring-signature API, and a spend layer over a canonical message. 129 tests. Deviations documented, no security claim. |
+| Candidate-B lattice layer (`candidate_b/lattice/`) | **B1+B2 complete**: SMILE manifest, negacyclic ring and NTT, quartic slots (`M_q`), BDLOP commitment, Fig. 5 opening proof and aggregation, the Fig. 8 recursion, **the Fig. 7/9 set-membership proof**, the Appendix-C ring-signature API, a spend layer over a canonical message, and a linkable tag. 143 tests. Deviations documented, no security claim. |
 | Rust component proofs (`RDXZ*`, `RDXT/S/I/J/K`) | type-check clean; proof tests are `#[ignore]`d |
 | Rust `RDXL64P1` (full transaction) | **cannot run**: resource preflight fails closed by design |
 
@@ -199,6 +199,24 @@ recursion do. `lattice/spend.py` signs one ring signature per input over a
 canonical message (anchor, input values, outputs, fee) and enforces
 `sum(inputs) = sum(outputs) + fee`; rings are equal-value, so the balance check
 is sound without a range proof.
+
+**B3: the signature is now linkable (2026-11-08).** `lattice/tag.py` closes the hole
+that `experiments/linear_tag_soundness.py` exposed. The mask is committed under its
+own key, the prover sends `T = <A', s>`, and the verifier derives
+`u_der = <A', u> - (<A', z'> - c' T) = <b', r_m> + c'(T - <A', s>)` and checks a BDLOP
+opening to zero under `b' = sum_j A'_j b^m_j`. That forces `c'(T - <A',s>) = 0`, and
+`c'` is separately checked to be a unit of `R_q`, so the tag is forced. A tagged
+signature is **51,584 B** (base 32,512 B plus 19,072 B for the mask commitment, the
+tag and its opening proof). A verifier that does not ask for the tag **refuses** a
+tagged proof rather than silently ignoring it.
+
+Two caveats, recorded in `ARCHITECTURE-DECISION.md` 8.2: tag-collision hardness is a
+Module-SIS assumption on a single-polynomial image and has to be priced; and the tag
+is a second proof bound to the signature, not one shared witness (that is B5).
+
+**The remaining gap, stated plainly:** with the tag, double spending is detectable,
+which is the property SMILE itself does not provide. What is still absent is a
+single composed proof (B5), amount commitments and range proofs.
 
 **The gap this exposes, stated plainly:** SMILE's ring signature is anonymous but
 **not linkable**. Nothing in Figs. 7-9 produces a per-note tag, so nothing here
