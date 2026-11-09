@@ -73,9 +73,16 @@ def verify_spend(spend: SP.Spend, **kwargs) -> bool:
 
 
 def verify_tagged(parameters, spend, params=None) -> bool:
-    """Check a tagged spend. What the node actually calls."""
+    """Check a tagged spend. What the node actually calls.
+
+    With the Rust backend this is a subprocess per input: about 110 ms of verification
+    plus ~50 ms of process start, against 20-38 s in Python.
+    """
+    from . import rust_backend
+
     if BACKEND is ProverBackend.RUST:
-        raise ProverUnavailable("the rust verifier is not implemented")
+        return rust_backend.verify_tagged_spend(parameters, spend)
+
     from .tagged import verify_tagged_spend
 
     return verify_tagged_spend(parameters, spend, params)

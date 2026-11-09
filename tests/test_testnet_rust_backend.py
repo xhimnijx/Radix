@@ -71,3 +71,67 @@ def test_the_backend_refuses_when_the_binary_is_missing(monkeypatch):
     monkeypatch.setenv("RADIX_PROVE_BIN", "C:/definitely/not/here.exe")
     with pytest.raises(prover.ProverUnavailable, match="not built"):
         prover.set_backend("rust")
+
+
+def test_the_rust_verifier_agrees_with_the_python_verifier(rig):
+    """The node's verification path, both ways, on the same tagged spend."""
+    parameters, secret, public, ring_keys = rig
+    from radix_core.candidate_b.lattice.spend import Output
+
+    start = prover.BACKEND
+    try:
+        prover.set_backend("rust")
+        spend = tagged.build_tagged_spend(
+            parameters,
+            secrets=(secret,),
+            publics=(public,),
+            rings=(ring_keys,),
+            input_values=(1000,),
+            outputs=(Output(key=public, value=1000),),
+            fee=0,
+            anchor=b"\x00" * 32,
+            rng=random.Random(4),
+        )
+        rust_verdict = prover.verify_tagged(parameters, spend)
+
+        prover.set_backend("python")
+        python_verdict = prover.verify_tagged(parameters, spend)
+    finally:
+        prover.set_backend(start.value)
+
+    assert rust_verdict is True
+    assert rust_verdict == python_verdict
+
+
+def test_the_rust_verifier_rejects_a_tampered_proof(rig):
+    parameters, secret, public, ring_keys = rig
+    from radix_core.candidate_b.lattice.spend import Output
+
+    start = prover.BACKEND
+    try:
+        prover.set_backend("rust")
+        spend = tagged.build_tagged_spend(
+            parameters,
+            secrets=(secret,),
+            publics=(public,),
+            rings=(ring_keys,),
+            input_values=(1000,),
+            outputs=(Output(key=public, value=1000),),
+            fee=0,
+            anchor=b"\x00" * 32,
+            rng=random.Random(6),
+        )
+        assert prover.verify_tagged(parameters, spend) is True
+
+        tampered = tagged.TaggedSpend(
+            anchor=spend.anchor,
+            input_values=spend.input_values,
+            rings=spend.rings,
+            outputs=(Output(key=public, value=999),),
+            fee=0,
+            signatures=spend.signatures,
+            tags=spend.tags,
+        )
+        assert prover.verify_tagged(parameters, tampered) is False
+    finally:
+        prover.set_backend(start.value)

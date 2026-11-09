@@ -119,6 +119,86 @@ def prove(
         )
 
 
+def verify(keys: S.Keys, statement: S.Statement, proof, message: bytes) -> bool:
+    """Check a proof with the Rust verifier. Same request format as proving.
+
+    Exit codes are kept distinct on purpose: 0 verified, 1 the proof is wrong, 2 the
+    input was malformed. A node rejecting a transaction and a node finding a bug are
+    different events and should not look the same.
+    """
+    binary = verify_binary_path()
+    if not binary.exists():
+        raise RustProverError(
+            f"the Rust verifier is not built: {binary}. "
+            "Run cargo build --release --bin verify_request."
+        )
+
+    # The request format carries the secret, which verification never reads; a zero
+    # secret keeps one serialiser for both directions.
+    request = build_request(keys, statement, _zero_secret(), 0, message)
+
+    with tempfile.TemporaryDirectory(prefix="radix-verify-") as work:
+        request_path = Path(work) / "request.bin"
+        proof_path = Path(work) / "proof.bin"
+        request_path.write_bytes(request)
+        proof_path.write_bytes(proof.encode())
+
+        try:
+            result = subprocess.run(
+                [str(binary), str(request_path), str(proof_path)],
+                capture_output=True,
+                timeout=600,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise RustProverError(f"could not run the Rust verifier: {error}") from None
+
+        if result.returncode == 2:
+            detail = result.stderr.decode(errors="replace").strip()
+            raise RustProverError(f"the Rust verifier rejected the request: {detail}")
+        return result.returncode == 0
+
+
+def _zero_secret():
+    """A secret of the right shape, for a request whose secret is never read.
+
+    Polynomials, not encoded bytes: `build_request` encodes, so returning bytes here
+    would encode twice and fail the degree check.
+    """
+    zero = tuple([0] * SMILE.ring_degree)
+    return tuple(zero for _ in range(SMILE.matrix_cols))
+
+
+def verify_binary_path() -> Path:
+    override = os.environ.get("RADIX_VERIFY_BIN")
+    if override:
+        return Path(override)
+    name = "verify_request.exe" if os.name == "nt" else "verify_request"
+    return binary_path().with_name(name)
+
+
+def verify_tagged_spend(parameters, spend) -> bool:
+    """The node's verifier, routed through Rust, for a tagged spend.
+
+    Mirrors `tagged.verify_tagged_spend` but hands each proof to the Rust verifier.
+    The statement is the extended one: `A_ext = [A; A']` and `(pk_j, T)` for every
+    member, exactly as the prover built it.
+    """
+    if not spend.balanced:
+        return False
+    message = spend.message()
+    keys = parameters.keys
+    extended_matrix = parameters.matrix + parameters.tag_matrix
+    for ring_keys, tag, signature in zip(spend.rings, spend.tags, spend.signatures):
+        extended_ring = tuple(key + tag for key in ring_keys)
+        statement = S.Statement(
+            matrix=extended_matrix, keys=extended_ring, depth=parameters.depth
+        )
+        if not verify(keys, statement, signature, message):
+            return False
+    return True
+
+
 def prove_tagged(
     parameters,
     secret,

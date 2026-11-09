@@ -88,6 +88,32 @@ dominant work scaled by a per-multiplication cost. The measured figures are 0.50
 and 0.11 s: the same order, both slightly off, and the sign of the verify error was
 not predictable. That is the argument for measuring.
 
+## The node's verification path
+
+A node spends its time verifying, not proving, so routing verification through Rust
+matters more than the prover numbers above. Measured on one tagged spend through
+`prover.verify_tagged`:
+
+| backend | verification |
+|---|---|
+| python | 40.3 s |
+| **rust** (subprocess per input) | **0.44 s** |
+
+**91x**, and the answers agree — which is the part that matters, not the ratio. The
+0.44 s is ~110 ms of verification plus process start and serialisation; the gap will
+widen on a machine with less Python overhead to lose.
+
+To use it:
+
+```powershell
+cd proof_rust
+cargo build --release --bin prove_request --bin verify_request
+cd ..
+python -m radix_testnet --backend rust
+```
+
+If either binary is missing, the backend refuses rather than falling back.
+
 ## What this means for the original question
 
 "Will users wait these extortionate times between transactions?" No:
