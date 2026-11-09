@@ -306,3 +306,40 @@ the critical path. `docs/CONFIDENTIAL-TRANSACTIONS.md` is therefore not a later 
    masked opening and a norm check, not a bit-decomposition. Measured at our parameters:
    honest carry rejected 0/50, inflated caught 50/50.
 3. ~~**One-time addressing**~~ -- **derivation solved, compatibility open.** ePrint 2025/112 section 5.3 derives a stealth key as `P = XOF(rhoK)*XOF(S) + Decompress(tK)` with the secret `p = k + XOF(S)`, where `S` is a KEM shared secret. The sender can compute `P` but not `p`, which fixes the deanonymisation in the earlier proposal. The open question is whether `XOF(S)` is short: if it is uniform, `p` is uniform and SMILE cannot prove knowledge of it as a short vector.
+
+
+## Plan revision, 2026-11-09 (network items 1-3)
+
+| Item | Outcome |
+|---|---|
+| Transaction relay | `tx` message, seen-set, flood from both submission paths. **Proven end to end**: a real spend through `Node.send` on one node appears in the other's mempool (174 s test, marked slow) |
+| Genesis constant | Block zero derived from `GENESIS_MNEMONIC` in `params.py`; the sync no longer transmits an allocation. Two nodes in separate directories, no communication, same genesis hash, same faucet key |
+| Mempool and fees | Minimum fee, cap of 64 with eviction **by fee rate**, fees paid entirely to the miner, treasury slice taken from the emission only |
+
+**What measurement and testing caught.**
+
+1. **`tag_rows == 4` was still asserted** in the node status test, several rounds after k'
+   became 1. It had been failing quietly because that file was not being run.
+2. **The genesis wallet had no phrase.** Seed-derived wallets have `phrase = None`, and the
+   persistence path concatenated it -- a `TypeError` on first start. The genesis phrase is
+   now the standard BIP-39 test vector, which is unmistakably public and is documented as
+   a faucet rather than a launch.
+3. **A network only worked if every node was handed the same wallet.** That was the real
+   consequence of a per-node genesis allocation, and it is now gone.
+
+**What is now true of the network, and what is not.**
+
+Two nodes can exchange transactions and blocks, agree on genesis without being told, and
+apply the same fee policy. They still cannot find each other: peers are configured by
+hand. There is no discovery, no gossip, no encryption and no authentication, and a peer
+that serves a longer chain is trusted to have a valid one apart from block-level checks.
+
+**The next three.**
+
+1. **Digit membership** -- the range-proof core. Two bits per base-4 digit with
+   `v(v-1) = 0`; C2's correction is that the alpha budget is per *vector*, not per bit, so
+   64 bits cost two alphas and an amount costs about three, not sixty-four.
+2. **The `[A | I_k]` noise-aware statement** -- C1's finding that the stealth public key
+   is `P = A*p + e1`, not `A*p`, so it is not a SMILE key at all. This is the structural
+   piece both hidden amounts and one-time addressing need.
+3. **The estimator run**, still. `docs/ESTIMATOR.md`; five minutes on any Linux box.
