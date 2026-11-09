@@ -63,7 +63,14 @@ was withdrawn as forgeable and rebuilt the same day as a same-witness extension
    not have spare. This blocks B2 as soon as a range proof wants `v_i`.
 
 `REVIEW-FINDINGS.md` is the record; `REVIEW-REQUEST.md` is the brief for the next
-pass, and questions 3 and 5 should be rewritten for it.
+pass.
+
+**Performance, measured 2026-11-09 (`PERFORMANCE.md`).** A depth-2 proof is 14,450
+ring multiplications to prove and 4,741 to verify. The Rust arithmetic runs one at
+20.1 us, which projects to ~0.36 s to prove -- two orders of magnitude inside the
+60 s phone bar -- and ~0.13 s to verify, which **misses** the 100 ms bar once a
+phone's 3-5x slowdown is applied. Prove is solved; verification needs batching or
+a faster multiplication, and neither is measured yet.
 
 **Exit:** a reviewer signs an attestation over `parameters_hash()`; the modulus is
 either SMILE's or a justified choice; the three deviations are resolved against a
