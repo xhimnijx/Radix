@@ -1,22 +1,26 @@
-refactor: Parameters carries its SmileParameters, which was blocking three attempts
+feat: the one-time addressing derivation, working, with its bound stated honestly
 
-Technical debt, and the reason items 1, 2 and 3 all stalled the same way. There are two
-parameter objects and they are easy to confuse:
+The retry against the fixed parameter type, and it went in one pass -- which is the evidence
+that last round's refactor was the actual blocker rather than a detour.
 
-  SmileParameters   modulus, ring_degree, matrix_cols, challenge_dim -- the ring algebra
-  Parameters        keys, matrix, depth, tag_matrix -- the actual statement
+p = k + XOF(S),  P = A*p,  T = A'*p = T_K + A'*XOF(S)
 
-Every module that touches the matrices needs both, and three separate attempts broke by
-assuming one was the other: a stealth module hit matrix_cols, then modulus, then a nested
-ring call, each fix revealing the next. That is not bad luck, it is a type that does not
-carry its own context.
+The sender computes P and T from the meta-address and the shared secret; the recipient
+computes p from the spend key and gets the same values. The sender cannot form p, because
+it does not know k -- tested by showing what it CAN do (subtract A*delta and recover A*k,
+which is public) alongside what it cannot.
 
-`Parameters` now has a `smile` field, populated by `setup` from the parameters it was
-actually given, so a module holding a `Parameters` never has to guess what it is holding.
-Verified both ways: the default set exposes smile.matrix_cols = 13 matching its matrix
-width, and a set built at ell = 17 exposes 17 rather than silently reporting the default --
-which is exactly the confusion that cost the last three rounds.
+Two corrections found by the tests rather than by reading:
 
-This is the fix that unblocks them. It adds no capability on its own; it removes a class of
-failure, and the next attempts at the range proof, the noise-aware statement and one-time
-addressing all depend on it.
+The shift used four-bit popcounts, giving a range of four, not the two its parameter name
+claims. Two-bit chunks make it a binomial of width 2, which is what CBD eta = 2 means.
+
+And the norm bound depends on BOTH distributions: p = k + delta, so a uniform-small spend
+key (the proof's own sample, width 5) plus a width-2 shift reaches 7, not the proof's mu of
+5. With a Kyber CBD spend key of width 2 it reaches 4 and fits. That is exactly C2's
+parameter point, now asserted as what it is instead of quietly loosened: which spend-key
+distribution a wallet uses is a parameter decision, not an implementation detail.
+
+7 tests. This completes the lattice structure of item 3; what remains there is deriving the
+shared secret from a real KEM rather than a caller-supplied value, and wiring the
+meta-address into the wallet.
