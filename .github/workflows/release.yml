@@ -97,21 +97,24 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-
+      # No setup-android action: the ubuntu-latest image already ships the Android
+      # SDK and sets ANDROID_HOME. The action failed on this runner and there is
+      # nothing it was adding that the image does not provide.
       - name: build the APK
         working-directory: android
         run: |
-          chmod +x gradlew 2>/dev/null || true
-          gradle assembleDebug --no-daemon --console=plain
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --console=plain
 
       - name: verify the APK rather than trusting the build
         run: |
           set -euo pipefail
           APK=android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -5
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$APK"
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort | tail -1)
+          "$AAPT" dump badging "$APK" | head -5
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort | tail -1)
+          "$APKSIGNER" verify --verbose "$APK"
           cp "$APK" RadixTestnet-android.apk
 
       - uses: actions/upload-artifact@v4
