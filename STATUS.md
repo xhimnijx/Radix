@@ -1,4 +1,4 @@
-﻿# Status â€” 2026-11-09
+# Status â€” 2026-11-09
 
 **One line:** the proof is finished, verified in two languages, and priced at about
 **2^158** by a delta-model check that both reviewers agree is above 128 bits. What is
@@ -223,3 +223,41 @@ soundness argument, not codec changes. They are the next ~4 KB and the next risk
 3. **Amount confidentiality**, now that the paper says a full 2-in/2-out confidential
    transaction is 26.49 KB -- smaller than our visible-amount proof was before
    compression, and comparable to what it is now.
+
+## Plan revision, 2026-11-09 (confidential transactions, round 2)
+
+Three items closed. What they produced, and what they cost.
+
+**Item 1, the construction.** `docs/CONFIDENTIAL-TRANSACTIONS.md` specifies the paper's
+confidential transaction with a page citation on every claim. The finding that changes the
+plan: **the range constraint is a digit-membership proof, not a bit decomposition.** The
+amount is 32 base-4 digits in `{0,1,2,3}` (p. 52), so proving an output is in range is
+proving each digit is one of four values — the same shape as the `α`-slot set membership
+this codebase already has.
+
+**Item 2, value commitments.** `radix_testnet/amounts.py` commits to a value
+additively homomorphically over `R_q`; balance is one vector equation; 9 tests. It is
+**not safe for value**: with no range proof, `q-5` is indistinguishable from `-5`, and a
+test asserts exactly that.
+
+**Item 3, compressed public keys — stopped, with evidence.** The paper compresses `t'₀`,
+the MLWE error and `w` together (p. 55), and requires a second rejection step. In this
+code the verifier **absorbs the exact commitment into the transcript** before drawing
+`c'`, and **multiplies it by the challenge** in the equation. Rounding either changes what
+is proved. `docs/COMPRESSION.md` records the byte accounting (the commitment is 45% of
+the proof), the five things that would have to be specified first, and the decision not
+to force it.
+
+**One process note.** The BOM guard caught `STATUS.md` after I appended to it with
+PowerShell — the second time that one-line test has caught a real regression, and both
+times the tool that wrote the file was mine rather than a contributor's.
+
+**The next three.**
+
+1. **Reference [25].** The addition proof with carries. Without it, balance cannot be
+   built to the paper's specification; the current `amounts.py` is carry-free and
+   therefore capped at `2^32`. This is a document to obtain, not code to write.
+2. **Digit membership.** Prove each committed digit lies in `{0,1,2,3}` using the
+   `α`-slot machinery, which is the one part of the construction that visibly fits this
+   codebase. It does not need [25] and it is what makes committed value non-negative.
+3. **The estimator run**, still. `docs/ESTIMATOR.md`; five minutes on any Linux box.
