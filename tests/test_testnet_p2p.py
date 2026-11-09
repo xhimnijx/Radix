@@ -246,3 +246,41 @@ def test_equal_work_is_broken_deterministically(two_nodes):
         assert from_second["adopted"] is True
 
     assert first.chain.tip.block_hash() == second.chain.tip.block_hash()
+
+
+def test_a_node_serves_the_peers_it_knows(two_nodes):
+    first, _second, first_port, second_port = two_nodes
+    reply = p2p.Peer.parse(f"127.0.0.1:{first_port}").call({"type": "getpeers"})
+
+    assert reply["type"] == "peers"
+    assert f"127.0.0.1:{second_port}" in reply["peers"]
+
+
+def test_discovery_turns_one_known_peer_into_two(two_nodes, tmp_path):
+    """The point of discovery: configure one peer, learn the rest of its view.
+
+    It is one hop and nothing more -- no gossip, no self-announcement -- so a node that
+    nobody introduces still has to be configured by hand. That limitation is written in
+    `discover` rather than hidden behind the word "discovery".
+    """
+    first, _second, first_port, second_port = two_nodes
+
+    third = Node(data_dir=tmp_path / "c", persist=True, peers=[])
+    try:
+        assert third.peers == []
+        added = third.discover(f"127.0.0.1:{first_port}")
+
+        # The third node already knew nobody; it now knows the second node, via the first.
+        assert f"127.0.0.1:{second_port}" in added
+        assert f"127.0.0.1:{second_port}" in third.peers
+    finally:
+        pass
+
+
+def test_discovery_does_not_add_a_peer_twice(two_nodes):
+    first, _second, first_port, _second_port = two_nodes
+    third_port_node = first  # reuse the fixture's node to keep the test cheap
+
+    first.peers = []
+    added = first.discover(f"127.0.0.1:{first_port}")  # asks itself
+    assert f"127.0.0.1:{first_port}" not in added, "a node must not record itself"

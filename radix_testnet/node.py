@@ -182,6 +182,14 @@ class Node:
                 "blocks": [block.to_wire() for block in self.chain.blocks],
             }
 
+        if kind == "getpeers":
+            # A node serves the peers it already knows. There is no gossip protocol and
+            # no address book beyond this: discovery is one hop, and a node that is not
+            # introduced by a peer has to be configured by hand. Stated plainly because
+            # one-hop discovery is a real limitation, not a placeholder name for
+            # something more.
+            return {"type": "peers", "peers": list(self.peers)}
+
         if kind == "tx":
             payload = message.get("payload")
             if not isinstance(payload, dict):
@@ -210,6 +218,28 @@ class Node:
             return {"type": "ok", "height": self.chain.height}
 
         raise p2p.PeerError(f"unknown message type {kind!r}")
+
+    def discover(self, peer_text: str) -> list[str]:
+        """Ask a peer for its peers and remember the ones we did not already know.
+
+        Returns the addresses added. This is the whole discovery mechanism: one hop, no
+        gossip, no self-announcement. It turns "configure every peer by hand" into
+        "configure one", which is the difference between a private testnet and something
+        another operator can join.
+        """
+        from . import p2p
+
+        reply = p2p.Peer.parse(peer_text).call({"type": "getpeers"})
+        heard = [str(entry) for entry in reply.get("peers", []) if entry]
+        added = []
+        for candidate in heard:
+            if candidate == peer_text or candidate in self.peers:
+                continue
+            self.peers.append(candidate)
+            added.append(candidate)
+        if added:
+            self.log.event("peers.discovered", from_peer=peer_text, added=len(added))
+        return added
 
     def sync_from(self, peer_text: str) -> dict:
         """Adopt a peer's chain if it has strictly more work than ours."""
