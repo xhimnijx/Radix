@@ -113,13 +113,14 @@ class Spend:
 
     @property
     def tags(self) -> tuple[bytes, ...] | None:
-        """The per-input linkable tags, or None when the spend is untagged."""
-        out = []
-        for signature in self.signatures:
-            if signature.tag_proof is None:
-                return None
-            out.append(ring.encode(signature.tag_proof.tag))
-        return tuple(out)
+        """Always None: this type is untagged.
+
+        It used to read `signature.tag_proof`, which the same-witness extension does
+        not populate, so a tagged spend built the new way would have reported `None`
+        here and a ledger would have silently skipped its tag checks. Tagged spends
+        live in `radix_testnet.tagged.TaggedSpend`, where the tags are a real field.
+        """
+        return None
 
     @property
     def total_in(self) -> int:
@@ -158,16 +159,22 @@ def build_spend(
     anchor: bytes,
     rng: random.Random,
     params: SmileParameters | None = None,
-    tag_keys=None,
 ) -> Spend:
-    """Sign one spend: one ring signature per input over the shared message."""
+    """Sign one spend: one ring signature per input over the shared message.
+
+    This builds an **untagged** spend. Tagged spends have their own type:
+    `radix_testnet.tagged.TaggedSpend`, built on `ring_signature.sign_tagged`, which
+    proves the tag inside the same relation. The separate tag proof that used to live
+    behind a `tag_keys` argument here was **forgeable** and has been removed rather
+    than left reachable -- see `tag.py` and `REVIEW-FINDINGS.md`.
+    """
     if not (len(secrets) == len(publics) == len(rings) == len(input_values)):
         raise SpendError("one secret, ring and value per input are required")
     if len(anchor) != 32:
         raise SpendError("anchor must be 32 bytes")
     message = _message(anchor, input_values, outputs, fee, params)
     signatures = tuple(
-        RS.sign(parameters, secret, public, tuple(ring_keys), message, rng, params, tag_keys)
+        RS.sign(parameters, secret, public, tuple(ring_keys), message, rng, params)
         for secret, public, ring_keys in zip(secrets, publics, rings)
     )
     return Spend(
@@ -184,15 +191,17 @@ def verify_spend(
     parameters: RS.Parameters,
     spend: Spend,
     params: SmileParameters | None = None,
-    tag_keys=None,
 ) -> bool:
-    """Check the rings, the balance, and every signature against the message."""
+    """Check the rings, the balance, and every signature against the message.
+
+    Untagged only. A tagged spend is verified with `ring_signature.verify_tagged`.
+    """
     try:
         if not spend.balanced:
             return False
         message = spend.message(params)
         return all(
-            RS.verify(parameters, tuple(ring_keys), message, signature, params, tag_keys)
+            RS.verify(parameters, tuple(ring_keys), message, signature, params)
             for ring_keys, signature in zip(spend.rings, spend.signatures)
         )
     except (TypeError, ValueError):

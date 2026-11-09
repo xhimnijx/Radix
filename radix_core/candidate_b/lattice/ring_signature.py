@@ -106,7 +106,6 @@ def sign(
     message: bytes,
     rng: random.Random,
     params: SmileParameters | None = None,
-    tag_keys=None,
 ) -> S.Proof:
     """RS.Sign: prove knowledge of a preimage of one key in `ring_keys`."""
     if parameters.tag_rows:
@@ -118,7 +117,7 @@ def sign(
     except ValueError:
         raise RingSignatureError("the public key is not in the ring") from None
     statement = S.Statement(matrix=parameters.matrix, keys=ring_keys, depth=parameters.depth)
-    return S.prove(parameters.keys, statement, secret, index, message, rng, params, tag_keys)
+    return S.prove(parameters.keys, statement, secret, index, message, rng, params)
 
 
 def verify(
@@ -127,7 +126,6 @@ def verify(
     message: bytes,
     signature: S.Proof,
     params: SmileParameters | None = None,
-    tag_keys=None,
 ) -> bool:
     """RS.Ver: check the signature against the ring."""
     if len(ring_keys) != parameters.ring_size:
@@ -140,7 +138,7 @@ def verify(
         )
     except (TypeError, ValueError):
         return False
-    return S.verify(parameters.keys, statement, signature, message, params, tag_keys)
+    return S.verify(parameters.keys, statement, signature, message, params)
 
 
 def size_bytes(depth: int) -> int:

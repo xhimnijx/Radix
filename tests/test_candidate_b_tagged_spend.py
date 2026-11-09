@@ -1,112 +1,113 @@
-"""Tagged spends: the double-spend check that SMILE does not provide on its own."""
+"""The withdrawn tagged-spend path is gone, and cannot come back quietly.
+
+These tests used to exercise `spend.build_spend(..., tag_keys=...)`, which reached the
+separate tag proof that C1 showed to be forgeable: it bound only a derived row, not
+the individual components, so a cheater could supply an unrelated witness. The path is
+removed rather than merely deprecated, because "reachable" and "safe" are different
+things and a forgotten caller is how a withdrawn construction gets deployed.
+
+A tagged spend is `radix_testnet.tagged.TaggedSpend`, built on
+`ring_signature.sign_tagged`, where `T = A' s` is proved inside the same relation.
+"""
 
 import random
 
 import pytest
 
-from radix_core.candidate_b.lattice import params, ring, ring_signature as RS, spend as SP, tag as T
-
-pytestmark = pytest.mark.slow
+from radix_core.candidate_b.lattice import params, ring, ring_signature as RS
+from radix_core.candidate_b.lattice import setmembership as S
+from radix_core.candidate_b.lattice.spend import Output, Spend, build_spend, verify_spend
 
 P_ = params.SMILE
-DEPTH = 2
-ANCHOR = bytes(range(32))
 
 
-def _random_key(rng):
-    return tuple(ring.sample_uniform(rng) for _ in range(P_.matrix_rows))
-
-
-@pytest.fixture(scope="module")
-def built():
-    rng = random.Random(71)
-    parameters = RS.setup(rng, DEPTH)
-    tag_keys = T.setup(rng, P_)
-    secret, public = RS.keygen(parameters, rng)
-    ring_keys = [_random_key(rng) for _ in range(parameters.ring_size)]
+def _rig():
+    rng = random.Random(21)
+    parameters = RS.setup(rng, 2)
+    keys = S.setup(rng, 2)
+    # The public key must open parameters.matrix, because that is the matrix
+    # RS.sign proves the statement over.
+    matrix = parameters.matrix
+    secret, public = S.keygen(rng, matrix)
+    ring_keys = [
+        tuple(ring.sample_uniform(rng) for _ in range(P_.matrix_rows))
+        for _ in range(32**2)
+    ]
     ring_keys[5] = public
-    outputs = tuple(SP.Output(key=_random_key(rng), value=value) for value in (4, 5))
-    spend = SP.build_spend(
+    statement = S.Statement(matrix=matrix, keys=tuple(ring_keys), depth=2)
+    return rng, parameters, keys, statement, secret, public, tuple(ring_keys)
+
+
+def test_build_spend_does_not_accept_tag_keys():
+    """The argument is gone, so a stale caller fails loudly instead of silently."""
+    rng, parameters, _keys, _statement, secret, public, ring_keys = _rig()
+    with pytest.raises(TypeError):
+        build_spend(
+            parameters,
+            (secret,),
+            (public,),
+            (ring_keys,),
+            (1000,),
+            (Output(key=public, value=1000),),
+            0,
+            b"\x00" * 32,
+            rng,
+            P_,
+            tag_keys=None,
+        )
+
+
+def test_verify_spend_does_not_accept_tag_keys():
+    rng, parameters, _keys, _statement, secret, public, ring_keys = _rig()
+    spend = build_spend(
         parameters,
         (secret,),
         (public,),
-        (tuple(ring_keys),),
-        (9,),
-        outputs,
+        (ring_keys,),
+        (1000,),
+        (Output(key=public, value=1000),),
         0,
-        ANCHOR,
+        b"\x00" * 32,
         rng,
-        None,
-        tag_keys,
+        P_,
     )
-    return parameters, tag_keys, secret, spend
+    assert verify_spend(parameters, spend, P_)
+    with pytest.raises(TypeError):
+        verify_spend(parameters, spend, P_, tag_keys=None)
 
 
-def test_tagged_spend_verifies(built):
-    parameters, tag_keys, _secret, spend = built
-    assert SP.verify_spend(parameters, spend, None, tag_keys)
+def test_a_spend_never_reports_tags():
+    """`Spend.tags` used to read `tag_proof`, which the extension does not populate.
 
-
-def test_the_tag_is_a_linear_image_of_the_note_secret(built):
-    _parameters, tag_keys, secret, spend = built
-    tags = spend.tags
-    assert tags is not None and len(tags) == 1
-    assert tags[0] == ring.encode(T.tag_of(tag_keys, secret, P_))
-
-
-def test_a_replayed_tag_is_rejected(built):
-    _parameters, _tag_keys, _secret, spend = built
-    ledger = SP.TagSet().accept(spend)
-    assert len(ledger.tags) == 1
-    with pytest.raises(SP.SpendError, match="already been spent"):
-        ledger.accept(spend)
-
-
-def test_an_untagged_spend_cannot_be_settled(built):
-    """Silently accepting it is exactly the bug that would allow double spending."""
-    parameters, _tag_keys, _secret, _spend = built
-    rng = random.Random(72)
-    secret, public = RS.keygen(parameters, rng)
-    ring_keys = [_random_key(rng) for _ in range(parameters.ring_size)]
-    ring_keys[1] = public
-    outputs = (SP.Output(key=_random_key(rng), value=9),)
-    untagged = SP.build_spend(
-        parameters, (secret,), (public,), (tuple(ring_keys),), (9,), outputs, 0, ANCHOR, rng
+    A tagged spend built the new way would have reported `None` there, and a ledger
+    checking `if spend.tags is None: skip` would have skipped its tag checks.
+    """
+    rng, parameters, _keys, _statement, secret, public, ring_keys = _rig()
+    spend = build_spend(
+        parameters,
+        (secret,),
+        (public,),
+        (ring_keys,),
+        (1000,),
+        (Output(key=public, value=1000),),
+        0,
+        b"\x00" * 32,
+        rng,
+        P_,
     )
-    assert untagged.tags is None
-    assert SP.verify_spend(parameters, untagged)  # still a valid authorisation
-    with pytest.raises(SP.SpendError, match="untagged"):
-        SP.TagSet().accept(untagged)
+    assert spend.tags is None
 
 
-def test_a_tampered_tag_is_rejected(built):
-    parameters, tag_keys, _secret, spend = built
-    rng = random.Random(73)
-    signature = spend.signatures[0]
-    forged = T.TagProof(
-        t=signature.tag_proof.t,
-        u=signature.tag_proof.u,
-        tag=ring.sample_small(rng),
-        proof=signature.tag_proof.proof,
-    )
-    from radix_core.candidate_b.lattice import setmembership as S
+def test_setmembership_refuses_the_withdrawn_tag_keys():
+    """Even the low-level entry point refuses, so no caller can reach tag.py's proof."""
+    rng, _parameters, keys, statement, secret, _public, _ring_keys = _rig()
+    with pytest.raises(S.SetMembershipError, match="WITHDRAWN"):
+        S.prove(keys, statement, secret, 5, b"m", rng, P_, tag_keys=object())
 
-    bad_signature = S.Proof(
-        commitment=signature.commitment,
-        h=signature.h,
-        omega=signature.omega,
-        challenge=signature.challenge,
-        challenge_prime=signature.challenge_prime,
-        response_prime=signature.response_prime,
-        response=signature.response,
-        tag_proof=forged,
-    )
-    tampered = SP.Spend(
-        anchor=spend.anchor,
-        input_values=spend.input_values,
-        rings=spend.rings,
-        outputs=spend.outputs,
-        fee=spend.fee,
-        signatures=(bad_signature,),
-    )
-    assert not SP.verify_spend(parameters, tampered, None, tag_keys)
+
+def test_the_supported_tagged_type_has_real_tags():
+    """The replacement has a tags field of its own, which is the point."""
+    from radix_testnet.tagged import TaggedSpend
+
+    assert "tags" in TaggedSpend.__dataclass_fields__
+    assert "tags" not in Spend.__dataclass_fields__

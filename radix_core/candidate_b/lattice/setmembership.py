@@ -19,13 +19,13 @@ Transcribed from the full version (ePrint 2021/564):
 
 Deviations, stated because they matter:
 
-1. **No rejection sampling** (as in ``sigma.py``): masks are uniform in
+1. **Historical note, no longer accurate:** masks *used* to be uniform in
    ``[-2^20, 2^20]``, which dwarfs ``||c r||``, so the response is statistically
    independent of the secret without aborting. Proofs are larger than SMILE's.
 2. **``e_1`` placement in ``F_m``.** Fig. 9 line 12 puts ``-e_1 sum gamma`` at
    order ``c``; Fig. 7's ``y_m`` carries it in the ``c^2`` coefficient. Only the
    ``c^2`` coefficient is checked -- the ``c^0`` part is fixed by ``omega``,
-   committed before ``c`` exists, and the ``c^1`` part cancels identically -- so
+   committed before ``c`` exists, and the ``c^1`` part is absorbed by ``psi`` -- so
    the ``<1, v_i> = 1`` constraint is only enforceable at order ``c^2``. This
    implementation follows Fig. 7 and puts it there: with it at order ``c`` the
    honest prover's check cannot pass.
@@ -439,6 +439,12 @@ def _prove_once(
         raise SetMembershipError("key and statement depth disagree")
     if not 0 <= index < SLOTS**depth:
         raise SetMembershipError("index is outside the ring")
+    if tag_keys is not None:
+        raise SetMembershipError(
+            "the separate tag proof is WITHDRAWN and forgeable (see tag.py and "
+            "REVIEW-FINDINGS.md). Use ring_signature.sign_tagged, which proves "
+            "T = A' s inside this relation."
+        )
     if tuple(ring.dot(row, secret, sm) for row in statement.matrix) != statement.keys[index]:
         raise SetMembershipError("the secret does not open the claimed ring member")
     rows = len(statement.matrix)
@@ -805,11 +811,14 @@ def verify(
         if any(proof.h[i] != 0 for i in range(prefix)):
             return False
 
-        if tag_keys is None:
-            # A tagged proof must be checked as tagged: silently ignoring the tag
-            # would let a ledger accept a signature whose linkability was never
-            # verified.
-            return proof.tag_proof is None
+        if tag_keys is not None:
+            # The separate tag proof is WITHDRAWN and forgeable; refusing here means a
+            # caller cannot accidentally accept a proof whose tag was checked by a
+            # construction known to be broken. Use ring_signature.verify_tagged.
+            raise SetMembershipError("the separate tag proof is withdrawn; use verify_tagged")
+        # A proof carrying a tag came from the withdrawn construction. Accepting it
+        # here would let a ledger take a signature whose linkability was never checked.
+        return proof.tag_proof is None
         if tag_keys is not None:
             if proof.tag_proof is None:
                 return False
