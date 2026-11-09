@@ -16,7 +16,7 @@ import webbrowser
 from pathlib import Path
 
 from . import TESTNET_BANNER
-from .node import Node, make_server
+from .node import Node, StateError, make_server
 from . import store
 
 
@@ -30,23 +30,56 @@ def _free_port(host: str, preferred: int) -> int:
             return probe.getsockname()[1]
 
 
+def start_auto_miner(node, interval: float) -> threading.Thread:
+    """Mine whenever the mempool is non-empty, until the process exits.
+
+    `Node.mine` takes the node lock, so this cannot race with the mine button or a
+    second request.
+    """
+
+    def loop() -> None:
+        from .chain import ChainError
+
+        while True:
+            try:
+                if node.chain.mempool:
+                    block = node.mine()
+                    print(f"mined block {block['height']} with {block['transactions']} tx")
+            except ChainError:
+                pass
+            except Exception as error:  # noqa: BLE001 - a background thread must not die
+                print(f"miner error: {error}")
+            time.sleep(interval)
+
+    thread = threading.Thread(target=loop, daemon=True, name="auto-miner")
+    thread.start()
+    return thread
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="radix-testnet",
         description="Start the local Radix testnet node and wallet.",
     )
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8642)
+    # Defaults come from config.json in the data directory; flags override it.
+    parser.add_argument("--host", default=None)
+    parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--data-dir", type=Path, default=None)
     parser.add_argument("--no-browser", action="store_true", help="do not open a window")
     args = parser.parse_args(argv)
 
     data_dir = args.data_dir or store.default_data_dir()
-    port = _free_port(args.host, args.port)
-    node = Node(data_dir=data_dir)
-    server, node = make_server(args.host, port, node=node)
+    config = store.load_config(data_dir)
+    host = args.host or config["host"]
+    port = _free_port(host, args.port or int(config["port"]))
+    try:
+        node = Node(data_dir=data_dir, config=config)
+    except StateError as error:
+        print(f"cannot start: {error}", file=sys.stderr)
+        return 2
+    server, node = make_server(host, port, node=node)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://{args.host}:{port}/"
+    url = f"http://{host}:{port}/"
 
     print(TESTNET_BANNER)
     print()
@@ -56,7 +89,10 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print("Ctrl+C to stop. No value, no security claim, no peers.")
 
-    if not args.no_browser:
+    if config.get("auto_mine"):
+        start_auto_miner(node, float(config.get("auto_mine_interval", 3.0)))
+        print("auto-miner  on")
+    if not args.no_browser and config.get("auto_open_browser", True):
         webbrowser.open(url)
     try:
         while True:

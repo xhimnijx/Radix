@@ -37,7 +37,8 @@
   nav button:hover { background:var(--panel); color:var(--ink); }
   nav button[aria-current="page"] { background:var(--panel); color:var(--ink); box-shadow:inset 2px 0 0 var(--accent); }
   nav .ico { width:18px; text-align:center; opacity:.9; }
-  aside .foot { margin-top:auto; font-size:11px; color:var(--dim); padding:10px 8px; line-height:1.5; }
+  aside .foot { margin-top:auto; font-size:11px; color:var(--dim); padding:10px 8px; line-height:1.6; }
+  aside .foot #conn { display:inline-block; margin-top:8px; }
   .badges { display:flex; gap:6px; flex-wrap:wrap; padding:0 8px 14px; }
   .badge { font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px;
            border-radius:999px; border:1px solid var(--line); color:var(--dim); }
@@ -226,11 +227,13 @@ function toast(message, kind = "") {
   setTimeout(() => node.remove(), 6000);
 }
 
-function setView(view) {
+function setView(view, sync = true) {
+  if (!VIEWS[view]) view = "wallet";
   state.view = view;
   for (const button of document.querySelectorAll("#nav button")) {
     button.setAttribute("aria-current", button.dataset.view === view ? "page" : "false");
   }
+  if (sync && location.hash !== `#${view}`) location.hash = `#${view}`;
   render();
 }
 
@@ -263,6 +266,7 @@ async function refresh() {
 function viewWallet() {
   const status = state.status;
   const accounts = state.accounts;
+  const funded = accounts.filter((entry) => entry.balance > 0).length;
   return `
     <div class="page-head">
       <div>
@@ -278,7 +282,7 @@ function viewWallet() {
           <span class="amount">${num(status.faucet.balance)}</span>
           <span class="unit">testnet units</span>
         </div>
-        <div class="sub" style="margin-top:6px">across ${accounts.filter(a => a.balance > 0).length} funded account(s)</div>
+        <div class="sub" style="margin-top:6px">across ${funded} funded account${funded === 1 ? "" : "s"}</div>
         <div class="actions">
           <button class="btn" data-go="send">Send</button>
           <button class="btn ghost" data-go="receive">Receive</button>
@@ -373,8 +377,13 @@ function viewSend() {
         <div class="stat"><div class="k">available</div>
           <div class="v">${num(state.status.faucet.balance)}</div>
           <div class="h">from the node's faucet wallet</div></div>
-        <div class="mono" style="margin-top:12px">${esc(account.address)}</div>
-        <div class="hint">Addresses are full lattice public keys, so they are long. Copy, do not retype.</div>
+        <label class="field">your address</label>
+        <div class="addrbox mono" id="sendAddr" data-full="${esc(account.address)}">${esc(short(account.address, 28, 12))}</div>
+        <div class="actions">
+          <button class="btn subtle tiny" id="copySendAddr">Copy</button>
+          <button class="btn subtle tiny" id="revealSendAddr">Show full</button>
+        </div>
+        <div class="hint">A lattice public key is 2048 bytes, so the address is long. Copy it, never retype it.</div>
       </section>
     </div>`;
 }
@@ -397,9 +406,10 @@ function viewReceive() {
               </option>`).join("")}
           </select>
           <label class="field">Address</label>
-          <div class="addrbox mono" id="addrText">${esc(account.address)}</div>
+          <div class="addrbox mono" id="addrText" data-full="${esc(account.address)}">${esc(short(account.address, 28, 12))}</div>
           <div class="actions">
             <button class="btn subtle tiny" id="copyBtn">Copy address</button>
+            <button class="btn subtle tiny" id="revealBtn">Show full</button>
           </div>
           <div class="hint">QR codes are generated locally by the node. No third-party service
             sees this address.</div>
@@ -493,6 +503,15 @@ const VIEWS = {
 
 function render() {
   const host = $("#main");
+  // The first render can happen before /api/status answers; showing a skeleton is
+  // better than throwing on a null status.
+  if (!state.status) {
+    host.innerHTML = `
+      <div class="page-head"><div><h1>Wallet</h1>
+        <div class="sub">connecting to the local node…</div></div></div>
+      <section class="card"><div class="empty"><span class="spinner"></span> loading</div></section>`;
+    return;
+  }
   const scroll = window.scrollY;
   host.innerHTML = VIEWS[state.view]();
   wire();
@@ -518,12 +537,25 @@ function wire() {
   }
   const acctPick = $("#acctPick");
   if (acctPick) acctPick.onchange = () => { state.receiveAccount = Number(acctPick.value); render(); };
-  const copyBtn = $("#copyBtn");
-  if (copyBtn) copyBtn.onclick = async () => {
-    const text = $("#addrText").textContent;
-    try { await navigator.clipboard.writeText(text); toast("Address copied", "ok"); }
-    catch { toast("Select the address and copy it manually", "err"); }
-  };
+  for (const [buttonId, targetId] of [["#copyBtn", "#addrText"], ["#copySendAddr", "#sendAddr"]]) {
+    const button = $(buttonId);
+    if (!button) continue;
+    button.onclick = async () => {
+      const text = $(targetId).dataset.full || $(targetId).textContent;
+      try { await navigator.clipboard.writeText(text); toast("Address copied", "ok"); }
+      catch { toast("Select the address and copy it manually", "err"); }
+    };
+  }
+  for (const [buttonId, targetId] of [["#revealBtn", "#addrText"], ["#revealSendAddr", "#sendAddr"]]) {
+    const button = $(buttonId);
+    if (!button) continue;
+    button.onclick = () => {
+      const node = $(targetId);
+      const full = node.dataset.full || "";
+      node.textContent = node.textContent === full ? short(full, 28, 12) : full;
+      button.textContent = node.textContent === full ? "Hide full" : "Show full";
+    };
+  }
   const bookPick = $("#bookPick");
   if (bookPick) bookPick.onchange = () => { if (bookPick.value) { $("#to").value = bookPick.value; state.send.to = bookPick.value; } };
   const refreshPick = $("#refreshPick");
@@ -540,9 +572,9 @@ async function loadQr() {
     const svg = await response.text();
     const host = $("#qrHost");
     if (host) host.innerHTML = svg;
-  } catch {
+  } catch (error) {
     const host = $("#qrHost");
-    if (host) host.innerHTML = '<div class="hint" style="width:190px">QR unavailable</div>';
+    if (host) host.innerHTML = `<div class="hint" style="width:190px">No QR code available.<br>${esc(error.message)}</div>`;
   }
 }
 
@@ -652,6 +684,13 @@ try {
   if (saved) document.documentElement.dataset.theme = saved;
 } catch { /* private mode */ }
 
+window.addEventListener("hashchange", () => {
+  const view = location.hash.replace(/^#/, "") || "wallet";
+  if (view !== state.view) setView(view, false);
+});
+
+const initial = location.hash.replace(/^#/, "") || "wallet";
+setView(VIEWS[initial] ? initial : "wallet", false);
 refresh().then(render);
 setInterval(refresh, 3000);
 </script>

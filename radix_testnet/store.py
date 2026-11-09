@@ -62,9 +62,14 @@ def write_json(path: Path, payload) -> None:
 
 
 def read_json(path: Path, default=None):
+    """Read JSON, tolerating a UTF-8 BOM.
+
+    Notepad and PowerShell both write one, and a config file that fails to load
+    because of an invisible character is a bad first experience.
+    """
     if not path.exists():
         return default
-    with path.open(encoding="utf-8") as stream:
+    with path.open(encoding="utf-8-sig") as stream:
         return json.load(stream)
 
 
@@ -169,3 +174,38 @@ def load_settings(data_dir: Path) -> dict:
 
 def save_settings(data_dir: Path, settings: dict) -> None:
     write_json(data_dir / SETTINGS_FILE, settings)
+
+
+# ------------------------------------------------------------------- config
+DEFAULT_CONFIG = {
+    "host": "127.0.0.1",
+    "port": 8642,
+    "log_level": "info",
+    "auto_open_browser": True,
+    # When true the app mines the mempool itself, so a transaction settles without
+    # the operator pressing anything. Off by default: a node that silently mines is
+    # surprising, and surprising is the last thing a testnet harness should be.
+    "auto_mine": False,
+    "auto_mine_interval": 3.0,
+}
+
+
+def load_config(data_dir: Path) -> dict:
+    """The node's configuration, with defaults filled in and unknown keys dropped.
+
+    A malformed config falls back to the defaults rather than refusing to start:
+    the file is a convenience, not a security boundary.
+    """
+    try:
+        stored = read_json(data_dir / CONFIG_FILE, {}) or {}
+    except (OSError, ValueError):
+        stored = {}
+    config = dict(DEFAULT_CONFIG)
+    config.update({key: value for key, value in stored.items() if key in DEFAULT_CONFIG})
+    return config
+
+
+def save_config(data_dir: Path, config: dict) -> None:
+    merged = dict(DEFAULT_CONFIG)
+    merged.update({key: value for key, value in config.items() if key in DEFAULT_CONFIG})
+    write_json(data_dir / CONFIG_FILE, merged)

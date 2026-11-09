@@ -68,11 +68,41 @@ So an account is the unit of spendability, and change goes to the next account. 
 real wallet gives every output its own key through one-time addressing; that is B2
 work and is not built here.
 
+**Addresses.** A lattice public key is 4 x 512 = 2048 bytes, so an address is
+`rtx1` followed by base64url of the key: 2,735 characters. Hex would be 4,096 and
+would **not fit in a QR code** (byte mode tops out at 2,953), which is why the
+encoding is base64url and the QR uses error-correction level L. The UI shows a
+truncated address with Copy and Show full rather than a wall of text.
+
 **What a send costs.** A real tagged ring signature over 1024 members takes 1–2
 minutes in CPython, and the UI shows elapsed time while it runs. The Rust arithmetic
 is measured at 20 µs per multiplication (≈0.47 s to prove, 37 ms to verify) but the
 proof is not ported, so the harness runs the reference implementation rather than
 pretending to be fast. `--backend rust` refuses instead of silently falling back.
+
+## Configuration and logs
+
+First start writes `config.json` next to the chain:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 8642,
+  "log_level": "info",
+  "auto_open_browser": true,
+  "auto_mine": false,
+  "auto_mine_interval": 3.0
+}
+```
+
+Set `"auto_mine": true` and the app mines the mempool itself, so a send settles
+without pressing anything. It is off by default: a node that silently mines is
+surprising, and surprising is the last thing a testnet harness should be.
+
+Command-line flags override it. Events are written as JSON lines to stderr and to
+`node.log` in the same directory — `node.start`, `chain.ready`, `tx.accepted`,
+`block.mined`, and `request.rejected` with the reason. A packaged app has no console
+to read, so the file is the record.
 
 ## CLI
 
@@ -110,7 +140,8 @@ python -m radix_testnet.cli gui
 | `wallet.py` | seed → accounts, addresses, tags, notes, send with change |
 | `prover.py` | the python/rust seam |
 | `codec.py` | `Proof` decoder and the spend envelope |
-| `store.py` | atomic on-disk chain, address book and settings |
+| `store.py` | atomic on-disk chain, address book, settings and config |
+| `log.py` | JSONL event log to stderr and `node.log` |
 | `node.py` | HTTP API and GUI server |
 | `app.py` | desktop launcher |
 | `miner.py` | mine the mempool |
@@ -135,6 +166,7 @@ Rings travel as **pool indices**, not keys: a depth-2 ring is 1024 lattice keys
 
 ```powershell
 python -m pytest -q tests/test_testnet_chain.py        # 9 tests, ~4 s, stub verifier
+python -m pytest -q tests/test_testnet_node.py         # 17 tests, ~30 s, HTTP over a real socket
 python -m pytest -q tests/test_testnet_end_to_end.py   # real proof, ~5 min
 ```
 

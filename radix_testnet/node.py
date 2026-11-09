@@ -1,4 +1,4 @@
-"""The node: an HTTP service over one in-memory chain, plus the browser GUI.
+﻿"""The node: an HTTP service over one in-memory chain, plus the browser GUI.
 
 Single process, localhost only, no peer discovery and no fork choice. What it does
 is run the real verifier on every submitted transaction and refuse a reused tag.
@@ -17,11 +17,16 @@ from pathlib import Path
 from . import chain as C
 from . import params as P
 from . import prover, store
+from .log import Log
 from .chain import Chain, ChainError
 from .tagged import SpendError
 from .wallet import Wallet, WalletError, address_of
 
 STATIC = Path(__file__).with_name("static")
+
+
+class StateError(RuntimeError):
+    """Persisted state exists but cannot be read."""
 
 
 class Node:
@@ -33,18 +38,34 @@ class Node:
         faucet: Wallet | None = None,
         data_dir: Path | None = None,
         persist: bool = True,
+        config: dict | None = None,
     ) -> None:
         self.parameters = P.parameters()
         self.data_dir = Path(data_dir) if data_dir is not None else store.default_data_dir()
         self.persist = persist
+        self.config = dict(config) if config is not None else store.load_config(self.data_dir)
+        self.log = Log(
+            self.data_dir / "node.log" if persist else None,
+            level=self.config.get("log_level", "info"),
+        )
+        self.log.event("node.start", data_dir=str(self.data_dir), persist=persist)
         self.faucet = faucet or Wallet(seed=P.faucet_seed(), parameters=self.parameters)
 
         loaded = None
         if chain is None and self.persist:
-            try:
-                loaded = store.load_chain(self.data_dir, self.parameters, prover.verify_tagged)
-            except (OSError, ValueError):
-                loaded = None
+            state = self.data_dir / store.STATE_FILE
+            if state.exists():
+                # Deliberately not caught: silently starting a fresh chain over a
+                # corrupt file would look like the data was never there.
+                try:
+                    loaded = store.load_chain(
+                        self.data_dir, self.parameters, prover.verify_tagged
+                    )
+                except (OSError, ValueError) as error:
+                    raise StateError(
+                        f"{state} could not be read ({error}). Move it aside to start "
+                        "a new chain; the old file is left untouched."
+                    ) from None
         self.chain = chain or loaded or Chain(parameters=self.parameters, depth=P.DEPTH)
         if not self.chain.blocks:
             # One note holding the whole faucet balance: identical outputs would
@@ -56,7 +77,15 @@ class Node:
         self.lock = threading.Lock()
         self.addressbook = store.load_address_book(self.data_dir)
         self.settings = store.load_settings(self.data_dir)
+        if self.persist:
+            store.save_config(self.data_dir, self.config)
         self._persist()
+        self.log.event(
+            "chain.ready",
+            height=self.chain.height,
+            outputs=len(self.chain.outputs),
+            pool=len(self.chain.pool),
+        )
 
     def _persist(self) -> None:
         if not self.persist:
@@ -118,10 +147,15 @@ class Node:
             import segno
         except ImportError:  # pragma: no cover - dependency is declared
             raise RuntimeError("segno is required for QR codes") from None
+        if len(text) > 2953:
+            raise ValueError("that value is too large for a QR code")
         buffer = io.BytesIO()
-        segno.make(text, error="m").save(
-            buffer, kind="svg", scale=6, border=2, dark="#e6edf3", light=None
-        )
+        try:
+            segno.make(text, error="l").save(
+                buffer, kind="svg", scale=6, border=2, dark="#e6edf3", light=None
+            )
+        except Exception as error:  # noqa: BLE001 - segno raises its own type
+            raise ValueError(f"cannot encode that value as a QR code: {error}") from None
         return buffer.getvalue()
 
     # ---------------------------------------------------------------- reads
@@ -184,6 +218,7 @@ class Node:
             spend, indices = self.faucet.build_spend(self.chain, recipient, amount, fee)
             identifier = self.chain.submit(spend, indices)
             self._persist()
+            self.log.event("tx.accepted", id=identifier.hex()[:16], fee=fee, amount=amount)
             return {"id": identifier.hex()[:16], "fee": fee, "amount": amount}
 
     def mine(self) -> dict:
@@ -191,6 +226,12 @@ class Node:
             block = self.chain.mine()
             self.faucet.scan(self.chain)
             self._persist()
+            self.log.event(
+                "block.mined",
+                height=block.height,
+                hash=block.block_hash().hex()[:16],
+                transactions=len(block.transactions),
+            )
             return {
                 "height": block.height,
                 "hash": block.block_hash().hex(),
@@ -202,6 +243,7 @@ class Node:
             spend, indices = C.spend_from_wire(payload, self.chain.pool, self.chain.depth, self.chain.rows)
             identifier = self.chain.submit(spend, indices)
             self._persist()
+            self.log.event("tx.accepted", id=identifier.hex()[:16], route="raw")
             return {"id": identifier.hex()[:16]}
 
 
@@ -295,6 +337,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._error(404, "no such route")
         except (ChainError, SpendError, WalletError, KeyError, ValueError) as error:
+            self.node.log.event("request.rejected", level="warn", route=path, reason=str(error))
             self._error(400, str(error))
         except Exception as error:  # noqa: BLE001
             traceback.print_exc()
@@ -321,3 +364,4 @@ def serve(host: str = "127.0.0.1", port: int = 8642, node: Node | None = None) -
     finally:
         server.server_close()
     return server
+

@@ -16,6 +16,7 @@ addressing (B2, not built).
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import random
 from dataclasses import dataclass, field
@@ -39,17 +40,33 @@ def _rng_for(seed: bytes, index: int) -> random.Random:
     return random.Random(int.from_bytes(digest, "big"))
 
 
+def _encode_body(blob: bytes) -> str:
+    """base64url, not hex.
+
+    A lattice public key is 4 x 512 = 2048 bytes. Hex doubles that to 4096
+    characters, which cannot fit in a QR code (byte mode tops out at 2953 bytes);
+    base64url gives 2731 characters, which can. The address is the same key either
+    way.
+    """
+    return base64.urlsafe_b64encode(blob).decode("ascii").rstrip("=")
+
+
+def _decode_body(body: str) -> bytes:
+    padding = "=" * (-len(body) % 4)
+    try:
+        return base64.urlsafe_b64decode(body + padding)
+    except (ValueError, base64.binascii.Error):
+        raise WalletError("the address body is not valid base64url") from None
+
+
 def address_of(public: tuple, p: SmileParameters = SMILE) -> str:
-    return ADDRESS_PREFIX + "1" + b"".join(ring.encode(poly, p) for poly in public).hex()
+    return ADDRESS_PREFIX + "1" + _encode_body(b"".join(ring.encode(poly, p) for poly in public))
 
 
 def parse_address(address: str, p: SmileParameters = SMILE) -> tuple:
     if not address.startswith(ADDRESS_PREFIX + "1"):
         raise WalletError("not a testnet address")
-    try:
-        blob = bytes.fromhex(address[len(ADDRESS_PREFIX) + 1 :])
-    except ValueError:
-        raise WalletError("the address is not valid hex") from None
+    blob = _decode_body(address[len(ADDRESS_PREFIX) + 1 :])
     poly_bytes = p.ring_degree * 4
     if len(blob) != p.matrix_rows * poly_bytes:
         raise WalletError("an address must hold k polynomials")
