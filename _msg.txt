@@ -1,0 +1,27 @@
+feat: the range proof's alpha-slot terms, as functions
+
+Steps 3 and 4 of docs/ALPHA-SLOTS.md, factored out so they can be tested before the proof's
+arity changes. Nothing here touches the wire format.
+
+  psi_range   = sum eta_b * a_b * (1 - 2b)
+  omega_range = sum eta_b * a_b^2
+
+The number of terms is checked rather than assumed: a silent length mismatch would drop a
+constraint, which is the kind of failure that looks like a passing proof.
+
+DELIBERATELY NOT INCLUDED: the cancellation condition. I wrote a `combined` helper computing
+`psi + c*omega` and a test that it vanishes for binary bits, and both were wrong -- the
+verifier's check is `omega - c*psi`, since the commitment's square expands to
+c^2 v(v-1) + c a(2v-1) + a^2 and with b binary the c^2 term dies leaving a^2 - c*a(1-2v).
+Rather than fix it in the remaining budget I removed both, with a note explaining why: the
+equation belongs in the verifier once, not in a helper and the verifier twice. Writing it in
+two places is exactly the class of bug this project has paid for four times.
+
+Two of my own test errors, both from assumptions about the ring: the first compared vectors
+of fours expecting coefficient-wise scaling when ring.mul is a convolution, and the second
+compared whole polynomials when the representation carries trailing zeros. The property is
+now tested by its centred value, which is what (1 - 2b) actually claims.
+
+6 tests: the b = 0 and b = 1 cases give +a and -a, omega squares, the shape mismatch is
+refused, the transcript draws in order, and a shorter draw is a prefix of a longer one --
+which is what makes the challenge stream usable.
