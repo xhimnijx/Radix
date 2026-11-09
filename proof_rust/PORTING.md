@@ -22,8 +22,8 @@ afternoon and a week.
 | 3 | Codec | `ring.encode/decode`, `Proof.encode` | polynomial digest and proof round-trip match | **done** |
 | 4 | BDLOP | `bdlop.py` | **commitment digest matches Python**; homomorphism and opening tests | **done** |
 | 5 | Quadratic, tensor | `quadratic.py`, `tensor.py` | **coefficient and expected-value digests match**; flat index 2083 | **done** |
-| 6 | Recursion | `recursion.py` | `matrix_vector`, `challenge_block`, `reduce_matrix` match | next |
-| 7 | Prove/verify | `setmembership.py` | cross-language verification | pending |
+| 6 | Recursion | `recursion.py` | **pairing digest matches**; shapes, linearity and constant-vector rejection | **done** |
+| 7 | Prove/verify | `setmembership.py` | cross-language verification | next |
 | 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | pending |
 | 9 | Timing | -- | end-to-end prove and verify, replacing the projection | pending |
 | 10 | Seam | `radix_testnet/prover.py` | `--backend rust` produces proofs the Python verifier accepts | pending |
@@ -53,8 +53,9 @@ label length is prefixed so `"ab"`+`"c"` cannot collide with `"a"`+`"bc"`.
 
 ## Current state
 
-40 Rust tests pass: 6 arithmetic, 4 SHAKE256, 4 transcript, 5 codec, 5 sampling,
-5 BDLOP, 5 tensor, 6 quadratic. The BDLOP commitment digest matches the Python reference byte for byte,
+46 Rust tests pass: 6 arithmetic, 4 SHAKE256, 4 transcript, 5 codec, 5 sampling,
+5 BDLOP, 5 tensor, 6 quadratic, 6 recursion. Every layer below the proof itself now
+has at least one value produced by the Python reference. The BDLOP commitment digest matches the Python reference byte for byte,
 which is the first check of real cryptographic structure rather than of hashing or
 encoding -- it exercises the sampling convention, the CRT multiplication and the
 commitment layout together.
