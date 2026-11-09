@@ -17,6 +17,7 @@ import pytest
 from radix_testnet import params as P
 from radix_testnet.chain import (
     GENESIS_TARGET,
+    GENESIS_TIME,
     LWMA_WINDOW,
     MAX_TARGET,
     MEDIAN_WINDOW,
@@ -80,6 +81,20 @@ def test_the_genesis_target_is_the_published_constant():
     assert chain.tip.work() == (1 << 64) // GENESIS_TARGET
 
 
+def test_the_first_adjustment_measures_a_positive_interval():
+    """With exactly two blocks the window is 1, and an off-by-one reverses the interval.
+
+    That bug clamped every solve time to one second, so the target tightened by the
+    maximum factor on every block and the chain became unmineable within about twenty.
+    It survived the synthetic tests because they only called `next_target` once the
+    window was two or more, where the arithmetic happened to be right.
+    """
+    chain = chain_with_genesis()
+    append_synthetic(chain, GENESIS_TIME + TARGET_INTERVAL)
+    # One block, exactly on schedule: difficulty must not move at all.
+    assert chain.next_target() == GENESIS_TARGET
+
+
 def test_fast_blocks_make_the_target_smaller():
     """Blocks arriving four times too fast must be made harder, not easier.
 
@@ -89,7 +104,10 @@ def test_fast_blocks_make_the_target_smaller():
     """
     chain = chain_with_genesis()
     start = chain.next_target()
-    stamp = 2_000_000_000
+    # Near the genesis time: a first solve time of three years legitimately relaxes
+    # difficulty and dominates the window for ninety blocks, which is correct
+    # behaviour and useless as a test of "fast blocks".
+    stamp = GENESIS_TIME
     for _ in range(5):
         append_synthetic(chain, stamp)
         stamp += 10  # far faster than TARGET_INTERVAL
@@ -210,7 +228,11 @@ def test_mining_converges_to_the_target_interval():
     The difficulty algorithm only sees timestamps, so feeding it the timestamps a given
     hashrate would produce tests it exactly without hashing anything.
     """
-    hashrate = 50_000.0  # hashes per second, arbitrary but fixed
+    # Chosen so that at the genesis target the expected interval is exactly
+    # TARGET_INTERVAL: 2^14 hashes per block at 136.5 hashes per second. A faster
+    # hashrate drives the true interval below one second, where the integer timestamp
+    # cannot represent it and the simulation stops being meaningful.
+    hashrate = ((1 << 64) / GENESIS_TARGET) / TARGET_INTERVAL
     chain = chain_with_genesis()
     now = 2_000_000_000
     intervals = []
@@ -219,7 +241,7 @@ def test_mining_converges_to_the_target_interval():
         target = chain.next_target()
         expected_hashes = (1 << 64) / target
         seconds = expected_hashes / hashrate
-        now += max(1, int(seconds))
+        now += max(1, round(seconds))
         append_synthetic(chain, now, target=target)
         intervals.append(seconds)
 

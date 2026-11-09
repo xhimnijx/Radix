@@ -34,6 +34,15 @@ TARGET_INTERVAL = 120
 LWMA_WINDOW = 90
 MEDIAN_WINDOW = 11
 FUTURE_DRIFT = 7200
+
+#: Emission, from docs/CONSENSUS.md section 5. Amounts are integer atoms with 100
+#: atoms to a unit, so the tail of 0.6 units is representable at all.
+ATOMS_PER_UNIT = 100
+INITIAL_REWARD_ATOMS = 20 * ATOMS_PER_UNIT  # 20 units
+TAIL_REWARD_ATOMS = 60  # 0.6 units, forever
+DECAY_BLOCKS = 525_600  # two years at a 120-second block
+TREASURY_BPS = 1000  # 10% of every reward
+COINBASE_MATURITY = 100  # blocks before a reward can be spent
 #: Fixed, so two nodes can agree on the genesis block. `int(time.time())` made every
 #: node's genesis unique, which made a shared chain impossible.
 GENESIS_TIME = 1_700_000_000
@@ -61,6 +70,8 @@ class Block:
     timestamp: int
     #: The difficulty this block was mined against, in the first 8 bytes of its hash.
     target: int = GENESIS_TARGET
+    #: Encoded public key that receives the block reward, empty for genesis.
+    coinbase: bytes = b""
 
     def header(self) -> bytes:
         return b"".join(
@@ -71,6 +82,7 @@ class Block:
                 self.nonce.to_bytes(8, "little"),
                 self.timestamp.to_bytes(8, "little"),
                 self.target.to_bytes(8, "little"),
+                self.coinbase,
                 str(len(self.transactions)).encode(),
             ]
         )
@@ -87,6 +99,7 @@ class Block:
             "nonce": self.nonce,
             "timestamp": self.timestamp,
             "target": self.target,
+            "coinbase": self.coinbase.hex(),
         }
 
     @classmethod
@@ -100,6 +113,7 @@ class Block:
                 nonce=int(payload["nonce"]),
                 timestamp=int(payload["timestamp"]),
                 target=int(payload.get("target", GENESIS_TARGET)),
+                coinbase=bytes.fromhex(payload.get("coinbase", "")),
             )
         except (KeyError, TypeError, ValueError) as error:
             raise ChainError(f"malformed block: {error}") from None
@@ -115,6 +129,29 @@ class Block:
         hash would only make low targets marginally more precise.
         """
         return int.from_bytes(self.block_hash()[:8], "big") < self.target
+
+
+def emission(height: int) -> int:
+    """The total reward for a block at `height`, in atoms.
+
+    Linear decay from the initial reward to the tail over `DECAY_BLOCKS`, then the tail
+    forever. Linear rather than a halving schedule because a halving cliff is a sudden
+    change in the security budget and this chain is small enough that smoothness
+    matters more than the Bitcoin resemblance.
+    """
+    if height < 0:
+        raise ChainError("height must not be negative")
+    if height >= DECAY_BLOCKS:
+        return TAIL_REWARD_ATOMS
+    span = INITIAL_REWARD_ATOMS - TAIL_REWARD_ATOMS
+    return INITIAL_REWARD_ATOMS - span * height // DECAY_BLOCKS
+
+
+def split_reward(height: int) -> tuple[int, int]:
+    """`(miner_atoms, treasury_atoms)` for a block at `height`."""
+    total = emission(height)
+    treasury = total * TREASURY_BPS // 10000
+    return total - treasury, treasury
 
 
 def output_id(note: Output, p: SmileParameters = SMILE) -> bytes:
@@ -138,6 +175,12 @@ class Chain:
     allocations: dict[bytes, int] = field(default_factory=dict)
     #: The genesis allocation, kept so a replica can be rebuilt from it.
     genesis_allocations: list = field(default_factory=list)
+    #: Treasury atoms by the height that credited them. Auditable, unspendable.
+    treasury: dict = field(default_factory=dict)
+    #: Coinbase outputs that exist but cannot be spent yet: id -> creating height.
+    immature: dict = field(default_factory=dict)
+    #: The key this node mines to. A foreign block names its own recipient.
+    miner_key: tuple | None = None
 
     # ---------------------------------------------------------------- genesis
     def __post_init__(self) -> None:
@@ -277,8 +320,12 @@ class Chain:
         weighted = 0
         weights = 0
         for position in range(1, window + 1):
-            previous = self.blocks[-(window + 1) + position]
-            current = self.blocks[-(window + 1) + position + 1]
+            # `position` counts solve times, so it must index the *earlier* block at
+            # `position - 1`. Getting this off by one reverses every interval, which
+            # clamps them all to 1 second and tightens the target by the maximum factor
+            # on every block -- the chain becomes unmineable within about twenty.
+            previous = self.blocks[-(window + 1) + position - 1]
+            current = self.blocks[-(window + 1) + position]
             # A zero or negative solve time is a timestamp lie, not a fast block.
             solve = max(1, current.timestamp - previous.timestamp)
             weighted += position * solve
@@ -319,6 +366,11 @@ class Chain:
             nonce=0,
             timestamp=when,
             target=target,
+            coinbase=(
+                b"".join(ring.encode(poly, SMILE) for poly in self.miner_key)
+                if self.miner_key is not None
+                else b""
+            ),
         )
         # Mine against the target, not a fixed number of bits. The nonce bound is a
         # sanity limit rather than a difficulty: at a realistic target the loop exits
@@ -333,6 +385,7 @@ class Chain:
                 nonce=block.nonce + 1,
                 timestamp=block.timestamp,
                 target=block.target,
+                coinbase=block.coinbase,
             )
             if block.nonce > 1 << 32:
                 raise ChainError("no nonce found")
@@ -428,6 +481,21 @@ class Chain:
         return fresh
 
     def _apply(self, block: Block) -> None:
+        # Coinbase first: the miner is paid for the block, and the treasury takes its
+        # slice. Genesis carries no recipient, so it pays nobody.
+        if block.coinbase and block.height > 0:
+            miner_atoms, treasury_atoms = split_reward(block.height)
+            if treasury_atoms:
+                self.treasury[block.height] = treasury_atoms
+            if miner_atoms:
+                key = self._decode_key(block.coinbase)
+                note = Output(key=key, value=miner_atoms)
+                identifier = output_id(note)
+                self.outputs[identifier] = note
+                # A reward is not spendable until COINBASE_MATURITY blocks later, so a
+                # chain that reorgs out the block cannot be spent into the new chain.
+                self.immature[identifier] = block.height
+
         for payload in block.transactions:
             spend, indices = spend_from_wire(payload, self.pool, self.depth, self.rows)
             for tag in spend.tag_bytes():
@@ -440,6 +508,36 @@ class Chain:
                 self.spent_tags.add(tag)
                 self.pending_tags.discard(tag)
         self.blocks.append(block)
+        self._mature_coinbase()
+
+    def _decode_key(self, blob: bytes) -> tuple:
+        chunk = SMILE.ring_degree * 4
+        if len(blob) != SMILE.matrix_rows * chunk:
+            raise ChainError("coinbase key has the wrong length")
+        return tuple(
+            ring.decode(blob[offset : offset + chunk], SMILE)
+            for offset in range(0, len(blob), chunk)
+        )
+
+    def _mature_coinbase(self) -> None:
+        """Move coinbase outputs into the ring pool once they are deep enough.
+
+        Maturity is enforced structurally rather than by a check: an immature key is
+        not in `pool`, and a ring can only reference the pool. A ring proof hides which
+        member is real, so checking a specific output's age is not possible -- making
+        every member eligible is what makes the rule sound.
+        """
+        tip = self.height
+        ready = [
+            identifier
+            for identifier, created in self.immature.items()
+            if tip - created >= COINBASE_MATURITY
+        ]
+        for identifier in ready:
+            note = self.outputs[identifier]
+            if note.key not in self.pool:
+                self.pool = [*self.pool, note.key]
+            del self.immature[identifier]
 
 
 #: Signature codec, as a pair of callables so tests can substitute a stub.
