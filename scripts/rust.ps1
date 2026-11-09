@@ -8,13 +8,18 @@
 #
 # Usage (from the repository root):
 #   & .\scripts\rust.ps1 test --locked
-#   & .\scripts\rust.ps1 test --locked -- --exact depth64_path_opening::tests::proves_and_verifies_private_depth64_path --ignored
+#   & .\scripts\rust.ps1 test -Directory proof_rust
+#   & .\scripts\rust.ps1 test --locked
+#   & .\scripts\rust.ps1 test -Directory proof_rust -- --exact depth64_path_opening::tests::proves_and_verifies_private_depth64_path --ignored
 #   & .\scripts\rust.ps1 check --locked --all-targets
 #
 # Verified 2026-11-08: `rust.ps1 test --locked` -> 46 passed, 7 ignored.
 
 [CmdletBinding()]
 param(
+    # Crate directory relative to the repository root. Defaults to the archived
+    # Candidate-A harness; pass `-Directory proof_rust` for the lattice crate.
+    [string]$Directory = 'archive\candidate-a\proof_harness',
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$CargoArgs
 )
 
@@ -37,7 +42,7 @@ Install it with:
 
 $env:PATH = "$selfContained;$env:PATH"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-Push-Location (Join-Path $repoRoot 'archive\candidate-a\proof_harness')
+Push-Location (Join-Path $repoRoot $Directory)
 try {
     # Cargo writes progress to stderr; under $ErrorActionPreference='Stop' Windows
     # PowerShell promotes that to a terminating NativeCommandError. Use the exit

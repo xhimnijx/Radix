@@ -114,8 +114,15 @@ def mat_vec(
 
 
 def norm_inf(value: Poly) -> int:
-    """Centered infinity norm: the honest measure for rejection sampling."""
-    return max(centered(a) for a in value)
+    """Centered infinity norm: the honest measure for rejection sampling.
+
+    `max(abs(centered(a)))`, not `max(centered(a))`. The first version returned the
+    largest *signed* representative, which never accounts for the magnitude of a
+    negative coefficient; the Rust port's cross-language check caught it because the
+    two implementations disagreed on the same polynomial. The l2 bound has since
+    replaced this as the verifier's check, but a norm that ignores sign is a trap.
+    """
+    return max(abs(centered(a)) for a in value)
 
 
 def l2_squared(value: Poly, parameters: SmileParameters | None = None) -> int:

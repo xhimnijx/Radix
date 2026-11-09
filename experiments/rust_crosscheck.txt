@@ -1,0 +1,8 @@
+Cross-language check of the lattice arithmetic
+q                = 4294966337
+checksum(product)  = 0x1e742e081280ce60
+checksum(naive)    = 0x1e742e081280ce60
+Rust (cargo run --release --bin bench):
+  checksum(mul_crt(a, b))   = 0x1e742e081280ce60
+  checksum(mul_naive(a, b)) = 0x1e742e081280ce60
+mul_crt 20.1 us, mul_naive 22.2 us per ring multiplication
