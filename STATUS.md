@@ -261,3 +261,47 @@ times the tool that wrote the file was mine rather than a contributor's.
    `α`-slot machinery, which is the one part of the construction that visibly fits this
    codebase. It does not need [25] and it is what makes committed value non-negative.
 3. **The estimator run**, still. `docs/ESTIMATOR.md`; five minutes on any Linux box.
+
+
+## Plan revision, 2026-11-09 (mainnet items 1-3)
+
+| Item | Outcome |
+|---|---|
+| Real proof of work | Target in the header, LWMA-90 with 2x clamps, MTP-11 and a two-hour future limit. Difficulty holds at 2^50 with 120 s spacing and tightens 2^50 -> 2^46 in five 10-second blocks |
+| Block rewards | Linear decay from 20 units to a 0.6-unit tail over 525,600 blocks, 10% treasury recorded per height, coinbase named in the header, 100-block maturity enforced by keeping immature keys out of the ring pool |
+| Checkpoints | Snapshot and restore without replaying history. **1.1x at 200 empty blocks**, break-even about 73 transactions skipped |
+
+**Four things measurement caught that reading would not.**
+
+1. **The LWMA ratio was inverted.** Fast blocks multiplied the target, making a rush of
+   blocks make the chain easier. The printout said "target 2^53 ... harder", contradicting
+   itself in one line.
+2. **The LWMA indices were off by one whenever the window was 1** -- the first adjustment
+   on a two-block chain. Every solve time came out negative, clamped to one second, and
+   the target tightened by the maximum factor every block: **the chain became unmineable
+   within about twenty blocks.** It survived the synthetic tests because they only called
+   `next_target` once the window was two or more, where the arithmetic happened to be
+   right.
+3. **A block reward to a reused key collapses.** Output identity is the hash of
+   (key, value), so two rewards to one key with the same value are one output -- and the
+   tag makes that key spendable once regardless. A miner reusing one key accumulates one
+   reward, not n. **This is one-time addressing reappearing in the reward path**, and it
+   moves that item from "later upgrade" to "launch dependency".
+4. **Checkpoints are not the order-of-magnitude win I expected.** Restoring costs a fixed
+   197 ms, almost all of it regenerating the 1024-key decoy pool, against 2.7 ms per
+   transaction replayed. 1.1x on empty blocks. The honest statement is "pays off after
+   73 skipped transactions, and the fixed cost is reducible by caching the decoy pool".
+
+**One strategy change, recorded because it contradicts this goal's premise.** The owner
+asked for amounts hidden **from launch**, not in a later upgrade. That removes the
+Monero-style visible-amounts path and puts the range proof and the carry proof back on
+the critical path. `docs/CONFIDENTIAL-TRANSACTIONS.md` is therefore not a later phase.
+
+**The next three.**
+
+1. **Digit membership** -- prove each committed base-4 digit lies in {0,1,2,3} using the
+   alpha-slot machinery. Needs no external document and is half of hidden amounts.
+2. **Reference [25]** -- the carry proof for balance. Blocks the other half. A question
+   for C1 and C2, not a coding task.
+3. **One-time addressing** -- now a launch dependency, not a later upgrade, because
+   rewards cannot accumulate to a reused key.
