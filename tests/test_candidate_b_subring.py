@@ -123,3 +123,44 @@ def test_transform_and_roots_agree_on_the_same_parameter_set():
     for index, value in enumerate(quartic):
         point = pow(table.root, 2 * index + 1, q)
         assert pow(point, 4, q) == value
+
+# ---------------------------------------------------------------------------
+# CRT glue: the replacement for the NTT-based glue at a modulus with no 256th
+# root of unity. Verified here against the NTT path at the prototype modulus,
+# where both exist, which is what makes the migration mechanical.
+# ---------------------------------------------------------------------------
+
+
+def test_crt_idempotents_are_idempotent_and_select_their_slot():
+    for index in (0, 1, 17, 31):
+        idempotent = subring.crt_idempotent(index)
+        assert subring.slot(idempotent, index) == (1, 0, 0, 0)
+        assert all(
+            subring.slot(idempotent, other) == (0, 0, 0, 0)
+            for other in range(32)
+            if other != index
+        )
+        assert ring.mul(idempotent, idempotent) == idempotent
+
+
+def test_glue_crt_agrees_with_the_ntt_glue():
+    for _ in range(3):
+        poly = ring.sample_uniform(RNG)
+        residues = subring.slots(poly)
+        assert subring.glue_crt(residues) == subring.glue(residues) == poly
+
+
+def test_glue_crt_round_trips_arbitrary_residues():
+    residues = tuple(
+        tuple(RNG.randrange(params.PROTOTYPE_MODULUS) for _ in range(4)) for _ in range(32)
+    )
+    assert subring.slots(subring.glue_crt(residues)) == residues
+
+
+def test_glue_crt_rejects_bad_input():
+    with pytest.raises(subring.SubringError):
+        subring.crt_idempotent(32)
+    with pytest.raises(subring.SubringError):
+        subring.glue_crt(tuple((1, 0, 0, 0) for _ in range(31)))
+    with pytest.raises(subring.SubringError):
+        subring.glue_crt(tuple((1, 0) for _ in range(32)))

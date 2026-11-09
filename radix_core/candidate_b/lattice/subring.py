@@ -136,6 +136,57 @@ def g(poly: tuple[int, ...], parameters: SmileParameters | None = None) -> tuple
     return tuple(total)
 
 
+
+def crt_idempotent(index: int, parameters: SmileParameters | None = None) -> tuple[int, ...]:
+    """The CRT idempotent e_index: 1 mod (X^4 - r_index), 0 modulo the others.
+
+    Closed form. `X^128 + 1` divided by `X^4 - r_i` is
+    `Q_i = sum_j r_i^j X^(4(31-j))`, and `Q_i` reduces to `32 r_i^31` in the i-th
+    slot, so the idempotent is `Q_i / (32 r_i^31)`, i.e. the coefficient of `X^(4t)`
+    is `r_i^(-t) / 32`. (The first version of this function dropped the `r_i^31`
+    and produced an operator that was not idempotent; the round-trip test caught it.)
+    """
+    p = SMILE if parameters is None else parameters
+    table = roots(p.modulus, p.ring_degree)
+    if not 0 <= index < len(table):
+        raise SubringError("slot index is outside the decomposition")
+    inverse = pow(len(table), -1, p.modulus)
+    r_inverse = pow(table[index], -1, p.modulus)
+    out = [0] * p.ring_degree
+    for t in range(len(table)):
+        out[4 * t] = pow(r_inverse, t, p.modulus) * inverse % p.modulus
+    return tuple(out)
+
+
+def glue_crt(
+    residues: tuple[tuple[int, ...], ...], parameters: SmileParameters | None = None
+) -> tuple[int, ...]:
+    """Reconstruct y from its quartic residues by 32-way CRT.
+
+    `y = sum_i e_i * c_i`. This is the replacement for `glue` when the modulus has
+    no 256th root of unity: it needs only that `X^128 + 1` factors into the 32
+    quartics, which every valid SMILE modulus guarantees. The quartic products do
+    not wrap, since `e_i` has degree <= 124 and `c_i` has degree <= 3.
+    """
+    p = SMILE if parameters is None else parameters
+    table = roots(p.modulus, p.ring_degree)
+    if len(residues) != len(table):
+        raise SubringError("slot vector has the wrong length")
+    if any(len(residue) != SLOT_DEGREE for residue in residues):
+        raise SubringError("every slot must be a quartic residue")
+    out = [0] * p.ring_degree
+    for index, residue in enumerate(residues):
+        idempotent = crt_idempotent(index, p)
+        for base in range(0, p.ring_degree, SLOT_DEGREE):
+            for offset in range(SLOT_DEGREE):
+                coefficient = residue[offset]
+                if coefficient:
+                    out[base + offset] = (
+                        out[base + offset]
+                        + coefficient * idempotent[base]
+                    ) % p.modulus
+    return tuple(out)
+
 def quartic_multiply(
     left: tuple[int, ...], right: tuple[int, ...], modulus_root: int, q: int
 ) -> tuple[int, ...]:
