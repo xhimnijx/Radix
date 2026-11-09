@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "The Problem.md",
-                "mode": "source",
+                "file": "Norms and Why They Matter.md",
+                "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "The Problem"
+              "title": "Norms and Why They Matter"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "The Problem.md",
+                "file": "Norms and Why They Matter.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "The Problem.md",
+                "file": "Norms and Why They Matter.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "The Problem.md",
+                "file": "Norms and Why They Matter.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,9 +190,12 @@
   },
   "active": "d079fa8af3855b5a",
   "lastOpenFiles": [
+    "Challenge Spaces and Ternary Secrets.md",
+    "Hard Problems on Lattices.md",
+    "Polynomials as Vectors.md",
     "Modular Arithmetic and the Ring R_q.md",
-    "Amount Confidentiality.md",
     "The Problem.md",
+    "Amount Confidentiality.md",
     "Start Here.md"
   ]
 }

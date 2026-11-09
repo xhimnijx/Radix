@@ -203,7 +203,7 @@ them now would be fiction.
 | Mempool policy, fee market | needs competing miners |
 | Peer discovery, eclipse resistance | a minimal request/response transport exists (`p2p.py`), but there is no discovery, gossip, authentication or encryption |
 | Difficulty bootstrap (§3.5) | needs a launch decision, not a measurement |
-| Consensus among *validating* nodes | nodes now exchange blocks and a lagging node adopts a longer chain, but a genuine fork is **refused, not reconciled** -- the chain has no undo journal |
+| Consensus among *validating* nodes | implemented in the minimal form: a node with more work wins, ties break on the lower tip hash, and a diverged chain is replaced by replaying the winner from genesis. What is missing is the cost discipline -- a full replay is fine at testnet size and would need checkpoints at mainnet size |
 | Checkpointing / weak subjectivity | depends on the above |
 
 ---

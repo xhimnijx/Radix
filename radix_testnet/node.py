@@ -160,6 +160,7 @@ class Node:
                 "type": "hello",
                 "height": self.chain.height,
                 "work": self.chain.cumulative_work(),
+                "tip": self.chain.tip.block_hash().hex(),
                 "genesis": self.chain.blocks[0].block_hash().hex(),
             }
 
@@ -200,8 +201,21 @@ class Node:
             )
         remote_work = int(hello.get("work", 0))
         local_work = self.chain.cumulative_work()
-        if remote_work <= local_work:
+        if remote_work < local_work:
             return {"adopted": False, "local_work": local_work, "remote_work": remote_work}
+        if remote_work == local_work:
+            # Equal work is a tie, and a tie must break deterministically or two nodes
+            # will each keep their own chain and never converge. The lower tip hash wins,
+            # which is arbitrary but identical on both sides of the comparison.
+            remote_tip = str(hello.get("tip", ""))
+            local_tip = self.chain.tip.block_hash().hex()
+            if not remote_tip or remote_tip >= local_tip:
+                return {
+                    "adopted": False,
+                    "local_work": local_work,
+                    "remote_work": remote_work,
+                    "reason": "equal work, tie broken by tip hash",
+                }
 
         payload = peer.call({"type": "getchain"})
         blocks = [C.Block.from_wire(item) for item in payload["blocks"]]

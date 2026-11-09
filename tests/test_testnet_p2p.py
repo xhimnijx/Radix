@@ -176,3 +176,59 @@ def test_a_peer_on_a_different_genesis_is_refused(two_nodes):
         second.sync_from(f"127.0.0.1:{first_port}")
 
     assert second.chain.blocks[0].block_hash() == other.blocks[0].block_hash()
+
+
+def test_a_fork_is_reconciled_by_work(two_nodes):
+    """Two branches from one genesis: the shorter one yields.
+
+    This is what `Chain.rebuild` makes cheap -- reconciliation is a replay from
+    genesis, not an undo journal. The node that is behind replaces its chain wholesale,
+    and both end on the same tip.
+    """
+    first, second, _first_port, second_port = two_nodes
+    assert first.chain.blocks[0].block_hash() == second.chain.blocks[0].block_hash()
+
+    # Both mine from the same genesis. The timestamps must differ or the two nodes
+    # search the same nonce sequence and produce *identical* blocks, which is not a
+    # fork at all -- a mistake this test made in its first version.
+    _mine_empty(first, timestamp=2_000_000_001)
+    _mine_empty(first, timestamp=2_000_000_002)
+    _mine_empty(second, timestamp=2_100_000_001)
+    assert first.chain.tip.block_hash() != second.chain.tip.block_hash()
+
+    # One more block settles it: the first node now has more work.
+    _mine_empty(first, timestamp=2_000_000_003)
+    assert first.chain.cumulative_work() > second.chain.cumulative_work()
+
+    outcome = second.sync_from(f"127.0.0.1:{_first_port}")
+
+    assert outcome["adopted"] is True
+    assert second.chain.tip.block_hash() == first.chain.tip.block_hash()
+    assert second.chain.cumulative_work() == first.chain.cumulative_work()
+    assert second.chain.blocks[1].block_hash() == first.chain.blocks[1].block_hash()
+
+
+def test_equal_work_is_broken_deterministically(two_nodes):
+    """A tie must resolve the same way on both sides, or they never converge."""
+    first, second, first_port, second_port = two_nodes
+    _mine_empty(first, timestamp=2_000_000_001)
+    _mine_empty(second, timestamp=2_100_000_001)
+    assert first.chain.cumulative_work() == second.chain.cumulative_work()
+    assert first.chain.tip.block_hash() != second.chain.tip.block_hash()
+
+    # Whichever direction is tried, the node with the lower tip hash keeps its chain
+    # and the other adopts. Run both directions and require agreement.
+    first_tip = first.chain.tip.block_hash()
+    second_tip = second.chain.tip.block_hash()
+
+    from_first = second.sync_from(f"127.0.0.1:{first_port}")
+    from_second = first.sync_from(f"127.0.0.1:{second_port}")
+
+    if first_tip < second_tip:
+        assert from_first["adopted"] is True
+        assert from_second["adopted"] is False
+    else:
+        assert from_first["adopted"] is False
+        assert from_second["adopted"] is True
+
+    assert first.chain.tip.block_hash() == second.chain.tip.block_hash()
