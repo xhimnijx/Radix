@@ -446,7 +446,7 @@ class Chain:
         self.mempool.clear()
         return block
 
-    def append(self, block: Block) -> None:
+    def append(self, block: Block, verify_transactions: bool = False) -> None:
         """Validate a block that came from somewhere else, then apply it.
 
         This is the only entry point for foreign blocks, and it refuses anything that
@@ -477,7 +477,7 @@ class Chain:
             )
         if block.timestamp > int(time.time()) + FUTURE_DRIFT:
             raise ChainError("block timestamp is too far in the future")
-        self._apply(block)
+        self._apply(block, verify_transactions=verify_transactions)
 
     def allocations_wire(self) -> list:
         """The genesis allocation, as hex, so a replica can rebuild from it."""
@@ -519,6 +519,7 @@ class Chain:
         allocations: list[tuple[tuple[Poly, ...], int]],
         blocks: list[Block],
         verify=None,
+        verify_transactions: bool = True,
     ) -> "Chain":
         """Replay a whole chain from genesis, from another node's view.
 
@@ -530,16 +531,28 @@ class Chain:
         fresh = cls(parameters=parameters, depth=depth, verify=verify)
         fresh.genesis(allocations)
         for block in blocks[1:]:
-            fresh.append(block)
+            fresh.append(block, verify_transactions=verify_transactions)
         return fresh
 
-    def _apply(self, block: Block) -> None:
+    def _apply(self, block: Block, verify_transactions: bool = False) -> None:
+        """Apply a block's transactions and its coinbase.
+
+        `verify_transactions` is False for blocks this node mined or already
+        validated on submission, and True for a chain adopted from a peer. Without
+        it, adopting a chain checks the proof of work, the links and the tags -- but
+        never the signatures, so a peer could hand over a chain of invalid spends and
+        the node would accept every one. Measured cost: about 105 ms per transaction
+        with the Rust verifier, which is the price of not trusting a stranger.
+        """
         # The transactions are applied first so the block's fees are known before the
         # coinbase is built: the miner is paid for the block AND for the transactions it
         # chose to include.
         total_fees = 0
         for payload in block.transactions:
             spend, indices = spend_from_wire(payload, self.pool, self.depth, self.rows)
+            if verify_transactions:
+                # Raises on a bad proof, a bad tag, a stale anchor or a double spend.
+                self._check_spend(spend, indices)
             for tag in spend.tag_bytes():
                 if tag in self.spent_tags:
                     raise ChainError("double spend: this tag has already been used")

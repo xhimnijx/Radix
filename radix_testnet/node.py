@@ -279,9 +279,11 @@ class Node:
         # hand us a chain whose block zero pays a different set of keys.
         allocations = P.genesis_allocations(self.parameters)
         try:
+            # verify_transactions=True: this chain came from a stranger, so every
+            # proof in it is checked rather than trusted.
             rebuilt = C.Chain.rebuild(
                 self.parameters, self.chain.depth, allocations, blocks,
-                verify=self.chain.verify,
+                verify=self.chain.verify, verify_transactions=True,
             )
         except (C.ChainError, KeyError, TypeError, ValueError) as error:
             raise p2p.PeerError(f"the peer's chain does not validate: {error}") from None
