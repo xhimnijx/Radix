@@ -1,0 +1,11 @@
+docs: the confidential-transaction construction, sourced page by page
+
+Read the paper's section properly instead of summarising the abstract. docs/CONFIDENTIAL-TRANSACTIONS.md now specifies what a hidden-amount transaction actually is, with a page reference on every claim.
+
+The important finding is how the range constraint works. It is NOT a bit decomposition. The amount is encoded as base-4 digits: a single polynomial whose coefficients lie in {0,1,2,3}, 32 of them covering [0, 2^64). So the range proof is a DIGIT-MEMBERSHIP proof -- each position must be one of four values -- which is the same shape as the alpha-slot set membership this codebase already implements. That makes the construction a plausible fit rather than a rewrite, which is the first time amounts have looked affordable structurally rather than just in bytes.
+
+Balance is the hard part and the document says so. Summing base-4 digit vectors needs a carry vector, and with many integers that carry is no longer binary, so it cannot be proven small by algebraic techniques alone (p. 54). The paper resolves this by citing reference [25] for an approximate shortness proof -- and [25] is not in this repository. That is the one blocking document, named rather than worked around.
+
+Size accounting reconciles: the paper's 17.27 KB bare ring signature (p. 48) plus about 9 KB of commitment, masked opening and h2 gives the 26.49 KB confidential transaction (p. 55). Our current proof is 21,760 B for a simpler statement, so we are about 4 KB over the bare figure rather than 14 KB over it.
+
+Section 7 lists five things the paper does not settle, including the exact B'0 layout and whether the fee is visible. Section 8 gives the implementation order, starting with obtaining [25].

@@ -116,6 +116,7 @@ Root documents:
 - [`REVIEW-REQUEST.md`](REVIEW-REQUEST.md) — the brief for a third review
 - [`docs/CONSENSUS.md`](docs/CONSENSUS.md) — block time, difficulty, reward, fork choice
 - [`docs/ESTIMATOR.md`](docs/ESTIMATOR.md) — the outstanding security estimate, and what blocks it
+- [`docs/CONFIDENTIAL-TRANSACTIONS.md`](docs/CONFIDENTIAL-TRANSACTIONS.md) — hiding transaction amounts, in detail
 - [`DEPLOY.md`](DEPLOY.md) — running a stagenet node on a second machine
 - [`TESTNET.md`](TESTNET.md) — how to run and build the app
 - [`PLAIN-ENGLISH.md`](PLAIN-ENGLISH.md) — the same story without jargon
