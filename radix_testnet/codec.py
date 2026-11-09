@@ -87,6 +87,41 @@ def decode_proof(
     )
 
 
+def range_witness(amounts: list[int]) -> dict:
+    """The digits and packed bits a range proof will need, as wire data.
+
+    This is the data-model step before the proof change: a spend can now CARRY a range
+    witness and the node validates its internal consistency, so the encoding, the packing
+    and the checks are exercised on real traffic before the alpha slots exist. The witness
+    is not yet proved -- it is checked in the clear -- and `docs/PAPER.md` lists that
+    distinction under the limitations rather than here.
+    """
+    from radix_core.candidate_b.lattice import digits as D
+
+    return {
+        "digits": [list(D.encode_amount(amount, D.DIGITS)) for amount in amounts],
+        "bits": [list(D.bits_of(amount, D.DIGITS)) for amount in amounts],
+    }
+
+
+def check_range_witness(payload: dict) -> None:
+    """Refuse a range witness that does not agree with itself."""
+    from radix_core.candidate_b.lattice import range as R
+
+    witness = payload.get("range")
+    if witness is None:
+        return
+    try:
+        statement = {
+            "bits": [tuple(bits) for bits in witness["bits"]],
+            "digits": [tuple(digits_) for digits_ in witness["digits"]],
+        }
+    except (KeyError, TypeError) as error:
+        raise CodecError(f"malformed range witness: {error}") from None
+    if not R.verify_digits(statement):
+        raise CodecError("the range witness does not hold")
+
+
 def spend_to_dict(spend: Spend, indices: tuple[tuple[int, ...], ...]) -> dict:
     return {
         "v": ENVELOPE_VERSION,
@@ -103,6 +138,9 @@ def spend_from_dict(payload: dict, pool, *, depth: int, rows: int, p: SmileParam
     """Rebuild a Spend, reconstructing each ring from the pool indices."""
     if payload.get("v") != ENVELOPE_VERSION:
         raise CodecError("unknown envelope version")
+    # A range witness travels with the spend and must agree with itself before the rest
+    # of the envelope is decoded, so a malformed one is rejected for the right reason.
+    check_range_witness(payload)
     try:
         indices = tuple(tuple(int(index) for index in ring_) for ring_ in payload["ring_indices"])
         rings = tuple(tuple(pool[index] for index in ring_) for ring_ in indices)

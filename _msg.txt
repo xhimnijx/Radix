@@ -1,22 +1,23 @@
-docs: an implementation-study draft, with its claims and limitations fixed first
+feat: a spend can carry a range witness, checked before anything else
 
-docs/PAPER.md. The order is deliberate: claims, then limitations, then the prose. A paper
-whose scope is decided by what it manages to write ends up overclaiming; one whose claims
-are listed first cannot.
+The data-model step before the proof change, and deliberately the safe half of it. A spend
+can now carry the base-4 digits and the packed bits for every amount, and the node checks
+their internal consistency on decode -- before the rest of the envelope -- so a malformed
+witness is rejected for the right reason rather than deep inside proof verification.
 
-Five claims, and nothing outside them: the protocol is implemented twice and each accepts
-the other's proofs; 21,760 bytes at ring size 1024; 475 ms to prove and 105.8 ms to verify;
-four reproducible defects; and a delta-model estimate of 2^158 and 2^167.
+What this establishes: the encoding, the 32-digit packing, the 2-bits-per-digit relation
+and the slot-binaryness check all run on real traffic. What it does not: the witness is
+checked IN THE CLEAR, so it proves nothing to a verifier who does not trust the prover. The
+limitation is named in docs/PAPER.md section 8 rather than implied by the field's presence.
 
-Not claimed, and said so in the paper: any security level, because the estimate is a delta
-model rather than an estimator run, the restatement is signed by a reviewer but not proved
-here, and the implementation is unaudited.
+Seven tests: the witness round-trips and its bits reconstruct its digits; a consistent one
+is accepted; an absent one is accepted, since a visible-amount spend is the current shape;
+and four refusals -- bits disagreeing with digits, a non-binary bit, a digit above 3, and a
+malformed structure with a clear error.
 
-The defects table is the paper's heart, because it is the argument for the method. Four
-defects, none findable by reading, two of them found only because a second implementation
-disagreed with the first. The commitment arity is the best example: κ+λ+m+1 and
-κ+rows+2m+1 agree exactly when rows = 8, so a test suite built on one configuration cannot
-distinguish them.
+The end-to-end and chain suites still pass, so a normal spend is unaffected: the witness is
+optional and absent by default.
 
-Sections are headings with the measured numbers filled in and TODOs where prose is missing.
-That is honest about what exists: a skeleton good enough to write into, not a paper.
+Next: the alpha slots. That is the change that turns this witness from a claim into a
+proof, and it touches the commitment arity, the transcript, the wire format and the
+Gaussian tables together -- which is why it is not being started at the end of a round.
