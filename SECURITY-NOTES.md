@@ -118,3 +118,41 @@ explicit `ValueError`.
 - The Rust FRI configuration is a 2-query test profile (§2.H11). The launch gate
   refuses to open on it, which is the control that matters until a production
   profile is measured.
+
+
+## What `2^157` means, and what it does not (2026-11-09)
+
+A delta-model sanity check of the two M-SIS instances puts them at roughly `2^157` (the
+untagged `A` relation at `k = 4`) and `2^174` (`B_0` at `W = 33`). Two things must not
+be inferred from that.
+
+**It is the cost of the assumption, not the security of the scheme.** The soundness
+argument extracts a witness from four transcripts by rewinding, in the random-oracle
+model. A forger's advantage crosses that reduction with a polynomial loss, so the
+scheme's bit-security is strictly less than the assumption's cost by an amount this
+project has not analysed. Quote it as "the M-SIS assumption is about 2^157", never as
+"the scheme is 157-bit".
+
+**It is a heuristic, not an estimator run.** The numbers come from inverting the
+root-Hermite `delta` model, not from `lattice-estimator`. They are consistent under
+both dimension conventions that were checked, and the binding relation is the untagged
+base at `k = 4` either way, but a real estimator run is still the outstanding item.
+
+## The modulus class costs a theorem, not an estimate (2026-11-09)
+
+`q = 4,294,966,337` has `ord_256(q) = 4`, which is what makes the quartic slots fields
+and closes both the challenge-difference and slot-constancy problems. Two consequences
+worth recording:
+
+- **The lattice is unchanged.** Unrolling `A` in the coefficient basis gives the same
+  integer matrix -- same dimension, same determinant, same Gaussian heuristic -- for any
+  `q` with the same `log q`, however `X^128 + 1` factorises. The factorisation changes
+  how products are computed and what can be proved about the algebra, not the M-SIS /
+  M-LWE instance.
+- **The hardness *proofs* are stated for `q = 1 mod 2n`.** At `ord_256(q) = 4` the
+  published module-LWE hardness results do not directly apply. We hold a conjecture
+  where a split modulus would have held a theorem, and that is a confidence cost that
+  does not appear in any estimate.
+
+If a published result covers this modulus class, cite it and this paragraph can go. If
+not, it stays.

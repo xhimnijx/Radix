@@ -1,192 +1,136 @@
-# Review request: fourth pass
+# Review request: fifth pass
 
-For C1 and C2. Round one found the tag forgeable and the parameters unpriced; round
-two settled the modulus; round three is now closed out — the Rust port is finished and
-cross-verified, and the app is packaged.
+For C1 and C2. The fourth pass answered the blocker and changed the picture:
 
-This brief says what changed, what is implemented, and the **five questions that
-remain**, in priority order. The first one is the only blocker.
-
-**Status:** research prototype. No audit, no security claim, no value. The Candidate-A
-track is archived in `archive/` and is not part of this review.
-
----
-
-## What changed since the third pass
-
-| Item | Then | Now |
+| | fourth pass | now |
 |---|---|---|
-| **Rust prover/verifier** | arithmetic layer only | **complete**; Python proof accepted by Rust, Rust proof accepted by Python |
-| Rust tests | 0 for the protocol | **69**, every layer with a known-answer value from Python |
-| Prover cost | projected 0.47 s / 37 ms | **measured 496 ms prove, 110 ms verify**, 9.75 attempts |
-| Android wallet | none | native APK, 24 KB, framework-only, on the releases page |
-| Deployable node | localhost only | `--host 0.0.0.0` documented with the LAN exposure warning |
-| Codec defect | commitment arity wrong in both languages | fixed; the port found it in the Python |
+| Q-A | "the parameters are not priced" | **answered: ~2^157 (A) and ~2^174 (B0). Not short.** My dimensions were wrong; corrected below |
+| Q-B | restate Theorem B.1 | answered: signable with four edits; C2 added the split-regime objection |
+| Q-C | discrete Gaussian | answered: required, and the decisive reason is portability |
+| Q-D | does the tag weaken M-SIS | answered: it strengthens it; `k' = 1` is sufficient |
+| Q-E | run it | answered: **the spend layer was still on the withdrawn tag — fixed** |
 
-**Two defects were found by porting, not by reading.** Both are recorded because they
-are evidence about how much checking the code had actually had:
+What remains is narrower and more concrete. Five items, in priority order.
 
-1. The commitment arity was `κ + λ + m + 1`; the correct count is `κ + rows + 2m + 1`.
-   The two agree only when `rows = 8` — the *tagged* shape — so the wrong formula passed
-   every test in both implementations and was wrong for every untagged proof.
-2. The zero prefix of `g` was applied to the first `d/l` **slots** instead of the first
-   `d/l` **coefficients**. Every stage of the proof still passed; only the `h`-prefix
-   check catches it.
+## The corrected numbers, for the record
 
-Neither was a cryptography problem. Both were caught by an independent implementation,
-which is the only argument for writing one that has ever held up.
+My Q-A inputs mixed two conventions: 1664 is the full solution lattice of `A`
+(`ell*d`), but 2944 is `23*d` where 23 is the **commitment arity**, not the width. The
+width is `W = 33`, so `W*d = 4224`.
 
----
+| relation | n | `det^{1/n}` | target | delta | block | Core-SVP |
+|---|---|---|---|---|---|---|
+| `A`, untagged, k = 4 | 1664 | `2^9.85` | `2^17.56` | 1.003218 | 541 | **`2^157`** |
+| `A`, tagged, k + k' = 8 | 1664 | `2^19.69` | `2^17.56` | < 1 | n/a | beyond the model |
+| `B_0`, W = 33 | 4224 | `2^9.70` | `2^27.90` | 1.002992 | 598 | **`2^174`** |
 
-## Q-A. The estimator run — the only blocker
+The binding relation is the untagged base at about `2^157`. The "3.6 bits of slack"
+framing was backwards: targets *below* the reachable norms mean a stronger reduction
+is required, not a weaker one.
 
-This is the single thing between "the proof verifies" and "the parameters are secure".
-Everything below is measured or derived; none of it has been run through an estimator.
-
-### Exact inputs
-
-```
-scheme          module-SIS / module-LWE over R_q = Z_q[X]/(X^128 + 1)
-q               4,294,966,337           (= 2^32 - 959, prime, ord_256(q) = 4)
-d               128
-l               32                      (slots per polynomial)
-k               4                       (rows of A)
-ell             13                      (columns of A)
-kappa           10
-lambda          10
-mu              5                       (secret coefficient bound)
-
-masks           s   = 2,666   (2^11.4)   for z    (W = 33, tagged)
-                s'  = 1,673   (2^10.7)   for z'   (ell = 13)
-responses       beta  = 244,992  (2^17.9)  = s  * sqrt(2*W*d)
-                beta' =  96,512  (2^16.6)  = s' * sqrt(2*ell*d)
-
-relation A      M-SIS_{k, 2*beta'}       target 2^17.6   dimension 1664
-relation B0     M-SIS_{kappa, 8*d*beta}  target 2^27.9   dimension 2944
-```
-
-### Questions
-
-1. **What are the Core-SVP costs** for those two instances, using the two target
-   conventions the paper uses (`2β′` because the extractor subtracts two responses, and
-   `8dβ` for the commitment rows)?
-2. **Is `q = 4,294,966,337` acceptable**, or does `ord_256(q) = 4` (irreducible quartics,
-   no 128-point NTT) cost anything in the LWE/SIS estimates relative to a split modulus?
-3. **What is the smallest change that reaches 128 bits** if we are short: larger `q`,
-   larger ring (`μ`), smaller `β`, or larger `ℓ`? Please give the trade in proof bytes.
-4. **Is `β` or `β′` binding?** At `δ = 1.0042` the reachable norms are `2^21.2` and
-   `2^31.7`, giving ~3.6 and ~3.8 bits of slack — which is not a security level. Say so
-   if the heuristic is the wrong tool here.
-
-**What counts as an answer:** a number, or a clear statement that these inputs are
-insufficient. An opinion is not usable; a table is.
+**Nothing is being changed on the strength of these numbers**, because they are a
+delta-heuristic sanity check, not an estimator run.
 
 ---
 
-## Q-B. Restate Theorem B.1 for the irreducible modulus
+## Q-F. Ring-pool binding — both of you called this the most serious item outside Q-A
 
-The paper's soundness analysis defines its constant `p` via `c mod X^{d/l} − ζ^{2j+1}`,
-which presupposes `ζ ∈ Z_q` — that is, the **split** case, which we no longer use.
+The proof binds the message, `w`, the commitments, `h`, `omega` and `c`. It does **not**
+bind the ring. The verifier rebuilds the ring from its own pool, so today it is sound
+only because prover and verifier are the same process.
 
-C2's earlier answer was that the extraction skeleton is ring-generic and needs three
-edits (`p` redefined over `F_{q^4}`, `c̄` invertibility as an explicit hypothesis, and
-the slot-constant property attributed to the modulus). That answer is accepted but
-**has not been written down**, and `REVIEW-FINDINGS.md` is a record, not a proof.
+Both of you propose the same cheap fix: absorb a ring digest as a transcript label
+beside the message, with the anchor committing to the pool root. Zero proof bytes.
 
-**Question:** is that restatement correct, and would you sign it? Specifically: does
-the `q^{-4}` bound really become exact in the field regime, and does the induction get
-shorter as expected rather than merely differently shaped?
+**Questions:**
 
----
+1. **Where exactly** should the digest be absorbed — inside `_head`, before `message`,
+   or as a separate label immediately after? Does the placement interact with the
+   extraction's transcript rewinding?
+2. The digest is over the **ordered** key list. Does the order need to be canonicalised
+   (e.g. sorted, or by pool index) or is any order fine as long as prover and verifier
+   agree?
+3. Does this change any soundness constant? My reading is no — it only removes the
+   trusted-pool assumption — but say so if that is wrong.
 
-## Q-C. The discrete Gaussian
+## Q-G. The discrete Gaussian — which one, and at what precision
 
-`setmembership._gaussian` draws a **continuous** Gaussian and rounds to integers, in
-both implementations. Lemma A.6 is stated for a discrete Gaussian.
+Both of you require a discrete sampler before the rejection argument can be invoked.
+C2's decisive point is portability: if both languages round floats, `libm` disagreement
+makes them *different distributions*, and the analysis applies to neither.
 
-The difference is `O(1/s)`, so about `2^-11` in statistical distance at these widths.
+**Questions:**
 
-**Question:** is that acceptable with the caveat recorded — the honest position today —
-or is a discrete sampler required before the rejection argument may be invoked at all?
-If a sampler is required, say which one; the port must use the same distribution, so
-this decides whether the Rust code changes too.
+1. Which construction, concretely, for a **32-bit-ish q** and `sigma ~ 2^11`:
+   Folláth–Peikert inversion, Peikert's rejection sampler, or a CDT with a fixed tail
+   cut? The cost is irrelevant next to a 9 ms multiplication, so the criterion is
+   simplicity and cross-language reproducibility.
+2. What **precision** is sufficient — how many bits of the cumulative distribution, and
+   what tail cut — such that the statistical distance to `D_{Z,sigma}` is negligible?
+3. Is there a test we can write that would catch the two implementations drifting?
 
----
+## Q-H. The confidence gap at `ord_256(q) = 4`
 
-## Q-D. Does the same-witness tag weaken M-SIS?
+C2's note: the hardness proofs for module-LWE in the literature are stated for
+`q = 1 mod 2n`. At `ord_256(q) = 4` we have the same lattice (the coefficient embedding
+depends only on `log q`) but not the theorem.
 
-C1 proposed the extension and it is implemented and tested:
+**Question:** is there a published result covering this modulus class, or are we
+correctly recording it as a conjecture in `SECURITY-NOTES.md`? If a result exists, cite
+it and we will stop hedging; if not, we will keep the hedge.
 
-```
-A_ext = [A ; A']          T = A' s          ring = { (pk_j, T) } for all j
-```
+## Q-I. Where do the 110 ms actually go? (C2's suggestion)
 
-so the existing proof over `A_ext` forces `T = A'·s` from the same witness. `k' = 4` was
-chosen on C2's collision estimate, not on a soundness argument.
+C2 guessed the CRT glue and re-encoding dominate, and that both are recoverable without
+cryptographic change. This project measured that batching has nothing to amortise
+(every stage depends on the proof's own challenges) and that parallelism gives 4.22x on
+8 cores.
 
-**Question:** does adding `k'` rows to the proved matrix change the M-SIS instance that
-the *ring signature* rests on — the `A` relation at `k = 4` becomes `k + k' = 8` — and if
-so, is the tag's collision margin the binding constraint or is the signature's soundness?
-In other words: **was `k' = 4` chosen for the right reason?**
+**Question:** is that profile worth chasing, or is 110 ms simply what a 32 KB lattice
+proof of this shape costs? If the glue is the cost, is there a representation change
+worth making — or does that reopen the coefficient-basis questions in `Q-C`?
 
-C2 also said `k' = 1` is defensible under `A_ext`; C1 recommended 4. The implementation
-defaults to 4. If 1 is sufficient, say so and we will reprice it.
+## Q-J. `k' = 1` or `k' = 4` — a decision, not a question
 
----
+Both of you now say `k' = 1` is sufficient (C2: 85 bits of margin on the collision
+instance; the tag strengthens the signature either way). The implementation defaults
+to 4.
 
-## Q-E. Run it, then tell us what breaks
+**Question:** confirm 1 is acceptable, and we will drop it — 4.6 KB and a fifth of the
+set-matrix work per tagged proof. If there is a reason to keep 4 that the collision
+estimate does not capture, say so.
 
-Releases, including the Android APK:
-**<https://github.com/xhimnijx/Radix/releases>**
+## Smaller items, still open
 
-```powershell
-python -m pip install -e .
-python -m radix_testnet                       # node + wallet UI on localhost
-python -m radix_testnet.cli node --host 0.0.0.0   # reachable from other devices
-```
+- **The errata.** Both confirmed the `e_1` double count and the eq. (24) index by
+  derivation, not by a later revision. If either of you can obtain the 2022-05-20
+  version, a diff would let the record say "erratum" instead of "suspected erratum".
+- **The `q^-4` constant.** C1: the relevant distribution is the *difference*
+  (coefficients in `-2..2`), so `q^-4` is an approximation that must be computed
+  rather than assumed. Worth a worked line in the restatement.
 
-The Rust backend makes a send take about a second instead of two minutes:
+## What changed in the code since the fourth pass
 
-```powershell
-cd proof_rust && cargo build --release --bin prove_request
-python -m radix_testnet.cli --backend rust ...
-```
-
-Reviewers find more when they can run the thing. Two of the four defects in
-`REVIEW-FINDINGS.md` came from someone trying an attack, not from reading.
-
----
-
-## Smaller questions, if you have time
-
-- **The paper's errata.** The `e₁` double count in Fig. 9 line 12 and the sum index in
-  eq. (24) should be checked against the later ePrint revisions (up to 2022-05-20)
-  before the paper is recorded as wrong.
-- **Ring-pool binding.** Rings travel as indices into the node's pool, and the proof
-  does not commit to the pool. The verifier rebuilds the ring from its own copy, which
-  is correct only because prover and verifier share one process. On a real network the
-  pool would have to be committed to by the anchor, or a proof would not bind to the
-  ring it was made for. Is that right, and what is the cheapest fix?
-- **Verification cost.** 110 ms measured against a 100 ms target. Batch verification is
-  the obvious answer and is unmeasured; if you have a preferred construction for these
-  proofs, say which.
-
----
-
-## What we are not asking
-
-Consensus, peer-to-peer networking, economics, or the archived Candidate-A work. There
-is no network and no value; `radix_core/launch.py` is closed by design.
+- **The withdrawn tag path is gone** (`74f68ae`): `spend.build_spend`/`verify_spend` no
+  longer accept `tag_keys`, `Spend.tags` returns `None` and says why, and
+  `setmembership.prove`/`verify` **raise** if `tag_keys` is supplied. The old
+  tagged-spend tests were replaced by guards that the path is gone.
+- The dangerous docstring sentences are corrected: "No rejection sampling" and "the
+  `c^1` part cancels identically".
+- `cli --backend rust` exists and works; the node reports `backend=rust` when selected.
+- Wallet portability: a BIP-39 phrase, a versioned derivation tag, and refusals when the
+  phrase is corrupt or missing beside an existing chain.
+- Parallel verification: `verify_many`, 4.22x on 8 cores.
 
 ## Reproducing
 
 ```powershell
-python -m pytest -q -m "not slow"        # 413 passed, 1 xfailed
+python -m pytest -q -m "not slow"        # 435 passed, 1 xfailed
 cd proof_rust && cargo test              # 69 passed
 python experiments/verify_rust_proof.py  # Rust proof -> Python verifier
-python experiments/mask_calibration.py   # the mask numbers above
-python experiments/slot_constancy_probe.py   # the modulus table
+cd proof_rust && cargo run --release --bin bench_batch   # the 4.22x
 ```
 
-Every number in this brief is reproducible with those commands. If one is not, that is
-a defect in the brief and we would rather hear about it than have it quoted.
+The suite has one known flake: `tests/test_nonce_multiprocess.py` fails roughly once in
+a full run under concurrency and passes 6/6 in isolation. It is Candidate-A legacy and
+unrelated to the lattice work, but it is recorded rather than hidden.
