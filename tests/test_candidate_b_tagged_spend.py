@@ -38,6 +38,30 @@ def _rig():
     return rng, parameters, keys, statement, secret, public, tuple(ring_keys)
 
 
+@pytest.fixture(scope="module")
+def built_spend():
+    """One real spend, shared. Building it costs a full proof -- about 100 seconds here.
+
+    The first version of this file built a spend inside each test, which made two of
+    them 214 of the 320 seconds in the whole fast suite. The suite was slow because of
+    that duplication, not because the protocol tests are expensive.
+    """
+    rng, parameters, _keys, _statement, secret, public, ring_keys = _rig()
+    spend = build_spend(
+        parameters,
+        (secret,),
+        (public,),
+        (ring_keys,),
+        (1000,),
+        (Output(key=public, value=1000),),
+        0,
+        b"\x00" * 32,
+        rng,
+        P_,
+    )
+    return parameters, spend
+
+
 def test_build_spend_does_not_accept_tag_keys():
     """The argument is gone, so a stale caller fails loudly instead of silently."""
     rng, parameters, _keys, _statement, secret, public, ring_keys = _rig()
@@ -57,44 +81,20 @@ def test_build_spend_does_not_accept_tag_keys():
         )
 
 
-def test_verify_spend_does_not_accept_tag_keys():
-    rng, parameters, _keys, _statement, secret, public, ring_keys = _rig()
-    spend = build_spend(
-        parameters,
-        (secret,),
-        (public,),
-        (ring_keys,),
-        (1000,),
-        (Output(key=public, value=1000),),
-        0,
-        b"\x00" * 32,
-        rng,
-        P_,
-    )
+def test_verify_spend_does_not_accept_tag_keys(built_spend):
+    parameters, spend = built_spend
     assert verify_spend(parameters, spend, P_)
     with pytest.raises(TypeError):
         verify_spend(parameters, spend, P_, tag_keys=None)
 
 
-def test_a_spend_never_reports_tags():
+def test_a_spend_never_reports_tags(built_spend):
     """`Spend.tags` used to read `tag_proof`, which the extension does not populate.
 
     A tagged spend built the new way would have reported `None` there, and a ledger
     checking `if spend.tags is None: skip` would have skipped its tag checks.
     """
-    rng, parameters, _keys, _statement, secret, public, ring_keys = _rig()
-    spend = build_spend(
-        parameters,
-        (secret,),
-        (public,),
-        (ring_keys,),
-        (1000,),
-        (Output(key=public, value=1000),),
-        0,
-        b"\x00" * 32,
-        rng,
-        P_,
-    )
+    _parameters, spend = built_spend
     assert spend.tags is None
 
 

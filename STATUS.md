@@ -182,9 +182,7 @@ the paper, and two nodes can now agree.
    is the highest-value change available and it does not touch soundness.
 2. **Fork reconciliation.** The chain has no undo journal, so a fork is refused rather
    than resolved. Until that exists, the p2p layer is a linear sync, not a network.
-3. **Test architecture.** Ten proof tests account for 285 of the 326 seconds in the fast
-   suite. Run them against the Rust backend, keep the cross-language oracle. Same
-   assertions, five times faster, nothing discarded.
+3. **Test architecture.** ~~Ten proof tests account for 285 of the 326 seconds.~~ **That was wrong**, and measuring it properly was the useful part: two tests in one file were 214 of the 320 seconds, because each built its own spend. Sharing one spend cut the fast suite to 227 seconds with no test removed. The remaining work is the default backend, not the tests.
 
 **Not re-run, and why.** The Rust suite last passed at 70 and no Rust file changed since.
 CI was re-checked because it runs on push.
