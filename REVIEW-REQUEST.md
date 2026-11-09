@@ -42,6 +42,12 @@ only because prover and verifier are the same process.
 Both of you propose the same cheap fix: absorb a ring digest as a transcript label
 beside the message, with the anchor committing to the pool root. Zero proof bytes.
 
+**Status: implemented as described below, pending your confirmation of the placement.**
+
+The digest is absorbed immediately after the message, before `w`, and squeezes 32
+bytes of SHAKE256 over the encoded keys in order. Zero proof bytes; no new check. Both
+implementations changed together and the cross-language fixtures were regenerated.
+
 **Questions:**
 
 1. **Where exactly** should the digest be absorbed — inside `_head`, before `message`,

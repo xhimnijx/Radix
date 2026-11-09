@@ -381,8 +381,38 @@ def _final_x(
     return tuple(blocks)
 
 
-def _head(message: bytes, w: tuple[Poly, ...], commitment: tuple[Poly, ...], p: SmileParameters) -> transcript.Transcript:
+def ring_digest(statement: "Statement", p: SmileParameters) -> bytes:
+    """A digest of the ring, in order, so a proof binds the ring it was made for.
+
+    Without this, the proof binds the message, ``w``, the commitments, ``h``, ``omega``
+    and ``c`` -- but not the keys. The verifier rebuilds the ring from its own pool, so
+    the scheme is sound only as long as prover and verifier are the same process. On a
+    network they are not: the node chooses a ring by pool index, and a proof made
+    against a different pool would still verify.
+
+    Absorbed as a transcript label, so it costs **zero proof bytes** and changes no
+    check: a prover working from one ring derives a different ``c`` from a verifier
+    holding another, and the proof simply fails.
+
+    Both implementations must hash the keys identically, or cross-language verification
+    breaks -- the same discipline the discrete Gaussian will need.
+    """
+    tx = transcript.Transcript(b"radix/ring/v1")
+    for key in statement.keys:
+        tx.absorb(b"pk", b"".join(ring.encode(poly, p) for poly in key))
+    return tx.challenge(b"ring", 32)
+
+
+def _head(
+    message: bytes,
+    w: tuple[Poly, ...],
+    commitment: tuple[Poly, ...],
+    p: SmileParameters,
+    digest: bytes,
+) -> transcript.Transcript:
     tx = transcript.Transcript(PROOF_TAG).absorb(b"message", message)
+    # The ring first: it is the statement, and a proof must not outlive it.
+    tx.absorb(b"ring", digest)
     tx.absorb(b"w", b"".join(ring.encode(poly, p) for poly in w))
     tx.absorb(b"t", b"".join(ring.encode(poly, p) for poly in commitment))
     return tx
@@ -478,7 +508,7 @@ def _prove_once(
             ring.add(ring.dot(keys.rows[position - 1], randomness, sm), values[position], sm)
         )
 
-    tx = _head(message, w, tuple(commitment), sm)
+    tx = _head(message, w, tuple(commitment), sm, ring_digest(statement, sm))
     c_prime = _draw_ternary(tx, b"c-prime", sm)
     if not _is_unit(c_prime, sm):
         return None
@@ -679,7 +709,9 @@ def verify(
             )
         )
         head_length = sm.challenge_dim + depth + rows + 1
-        tx = _head(message, w, proof.commitment[:head_length], sm)
+        tx = _head(
+        message, w, proof.commitment[:head_length], sm, ring_digest(statement, sm)
+    )
         if _draw_ternary(tx, b"c-prime", sm) != proof.challenge_prime:
             return False
         tx.absorb(b"z-prime", b"".join(ring.encode(poly, sm) for poly in proof.response_prime))

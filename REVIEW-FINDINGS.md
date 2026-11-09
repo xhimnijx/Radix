@@ -729,3 +729,60 @@ but that does not remove the set-matrix cost, and the 110 ms is better attacked 
 measuring where it goes. Both align with what this project measured independently:
 algebraic batching has nothing to amortise, and parallelism gives 4.22x on 8 cores.
 C2's suggestion to profile the CRT glue and re-encoding is the next useful measurement.
+
+
+# Ring-pool binding, 2026-11-09: implemented
+
+Both reviewers called this the most serious item outside Q-A, and both gave the same
+fix. It is now in the code.
+
+## The defect
+
+The proof bound the message, `w`, the commitments, `h`, `omega` and `c` — but **not the
+keys**. The verifier rebuilds the ring from its own pool, so the scheme was sound only
+while prover and verifier were the same process. On a network they are not: the node
+chooses a ring by pool index, and a proof made against a different pool would have
+verified against the node's.
+
+## The fix
+
+A digest of the ordered ring keys, absorbed into the transcript **before** `w`:
+
+```
+Transcript(PROOF_TAG)
+    .absorb(b"message", message)
+    .absorb(b"ring",    ring_digest(statement))   <- new
+    .absorb(b"w",       ...)
+    .absorb(b"t",       ...)
+```
+
+`ring_digest` hashes `SHAKE256(b"radix/ring/v1", pk_0 || pk_1 || ... )` over the encoded
+keys in order and squeezes 32 bytes.
+
+Properties worth stating:
+
+- **Zero proof bytes.** The proof is still 32,512 B. The digest moves the challenge; it
+  does not add a field.
+- **No new check to get wrong.** A prover working from one ring derives a different `c`
+  from a verifier holding another, so the proof simply fails. There is no digest
+  comparison that could be skipped or miswritten.
+- **Implemented in both languages**, in `setmembership.ring_digest` and
+  `statement::ring_digest`, with the same framing. The cross-language fixtures were
+  regenerated and acceptance holds in both directions.
+
+## Tests
+
+- `test_a_proof_does_not_transfer_to_a_different_ring` — a valid proof, verified against
+  a ring with one public key swapped, is rejected.
+- `test_the_ring_digest_changes_with_the_keys` — a digest that ignored the keys would be
+  decoration.
+- `the_head_binds_the_ring_digest` in Rust — different digests give different challenges.
+
+## Still open on this item
+
+Q-F asks the reviewers to confirm the placement and whether the key order needs
+canonicalising. The implementation absorbs the digest immediately after the message,
+which is the placement both suggested in prose. If a reviewer wants it elsewhere, it is
+a one-line move on each side — but the ordering requirement is now recorded: **any
+change to this must be made in both implementations at once**, or the cross-language
+tests start comparing different protocols.

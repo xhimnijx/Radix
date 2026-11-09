@@ -110,3 +110,39 @@ def test_index_vectors_are_one_hot():
             flat = flat * 32 + vector.index(1)
         assert flat == index
 
+
+
+def test_a_proof_does_not_transfer_to_a_different_ring(built):
+    """The ring is bound by a transcript digest, so a swap breaks the challenge.
+
+    Before this, a proof bound the message, w, the commitments, h, omega and c -- but
+    not the keys. The verifier rebuilds the ring from its own pool, so the scheme was
+    sound only while prover and verifier were the same process. On a network they are
+    not: the node picks a ring by pool index, and a proof made against a different pool
+    would still have verified.
+    """
+    keys, statement, secret, index, proof = built
+    assert S.verify(keys, statement, proof, b"transfer-1", P_)
+
+    # Same shape and same matrix, one different public key: a different ring.
+    swapped = list(statement.keys)
+    position = (index + 1) % len(swapped)
+    width = len(swapped[position])
+    swapped[position] = tuple(ring.sample_uniform(random.Random(99)) for _ in range(width))
+    other = S.Statement(matrix=statement.matrix, keys=tuple(swapped), depth=statement.depth)
+
+    assert S.verify(keys, other, proof, b"transfer-1", P_) is False
+
+
+def test_the_ring_digest_changes_with_the_keys(built):
+    """A digest that ignored the keys would be decoration."""
+    _keys, statement, _secret, _index, _proof = built
+    first = S.ring_digest(statement, P_)
+
+    swapped = list(statement.keys)
+    width = len(swapped[0])
+    swapped[0] = tuple(ring.sample_uniform(random.Random(101)) for _ in range(width))
+    other = S.Statement(matrix=statement.matrix, keys=tuple(swapped), depth=statement.depth)
+
+    assert S.ring_digest(other, P_) != first
+    assert len(first) == 32

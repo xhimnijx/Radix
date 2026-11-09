@@ -11,8 +11,17 @@ use crate::codec::ProofWire;
 use crate::recursion::{from_constants, matrix_vector, tensor, Quartic};
 use crate::sample::dot;
 use crate::statement::{
-    draw, draw_ternary, head, masking_width, mask_std, Keys, ProofError, Statement, CHALLENGE_DIM,
+    CHALLENGE_DIM,
+    Keys,
     MATRIX_COLS,
+    ProofError,
+    Statement,
+    draw,
+    draw_ternary,
+    head,
+    mask_std,
+    masking_width,
+    ring_digest,
 };
 use crate::{add, glue_crt, l2_squared, mul_crt, scalar, slots, sub, zero, Poly, D, Q, SLOTS};
 
@@ -215,7 +224,7 @@ fn prove_once(
         commitment.push(add(&base, &values[position]));
     }
 
-    let mut transcript = head(message, &w, &commitment);
+    let mut transcript = head(message, &w, &commitment, &ring_digest(statement));
     let challenge_prime = draw_ternary(&mut transcript, b"c-prime");
     let lifted_prime = crate::lift_challenge(&challenge_prime);
     if !crate::verifier::is_unit(&lifted_prime) {

@@ -10,8 +10,16 @@ use crate::proof::{e1, final_x, gamma_elements, paper_to_slot, set_matrix};
 use crate::sample::dot;
 use crate::recursion::{reduce_matrix, Quartic};
 use crate::statement::{
-    draw, draw_ternary, head, masking_width, Keys, ProofError, Statement, CHALLENGE_DIM,
+    CHALLENGE_DIM,
+    Keys,
     MATRIX_COLS,
+    ProofError,
+    Statement,
+    draw,
+    draw_ternary,
+    head,
+    masking_width,
+    ring_digest,
 };
 use crate::{add, l2_squared, mul_crt, slots, sub, zero, Poly, SLOTS};
 
@@ -112,7 +120,7 @@ fn verify_inner(
 
     trace.push("head");
     let head_length = CHALLENGE_DIM + depth + rows + 1;
-    let mut transcript = head(message, &w, &proof.commitment[..head_length]);
+    let mut transcript = head(message, &w, &proof.commitment[..head_length], &ring_digest(statement));
     trace.push("c-prime");
     if draw_ternary(&mut transcript, b"c-prime") != proof.challenge_prime {
         return Ok(false);

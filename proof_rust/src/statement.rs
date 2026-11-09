@@ -87,9 +87,22 @@ pub fn draw_ternary(transcript: &mut Transcript, label: &[u8]) -> [i64; D] {
 }
 
 /// The transcript head: the domain, the message, `w` and the commitments.
-pub fn head(message: &[u8], w: &[Poly], commitment: &[Poly]) -> Transcript {
+/// A digest of the ring, in order, so a proof binds the ring it was made for.
+///
+/// Must match `setmembership.ring_digest` byte for byte, or cross-language
+/// verification breaks. Zero proof bytes: it only moves the challenge.
+pub fn ring_digest(statement: &Statement) -> Vec<u8> {
+    let mut transcript = Transcript::new(b"radix/ring/v1");
+    for key in &statement.keys {
+        transcript.absorb(b"pk", &encode_vector(key));
+    }
+    transcript.challenge(b"ring", 32)
+}
+
+pub fn head(message: &[u8], w: &[Poly], commitment: &[Poly], digest: &[u8]) -> Transcript {
     let mut transcript = Transcript::new(PROOF_TAG);
     transcript.absorb(b"message", message);
+    transcript.absorb(b"ring", digest);
     transcript.absorb(b"w", &encode_vector(w));
     transcript.absorb(b"t", &encode_vector(commitment));
     transcript
@@ -224,11 +237,24 @@ mod tests {
     fn the_head_binds_the_message_first() {
         let w = vec![[1u64; D]; 2];
         let commitment = vec![[2u64; D]; 3];
-        let mut first = head(b"one", &w, &commitment);
-        let mut second = head(b"two", &w, &commitment);
+        let mut first = head(b"one", &w, &commitment, b"ring");
+        let mut second = head(b"two", &w, &commitment, b"ring");
         assert_ne!(
             draw_ternary(&mut first, b"c"),
             draw_ternary(&mut second, b"c")
+        );
+    }
+
+    #[test]
+    fn the_head_binds_the_ring_digest() {
+        let w = vec![[1u64; D]; 2];
+        let commitment = vec![[2u64; D]; 3];
+        let mut here = head(b"m", &w, &commitment, b"ring-one");
+        let mut there = head(b"m", &w, &commitment, b"ring-two");
+        assert_ne!(
+            draw_ternary(&mut here, b"c"),
+            draw_ternary(&mut there, b"c"),
+            "a proof made against one ring must not transfer to another"
         );
     }
 
