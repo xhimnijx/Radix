@@ -427,8 +427,13 @@ right for the wrong reason. Only the order test decides.
 rather than research, and C1 gives the thresholds: at root-Hermite `1.0042`,
 `s' <~ 2^14.3` and `beta' <~ 2^20.2` for the `A` relation, `s <~ 2^15.2` and
 `beta <~ 2^21.7` for the `B_0` relation. The paper's own `s ~ 2^10.5` sits well
-inside. C1 suggests `s, s' ~ 2^13-14`, `beta ~ 2^20-21`, `beta' ~ 2^19-20`, with
-rejection rate `M ~ 1.2-1.5`.
+inside. ~~C1 suggests `s, s' ~ 2^13-14`, `beta ~ 2^20-21`, `beta' ~ 2^19-20`, with
+rejection rate `M ~ 1.2-1.5`.~~ **Superseded 2026-11-09:** C1 recalculated and
+withdrew this. At `s, s' = 2^13-14` the per-step rejection rate is
+`M ~ 1.005-1.02`, not 1.2-1.5, because that width is 4-8x above `T`; the paper's
+`M = sqrt(3/2)` sits at `s ~ 1.57 T`, about `2^10.5-11`. Going to `2^13-14` buys
+near-zero rejection but grows `beta` and `beta'` and thins the M-SIS margin to
+0.4-2.2 bits, which is not defensible. Corrected guidance at the end of this file.
 
 C2 adds the trap that makes it unanswerable by choosing a number: deriving `s` from
 the max norm (`s ~ 11 d mu = 7040`) instead of the standard deviation gives
@@ -527,3 +532,47 @@ The corrected work estimate for adopting the modulus:
 6. Restate Theorem B.1 with the three edits above.
 
 Nothing in items 1-4 is a protocol change.
+
+## C1 on the mask, measured here
+
+C1's third-round answer, and a measurement that reproduces it.
+
+**The irreducible ring does not change `M`.** Split or irreducible is a change of
+CRT basis, not of ring multiplication: both compute the same negacyclic
+convolution in `Z_q[X]/(X^128 + 1)`, and SMILE's rejection sampling is defined on
+that coefficient vector (Lemma A.5's inner product is over coefficients). So
+`T = ||c r||_2` and `M = exp(T^2 / 2 s^2)` are unchanged for the same `c`, `r`.
+
+**The trap this creates for the port.** The quartic-CRT multiplier must glue back
+to the coefficient basis *before* any norm or rejection check. A norm taken in the
+quartic-slot basis is a different quantity -- the CRT is not an isometry -- and the
+paper's `M` would no longer apply. This is an implementation requirement now, not
+an observation.
+
+`experiments/mask_calibration.py` measures it on the code's own distributions
+(ternary 1/2, 1/4, 1/4 for `c`; uniform on `[-5,5]` for `r`):
+
+| quantity | model | measured |
+|---|---|---|
+| coefficient variance of `c r` | `128 * E[c^2] * E[r^2] = 640`, `sigma = 25.3` | **627, sigma = 25.0** |
+| `T` for `z` (W = 33), 99th percentile | ~1.7k | **1701** (`2^10.7`) |
+| `T'` for `z'` (ell = 13), 99th percentile | ~1.1k | **1081** (`2^10.1`) |
+| `s` giving `M = sqrt(3/2)` | `1.57 T` | **2671 (`2^11.4`), 1698 (`2^10.7`)** |
+
+The rejection curve matches C1's table to three digits: `M = 1.41` at `2^11`,
+`1.09` at `2^12`, `1.02` at `2^13`, `1.005` at `2^14`.
+
+**Calibrated parameters, from the measured `T`:**
+
+| mask | `T` | `s = 1.57 T` | `beta` | target | reachable at `delta = 1.0042` | margin |
+|---|---|---|---|---|---|---|
+| `z` (W = 33) | 1700 | 2670 (`2^11.4`) | 245,386 (`2^17.9`) | `2^27.9` | `2^31.7` | **3.8 bits** |
+| `z'` (ell = 13) | 1072 | 1684 (`2^10.7`) | 97,120 (`2^16.6`) | `2^17.6` | `2^21.2` | **3.6 bits** |
+
+So the paper's own regime -- `s ~ 1.57 T`, `M = sqrt(3/2)`, overall `2M^2 ~ 3` --
+is the right choice, and it leaves about 3.7 bits of root-Hermite margin. The
+reachable norms are C1's heuristic values at `delta = 1.0042`; **a lattice
+estimator must confirm them before any security claim.**
+
+What this does *not* settle: whether 3.7 bits of RHF margin is 128 bits. That is
+the estimator's job, and it is the last open question in the parameter set.
