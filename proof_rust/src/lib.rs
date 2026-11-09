@@ -10,6 +10,8 @@
 //! residues fits in `u64` and the CRT accumulation uses `u128`.
 
 pub mod sample;
+pub mod tensor;
+pub mod quadratic;
 pub mod bdlop;
 pub mod codec;
 pub mod sha3;
@@ -110,6 +112,14 @@ pub fn sub(left: &Poly, right: &Poly) -> Poly {
 }
 
 /// The O(d^2) reference implementation: correct by construction.
+pub fn scalar(value: u64, poly: &Poly) -> Poly {
+    let mut out = [0u64; D];
+    for index in 0..D {
+        out[index] = (value as u128 * poly[index] as u128 % Q as u128) as u64;
+    }
+    out
+}
+
 pub fn mul_naive(left: &Poly, right: &Poly) -> Poly {
     // Signed accumulation: `X^D = -1`, so wrapped terms are subtracted.
     let mut accumulator = [0i128; D];
