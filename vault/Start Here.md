@@ -78,6 +78,7 @@ If you have A-Level Maths and Further Maths, read in this order:
 - [[How the Port Was Verified]]
 - [[Performance Measurements]]
 - [[Packaging and Distribution]]
+- [[The Android App]]
 
 ### For lecturers
 - [[Evidence Pack - Overview]]

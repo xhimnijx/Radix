@@ -74,3 +74,11 @@ Everything else supports these three.
 failed once in a full run and passed immediately when re-run in isolation. It is a
 multiprocess timing test from the archived Candidate-A track and is unrelated to the
 lattice work. Recorded here rather than hidden.
+
+## Android app
+
+No unit tests. `android/` is ~400 lines of UI glue around HTTP calls; the logic worth
+testing is in the node, which has 21 HTTP tests. The APK was verified with `aapt`
+(manifest, permissions, launchable activity) and `apksigner` (signature) rather than by
+trusting the build, and the published release asset matches the local build byte count.
+See [[The Android App]].
