@@ -124,12 +124,36 @@ This is the part that is easy to get wrong, and it is **not** a simple sum.
 > carry rows, which is a parameter change rather than an algebraic incompatibility.
 > The exact rejection algorithm and constants still need the paper in hand.
 
-> [!warning] What this paper does not contain
-> **The addition proof lives in [25], and it is not in this repository.**
-> The balance mechanism cannot be implemented from `2021-564.pdf` alone: the carry
-> vector's shortness argument, the exact constraint system, and the rejection
-> behaviour are all in [25]. This is the first thing to obtain. Everything else below can
-> proceed without it; item 3 cannot.
+> [!note] Resolved: the carry proof is the *relaxed* range proof, and it is cheap
+> **Lyubashevsky, Nguyen, Seiler. "Practical Lattice-Based Zero-Knowledge Proofs for
+> Integer Relations." CCS 2020, pp. 1051-1070. ePrint 2020/1183** — the same three authors
+> as SMILE, now in `studies/2020-1183.pdf`.
+>
+> The carry never needs a bit-decomposition. [25] p. 5 rests on one observation:
+>
+> > for `f in Z^k` and masking `y in Z^n`, over a random `R in {0,1}^{n x k}`, the
+> > probability that `max(Rf + y mod q)` is at least half of `max(f)` is at least
+> > `1 - 2^-n`.
+>
+> So **if `Rf + y` is small then `f` was small.** The prover sends `z = Rf + y`, applies
+> rejection sampling to hide `f`, and proves with a linear argument that `z = Rf + y`.
+> The verifier checks one norm bound. That is the "negligible additional cost" SMILE
+> means, and it is one masked opening rather than `k` binary proofs.
+>
+> Also worth recording from [25] p. 4: for **addition** the carry *is* binary, and the
+> relation is `a + b + f·(X - 2) = c` with `M` the `(k+1) x k` matrix of `-2` on the
+> diagonal and `1` below it. The carry only stops being binary when summing **many**
+> integers, which is exactly the multi-input case SMILE has.
+
+**Measured here** (`radix_core/candidate_b/lattice/relaxed.py`, 5 tests): with 64 columns,
+128 rows and a mask width of 64, an honest carry peaks at about 417 against a verifier
+bound of 576, a single coefficient inflated by 40x is caught **50 times out of 50**, and a
+coefficient inflated to `q/3` is caught 50 out of 50. An honest carry is rejected 0 times
+out of 50.
+
+The first version of that module used a *uniform* mask, which makes `z` uniform and
+rejects every honest proof — 200 out of 200. The mask has to be bounded for the check to
+mean anything, which is the same reason lattice signatures reject rather than sample.
 
 ## 6. Size accounting (p. 54-56)
 

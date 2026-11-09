@@ -1,34 +1,33 @@
-feat: k' = 1, as C2 priced it, and a size formula that had gone stale
+feat: the carry proof, resolved from [25] and measured at our parameters
 
-C2 gave three reasons and they hold. The tag's own collision instance is 2^213 at k'=1,
-85 bits over target; k'=4 puts the target below det^(1/n), buying margin that is already
-there; and fewer rows means fewer module equations in s on top of pk = A s, which HELPS
-hiding rather than hurting it. So the original recommendation of 4 was paying for
-something the estimate says we already have.
+The user added both papers to studies/. [25] is 2020-1183.
 
-Measured after the change:
+THE ANSWER IS BETTER THAN THE PLAN. SMILE's vague reference to "an approximate shortness
+proof" is the relaxed range proof on p. 5 of [25], and it needs no bit-decomposition of
+the carry at all. One observation carries it:
 
-  tagged proof  24,832 -> 22,528 B
-  tag            2,048 ->    512 B
-  total         26,880 -> 23,040 B
+  for f in Z^k and masking y in Z^n, over random R in {0,1}^{n x k}, the probability
+  that max(R f + y mod q) >= half of max(f) is at least 1 - 2^-n.
 
-The width moved from 25+8 to 25+5, so the discrete Gaussian had no table for width 30 and
-refused to sample -- which is the behaviour that was designed in, and it worked. A table
-was generated and registered in both languages.
+So if R f + y is small, f was small. The prover sends z = R f + y, rejection-samples to
+hide f, and proves z = R f + y with a linear argument. The verifier checks one norm
+bound. That is one masked opening, not k binary proofs -- the "negligible additional
+cost" SMILE refers to.
 
-THE CHANGE EXPOSED A STALE FORMULA. tagged_size_bytes still returned 38,656 for a proof
-that had become 23,040: it counted four bytes per response coefficient after they were
-compressed to two, and it ignored the row count the caller actually uses. It now matches
-the measured sizes exactly at both k' values. A test that asserted a hardcoded range had
-been hiding this -- it was edited once for the compression and would have been edited
-again here, so it now asserts the relationship instead.
+Also from p. 4: for ADDITION the carry IS binary, and the relation is a + b + f(X-2) = c
+with M the (k+1)xk matrix of -2 on the diagonal and 1 below. The carry only stops being
+binary when summing MANY integers, which is exactly the multi-input case.
 
-One more self-inflicted bug: my first replacement inserted the new function ABOVE the old
-one, and Python takes the last definition, so the stale code kept winning. The duplicate
-is gone.
+radix_core/candidate_b/lattice/relaxed.py implements the observation, derives R from a
+seed rather than transmitting it, and measures it. Five tests: with 64 columns, 128 rows
+and a mask of width 64, an honest carry peaks at about 417 against a bound of 576, a
+coefficient inflated 40x is caught 50 times out of 50, and an honest carry is rejected 0
+times out of 50.
 
-Also recorded from the reviewers: reference [25] is identified (Lyubashevsky, Nguyen,
-Seiler, CCS 2020, ePrint 2020/1183), Theorem B.1' is signed with one new lemma, and C1
-showed that my proposed public-shift repair for one-time addressing is a deanonymisation
--- anyone can compute pk_out - H*P_view and recover the spend key. That paragraph is now
-in the note as a warning rather than as a proposal.
+The first version used a UNIFORM mask, which makes z uniform and rejects every honest
+proof -- 200 of 200 flagged. The mask must be bounded for the check to mean anything,
+which is the same reason lattice signatures reject rather than sample. That mistake is
+recorded in the module docstring.
+
+docs/CONFIDENTIAL-TRANSACTIONS.md no longer warns that the carry proof cannot be built; it
+cites the resolved technique, the addition relation, and the measurements.

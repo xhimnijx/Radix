@@ -301,7 +301,9 @@ the critical path. `docs/CONFIDENTIAL-TRANSACTIONS.md` is therefore not a later 
 
 1. **Digit membership** -- prove each committed base-4 digit lies in {0,1,2,3} using the
    alpha-slot machinery. Needs no external document and is half of hidden amounts.
-2. **Reference [25]** -- the carry proof for balance. Blocks the other half. A question
-   for C1 and C2, not a coding task.
+2. ~~**Reference [25]**~~ -- **obtained and resolved.** It is the *relaxed* range proof
+   (CCS 2020, p. 5): if `Rf + y` is small then `f` was small, so the carry needs one
+   masked opening and a norm check, not a bit-decomposition. Measured at our parameters:
+   honest carry rejected 0/50, inflated caught 50/50.
 3. **One-time addressing** -- now a launch dependency, not a later upgrade, because
    rewards cannot accumulate to a reused key.
