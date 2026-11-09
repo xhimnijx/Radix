@@ -41,31 +41,54 @@ ring, or no range proof at all.
 
 ## The options that survive the post-quantum requirement
 
-### Option A — MatRiCT / MatRiCT+ (the closest existing work)
+### Option A — SMILE's own confidential-transaction construction
 
-Esgin, Zhao, Steinfeld, Liu, and later Kuchta et al., built **MatRiCT** (2019) and
-**MatRiCT+** (2021): lattice-based RingCT, which is Monero's protocol rebuilt over
-`R_q`. They prove exactly the four properties above, with ring sizes in the same range
-as ours (hundreds to a thousand), and they are the nearest thing to a published
-blueprint for what Radix is building.
+The paper this project implements **already contains a confidential-transaction
+protocol**, and section 4.5 gives its sizes. Figures below are from
+`studies/2021-564.pdf` (ePrint 2021/564), pages 1, 48, 55 and 56.
 
-Why it is the right first place to look:
+| What | Size |
+|---|---|
+| Ring signature alone, ring size `2^5` | 16 KB |
+| Ring signature alone, ring size `2^10` | **17.27 KB** |
+| Ring signature alone, ring size `2^25` | 21.53 KB |
+| **Full CT proof, 2 inputs / 2 outputs, ring size 1024** | **26.49 KB** |
+| Full CT proof, 100 inputs, ring size 1024 | 344.26 KB |
+| A single output coin | 3.78 KB |
 
-- same algebraic setting, so the commitment and the ring signature can share a modulus
-- the range proof is built from the *same* commitment machinery rather than a second
-  proof system
-- the papers discuss the decoy-selection and linking problems a real ledger has
+**This reverses the estimate I wrote in the first draft of this note.** I guessed that a
+range proof would add 15–20× and blow the size budget. The paper's own number for a
+*complete* confidential transaction — hidden amounts, hidden sender, ring size 1024 — is
+**26.49 KB**, which is *smaller than our current 31.75 KB untagged proof for a single
+input.*
 
-Why it is not automatically the answer:
+The consequence is the opposite of the one I expected:
 
-- **I have not verified its numbers in this session.** Any figure for proof size or
-  verification cost in this note is mine and an estimate; quote the paper.
-- Its construction makes different choices from SMILE, and the `alpha`-slot machinery in
-  [[The Set Membership Proof]] does not map onto it directly.
-- Ring signatures of this shape are **large**. Ours is already 32 KB for one input. A
-  RingCT transaction with a range proof on top is plausibly 40-60 KB per input, and that
-  number decides whether the design is usable at all (see the chain-growth arithmetic in
-  [[Status and Honest Limitations]]).
+- **Amounts are affordable.** At 26.49 KB per transaction, ten transactions per
+  120-second block is 69 GB/year, and one per block is 7 GB/year — inside the 100–300 GB
+  budget set in `docs/CONSENSUS.md`.
+- **Our implementation is the problem, not the design.** We are at 31.75 KB for one
+  input with visible amounts, against the paper's 26.49 KB for two inputs and two
+  outputs with hidden amounts. Roughly a 2.5× gap, and it is *compression*, not
+  cryptography.
+
+### Where the gap comes from
+
+The paper is explicit about three optimisations this implementation does not make
+(pages 55):
+
+1. **Compressed public keys** — the Dilithium technique of transmitting `t0` rounded
+   modulo `2^D` rather than in full.
+2. **Bai–Galbraith compression** — the MLWE error is not opened explicitly; a rounded
+   `w'` is sent and the remainder masks the error, with a second rejection step.
+3. **Entropy coding of `z`** — the paper computes its bandwidth by the entropy of the
+   discrete Gaussian rather than by `W·d·log q`. This is where most of the saving is:
+   a Gaussian of standard deviation `sigma` costs about `log2(sigma sqrt(2 pi e))` bits
+   per coefficient, not `log2(q)`.
+
+Point 3 alone explains most of the difference, and it is a *representation* change that
+does not touch the proof's soundness — which makes it the highest-value optimisation
+available, and a natural next work item.
 
 ### Option B — LaBRADOR and lattice proof systems
 
@@ -115,23 +138,26 @@ that is fatal unless the notes are cheap.
 
 ## Recommendation
 
-**Do not implement anything yet.** The order should be:
+The question is no longer whether amounts fit — the paper says they do, at 26.49 KB for
+a 2-in/2-out transaction. The questions are:
 
-1. **Read MatRiCT+ properly** and extract its range-proof construction, proof sizes and
-   verification cost, and check whether the `A`-matrix structure can be shared with
-   SMILE's. If it can, most of this note collapses into "adapt MatRiCT+".
-2. **Decide the size budget first.** A transaction is 39 KB today. If the target is a
-   chain someone will download, the *total* per transaction cannot exceed roughly 60 KB,
-   which leaves ~20 KB for the range proof and everything else. That constraint should
-   drive the choice, not the other way round.
-3. **Only then** choose between A and D, and write the statement shapes down before any
-   code.
+1. **Close the compression gap first.** 31.75 KB → the paper's ~17 KB ring signature is
+   a representation problem (entropy-coded `z`, compressed keys, Bai–Galbraith), not a
+   cryptographic one. Until that is done, we are not comparing like with like, and every
+   amount-related estimate inherits the overhead.
+2. **Then implement the CT construction from section 4.5**, which the paper already
+   specifies for these parameters.
+3. **Then re-measure.** If a real 2-in/2-out proof lands near 26.49 KB, amounts cost
+   less than the current tagged transaction and the size argument disappears.
+
+**Still no implementation in this note.** The ordering is the recommendation.
 
 ## Questions for C1 and C2
 
-1. **Is MatRiCT+ the right starting point**, or is there a construction better suited to
-   SMILE's `alpha`-slot structure? In particular, does its range proof need the same
-   `A` as the ring signature, or a second matrix?
+1. **Is the 26.49 KB figure for 2-in/2-out achievable in an implementation** that keeps
+   our `alpha`-slot structure, or does it depend on the specific tensor encoding in the
+   paper's section 4.5? The difference decides whether this is a porting job or a
+   redesign.
 2. **Can the range proof share the commitment matrix `B`** we already use, or does it
    require independent randomness that doubles the commitment width?
 3. **What is the smallest post-quantum range proof for 64-bit values** in a setting where

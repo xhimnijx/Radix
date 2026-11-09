@@ -23,10 +23,17 @@ block size, and chain growth together:
 | 5 tx per block | 720 | 139 MB | **51 GB** |
 | 10 tx per block | 720 | 279 MB | **102 GB** |
 | 10 tx per block, 30 s blocks | 2,880 | 1.1 GB | **407 GB** |
+| **with amounts hidden, 26.49 KB/tx** (SMILE §4.5, 2-in/2-out) | 720 | 19 MB | **7 GB** |
+| **with amounts hidden, 10 tx/block** | 720 | 191 MB | **69 GB** |
 
 A chain people are expected to download has a practical ceiling around 100–300 GB, so
 the design target is **0.05–0.5 transactions per second** until proofs shrink or are
-aggregated. Monero reaches ~20 tx/s because its proofs are ~2.5 KB per input; ours are
+aggregated.
+
+The last two rows matter: the paper's own confidential-transaction proof (2 inputs,
+2 outputs, ring size 1024, amounts hidden) is **26.49 KB**, smaller than our current
+31.75 KB for one input with visible amounts. So hidden amounts do not threaten the size
+budget — our unimplemented compression does. See `vault/Amount Confidentiality.md`. Monero reaches ~20 tx/s because its proofs are ~2.5 KB per input; ours are
 fifteen times larger. This is a property of the proof system, not of the parameters, and
 no block-time choice can fix it.
 
