@@ -112,7 +112,7 @@ not have, or the NIZK route in Option D, which depends on the composition work t
 
 ## Questions for C1 and C2
 
-Included in [REVIEW-REQUEST.md](../../REVIEW-REQUEST.md) as Q-F's neighbours, but
+Included in [REVIEW-REQUEST.md](../REVIEW-REQUEST.md) as Q-F's neighbours, but
 stated here in context:
 
 1. Is there a published lattice stealth-address construction that does not require a
