@@ -43,7 +43,27 @@ jobs:
         run: python -m examples.wallet_note_demo > /dev/null
 
   rust:
-    name: rust (archived Candidate-A harness - build, lint, non-ignored tests)
+    name: rust (the ported prover and verifier - 69 tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: proof_rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: proof_rust
+      - name: Toolchain (from rust-toolchain.toml)
+        run: rustup show
+      - name: Check
+        run: cargo check --all-targets
+      - name: Test
+        run: cargo test
+      - name: Cross-language check - a Python proof must verify in Rust
+        run: cargo test --test python_proof
+
+  rust-archive:
+    name: rust (archived Candidate-A harness)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,6 +81,27 @@ jobs:
         run: cargo check --locked --all-targets
       - name: Test (proof-heavy tests are #[ignore]d by design)
         run: cargo test --locked
+
+  rust-backend-seam:
+    name: the Rust prover behind the testnet seam
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: proof_rust
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pytest
+      - name: Build the prover
+        run: cargo build --release --bin prove_request --manifest-path proof_rust/Cargo.toml
+      - name: Rust proves a tagged spend, Python verifies it
+        run: python -m pytest -q tests/test_testnet_rust_backend.py
 
   launch-gate:
     name: launch gate is closed
