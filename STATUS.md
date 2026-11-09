@@ -105,3 +105,46 @@ teeth, not a banner. There is deliberately no flag that opens it.
 - `SECURITY-NOTES.md` — what the numbers do and do not mean
 - `DEPLOY.md` — running a stagenet node
 - `vault/` — 40 notes, from A-Level maths upward
+
+## Plan revision, 2026-11-09 (after the third work item)
+
+Three items closed since the last status: the discrete Gaussian, the amount
+confidentiality note, and the consensus specification.
+
+**What the numbers said.**
+
+- **The discrete sampler changed nothing about the parameters.** Calibration reproduces
+  `T = 1700`, `s = 2665.5`, `beta = 244,992`, `T' = 1072`, `s' = 1673`, `beta' = 96,512`
+  exactly, because it measures response norms at a fixed width and the sampler changes
+  the shape of the mask, not its standard deviation. The tables add 207 KB of data and
+  remove a portability defect.
+- **Chain growth now binds the design.** At 38,656 bytes per tagged spend, ten
+  transactions per 120-second block is 102 GB per year. That is the constraint that
+  makes block time a latency decision rather than a throughput decision, and it is why
+  the consensus spec refuses to trade block time for capacity.
+- **Amounts are the next size pressure, not the next feature.** A range proof adds bytes
+  to every transaction, and every byte is multiplied by the chain-growth arithmetic
+  above.
+
+**What was deliberately not done.**
+
+- No range-proof implementation. The note says why: Bulletproofs are curve-based and
+  would make the protocol quantum-vulnerable, and the post-quantum alternatives are not
+  yet compared on SIZE, which is the binding constraint.
+- No consensus code. Without peers, propagation latency and orphan rate cannot be
+  measured, so §7 of the spec lists what is blocked rather than inventing parameters.
+
+**What is next, in order.**
+
+1. Read MatRiCT+ and extract its range-proof sizes. This is a reading task, not a coding
+   one, and it decides whether amounts are feasible at all.
+2. The estimator run (with C1 and C2). Everything else is downstream of it.
+3. A peer-to-peer layer, without which §7 of `docs/CONSENSUS.md` stays empty and the
+   difficulty parameters stay untested.
+
+**What was not re-run, and why.** The Python and Rust suites last passed at 439 + 1 xfail
+and 70 with the sampler change applied, and no code has changed since — only
+documentation. Re-running them would produce the same result and is not evidence of
+anything.
+
+CI is green on `main`.
