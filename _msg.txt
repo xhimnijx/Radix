@@ -1,23 +1,24 @@
-feat: checkpointed sync, which completes the network hardening item
+feat: the noise-aware statement wired end to end, so P = A*p + e1 is provable
 
-A node refreshes a snapshot of its own state every CHECKPOINT_INTERVAL blocks, and
-sync_from replays from it instead of from genesis -- but only when the peer's chain hashes
-to the same block at that height.
+C1's finding was that the stealth public key is an MLWE sample, not an exact linear image,
+and that SMILE's exact relation therefore rejects a legitimately produced key. This is the
+wiring that fixes it:
 
-That agreement check is the whole safety argument. A snapshot is a statement about a
-PARTICULAR chain; applying it to a different one would adopt a state that never existed.
-When the hashes disagree, or the restore raises, the code falls back to a full rebuild and
-logs why rather than proceeding on a bad snapshot.
+  matrix   A_noise = [A | I_k]      13 + 4 = 17 columns
+  witness  (p, e1)                  one short vector of length 17
+  public   A*p + e1 = P             the noisy key the stealth derivation produces
 
-The measured win is modest and was measured before this was built: 1.1x at 200 empty
-blocks, break-even around 73 skipped transactions, because restoring costs a fixed 197 ms
-that is mostly regenerating the decoy pool. The tests check correctness and the fallback
-rather than speed, and the module docstring says so.
+A full prove and verify over that statement now completes at ell = 17, accepted against the
+right message and rejected against a different one. The witness is checked short before
+proving, because the proof's bounds apply to the whole vector and an oversized noise term
+would fail for the wrong reason.
 
-replay_from now takes verify_transactions and defaults to True, matching rebuild: a chain
-from a peer is verified whatever route it arrives by.
+What this does NOT establish: soundness of the noise-aware statement. The extraction
+argument is C1's, it is not written, and docs/PAPER.md lists it under the limitations rather
+than implying the wiring makes it proven. What is established is that the statement shape
+works with the existing proof at the required width.
 
-Network hardening is complete: authenticated transport, multi-hop discovery, slow-start
-bootstrap, and checkpoints in sync.
+Two prerequisites made this a single pass where three earlier attempts failed: ell = 17
+being constructible at all, and Parameters carrying its SmileParameters.
 
-5 checkpoint-sync tests, 25 across that and the p2p suite.
+One slow test, 133 s, because it produces a real 17-column proof.

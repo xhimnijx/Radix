@@ -146,3 +146,51 @@ def test_a_statement_at_seventeen_columns_proves_and_verifies():
     assert len(proof.response_prime) == 17
     assert S.verify(keys, statement, proof, b"wide", wide) is True
     assert S.verify(keys, statement, proof, b"other", wide) is False
+
+
+@pytest.mark.slow
+def test_a_noisy_statement_proves_and_verifies_at_seventeen_columns():
+    """C1's wiring: prove over `[A | I_k]` with witness `(p, e1)`.
+
+    The stealth public key is `P = A·p + e1`, not `A·p`, so the proved matrix must be
+    `A_noise = [A | I_k]` and the witness must carry the noise. This is the whole point of
+    the noise-aware statement: without it the exact relation rejects a valid stealth key,
+    which is tested separately above.
+
+    What this does NOT establish is soundness of that statement -- the extraction argument
+    is C1's, and `docs/PAPER.md` lists it under the limitations rather than here.
+    """
+    from radix_core.candidate_b.lattice import ring, setmembership as S
+    from radix_core.candidate_b.lattice.params import SmileParameters
+
+    columns = 13
+    rows = 4
+    wide = SmileParameters(matrix_cols=columns + rows)  # ell + k = 17
+    rng = random.Random(41)
+
+    plain = tuple(
+        tuple(ring.sample_uniform(rng) for _ in range(columns)) for _ in range(rows)
+    )
+    augmented = noisy.augment(plain, rows)
+    assert len(augmented[0]) == 17
+
+    secret = ring.sample_vector(rng, columns, small=True, parameters=SMILE)
+    error = tuple(
+        ring.normalize([rng.randint(-2, 2) for _ in range(SMILE.ring_degree)])
+        for _ in range(rows)
+    )
+    witness = tuple(secret) + error  # (p, e1)
+    public = noisy.noisy_public_key(plain, secret, error)
+    assert noisy.is_short(witness, 5), "the witness must be short for the proof to accept"
+
+    keys = S.setup(rng, 2, wide)
+    ring_keys = [
+        tuple(ring.sample_uniform(rng) for _ in range(rows)) for _ in range(1024)
+    ]
+    ring_keys[40] = public
+    statement = S.Statement(matrix=augmented, keys=tuple(ring_keys), depth=2)
+
+    proof = S.prove(keys, statement, witness, 40, b"noisy", random.Random(42), wide)
+
+    assert S.verify(keys, statement, proof, b"noisy", wide) is True
+    assert S.verify(keys, statement, proof, b"other", wide) is False
