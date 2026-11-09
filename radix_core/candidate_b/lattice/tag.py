@@ -79,9 +79,18 @@ def _p(parameters: SmileParameters | None = None) -> SmileParameters:
 
 
 def invertible(poly: Poly, parameters: SmileParameters | None = None) -> bool:
-    """Whether `poly` is a unit of R_q, checked through the NTT."""
+    """Whether `poly` is a unit of R_q.
+
+    Split quartic: all 128 NTT coordinates nonzero. Irreducible quartic: all 32
+    residues nonzero, since each is an element of a field. See
+    `setmembership._is_unit` for why the two conditions differ.
+    """
     p = _p(parameters)
-    return all(coefficient != 0 for coefficient in ntt.forward(poly, p))
+    if ntt.try_transform(p.modulus, p.ring_degree) is not None:
+        return all(coefficient != 0 for coefficient in ntt.forward(poly, p))
+    from . import subring
+
+    return all(residue != (0, 0, 0, 0) for residue in subring.slots(poly, p))
 
 
 @dataclass(frozen=True)

@@ -124,13 +124,21 @@ def _gamma_elements(gamma: tuple[Poly, ...], p: SmileParameters) -> tuple[tuple[
 def _is_unit(poly: Poly, p: SmileParameters) -> bool:
     """Whether `poly` is invertible in R_q.
 
-    For this modulus every quartic factor splits completely, so R_q is isomorphic
-    to Z_q^128 and a polynomial is a unit exactly when none of its NTT coordinates
-    vanish. The verifier must check this: the line-13 argument divides by c^2, and
-    a non-unit c hides a coordinate where the binaryness constraint is vacuous.
-    Review finding, 2026-11-08.
+    The exact condition depends on how the quartics factor, and the two cases are
+    genuinely different:
+
+    * split quartic -- `R_q ~ Z_q^128` -- so a unit needs **all 128 NTT
+      coordinates** nonzero; a merely nonzero residue is only the weaker
+      "not all four coordinates vanish" and would admit zero divisors;
+    * irreducible quartic -- `R_q ~ (F_{q^4})^32` -- so a **nonzero residue** is a
+      unit of a field, and there is no NTT to consult.
+
+    The verifier must check this: the line-13 argument divides by `c^2`, and a
+    non-unit `c` hides a coordinate where the binaryness constraint is vacuous.
     """
-    return all(coefficient != 0 for coefficient in ntt.forward(poly, p))
+    if ntt.try_transform(p.modulus, p.ring_degree) is not None:
+        return all(coefficient != 0 for coefficient in ntt.forward(poly, p))
+    return all(residue != (0, 0, 0, 0) for residue in subring.slots(poly, p))
 
 
 def _paper_to_slot(position: int, depth: int, rows: int, p: SmileParameters) -> int:

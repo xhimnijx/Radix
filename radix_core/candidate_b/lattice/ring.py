@@ -12,7 +12,7 @@ from __future__ import annotations
 import random
 from typing import Iterable, Sequence
 
-from . import ntt
+from . import ntt, subring
 from .params import SMILE, SmileParameters
 
 Poly = tuple[int, ...]
@@ -80,10 +80,17 @@ def mul_naive(left: Poly, right: Poly, parameters: SmileParameters | None = None
 
 
 def mul(left: Poly, right: Poly, parameters: SmileParameters | None = None) -> Poly:
-    """Negacyclic product: X^d == -1, via the NTT when one exists for (q, d)."""
+    """Negacyclic product: X^d == -1.
+
+    Three paths, all equality-tested against each other: the NTT when a 256th root
+    of unity exists, the quartic CRT when it does not, and the naive convolution as
+    the reference both must match.
+    """
     p = _params(parameters)
-    if ntt.supports(p):
+    if ntt.try_transform(p.modulus, p.ring_degree) is not None:
         return ntt.multiply(left, right, p)
+    if (p.modulus - 1) % 64 == 0:
+        return subring.multiply(left, right, p)
     return mul_naive(left, right, p)
 
 

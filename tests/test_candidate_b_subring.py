@@ -116,8 +116,11 @@ def test_malformed_inputs_are_rejected():
 
 
 def test_transform_and_roots_agree_on_the_same_parameter_set():
-    """The quartic constants are fourth powers of the transform's roots."""
-    table = ntt.transform()
+    """The quartic constants are fourth powers of the transform's roots.
+
+    Only meaningful at the split modulus, which is the one that has a transform.
+    """
+    table = ntt.transform(params.SMILE_SPLIT)
     q = table.modulus
     quartic = subring.roots(q, table.degree)
     for index, value in enumerate(quartic):

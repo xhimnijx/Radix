@@ -1,10 +1,10 @@
-"""Tests for the SMILE parameter manifest, ring arithmetic, and BDLOP commitment."""
+﻿"""Tests for the SMILE parameter manifest, ring arithmetic, and BDLOP commitment."""
 
 import random
 
 import pytest
 
-from radix_core.candidate_b.lattice import bdlop, params, ring
+from radix_core.candidate_b.lattice import bdlop, ntt, params, ring
 
 
 def _rng(seed: int = 7) -> random.Random:
@@ -51,13 +51,29 @@ def test_paper_values_are_pinned():
     assert params.SMILE.secret_bound == 5           # mu
 
 
-def test_prototype_modulus_is_usable_and_flagged_as_not_from_the_paper():
+def test_modulus_is_irreducible_quartic_and_flagged_as_not_from_the_paper():
+    """The adopted criterion: `ord_256(q) = 4`, so X^128+1 has 32 irreducible quartics.
+
+    That is what makes the quartic slots fields -- a nonzero residue is a unit, and
+    `v(v-1) = 0` forces a 32-entry binary vector rather than a 128-coordinate
+    idempotent. See REVIEW-FINDINGS.md. The cost is that no 256th root of unity
+    exists, so `ntt_capacity` is 64 rather than 256.
+    """
     q = params.PROTOTYPE_MODULUS
     assert q.bit_length() == 32
-    assert q % 256 == 1
+    assert q % 64 == 1 and q % 128 != 1
     assert _is_probable_prime(q)
-    assert params.SMILE.ntt_capacity >= 256          # 2d for d = 128
-    assert params.MODULUS_FROM_PAPER is False        # honest flag
+    assert params.SMILE.ntt_capacity == 64            # 64 | q-1, 128 does not
+    assert ntt.try_transform(q, params.RING_DEGREE) is None
+    assert params.MODULUS_FROM_PAPER is False         # honest flag
+
+
+def test_the_split_reference_modulus_still_admits_the_ntt():
+    """Kept because the quartic-CRT path is tested against the NTT path."""
+    split = params.SMILE_SPLIT
+    assert split.modulus % 256 == 1
+    assert split.ntt_capacity >= 256
+    assert ntt.try_transform(split.modulus, split.ring_degree) is not None
 
 
 def test_paper_size_table_is_transcribed():
@@ -218,3 +234,4 @@ def test_tensor_depth_requires_a_power_of_the_subring_dimension():
     for bad in (0, -1, 33, 1000):
         with pytest.raises(ValueError):
             params.tensor_depth(bad)
+

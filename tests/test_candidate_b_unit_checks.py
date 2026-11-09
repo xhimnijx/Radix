@@ -29,13 +29,27 @@ def _statement(seed: int) -> S.Statement:
     return S.Statement(matrix=matrix, keys=keys, depth=DEPTH)
 
 
-def test_a_unit_is_exactly_a_polynomial_with_no_vanishing_ntt_coordinate():
+def test_a_unit_is_recognised_in_the_irreducible_regime():
+    """At the default modulus a nonzero quartic residue is a unit of a field."""
     assert S._is_unit(ring.constant(1, P_), P_)
     assert not S._is_unit(ring.zero(P_), P_)
-    # X - root vanishes at a root of X^128 + 1, so it is not a unit.
-    root = ntt.transform().root
-    x_minus_root = ((-root) % P_.modulus, 1 % P_.modulus) + tuple(0 for _ in range(P_.ring_degree - 2))
-    assert not S._is_unit(x_minus_root, P_)
+    assert ntt.try_transform(P_.modulus, P_.ring_degree) is None
+
+
+def test_a_unit_is_recognised_in_the_split_regime():
+    """At the split modulus a unit needs all 128 NTT coordinates nonzero."""
+    split = params.SMILE_SPLIT
+    assert S._is_unit(ring.constant(1, split), split)
+    assert not S._is_unit(ring.zero(split), split)
+    # X - root vanishes at a root of X^128 + 1, so it is not a unit there.
+    root = ntt.transform(split).root
+    x_minus_root = ((-root) % split.modulus, 1 % split.modulus) + tuple(
+        0 for _ in range(split.ring_degree - 2)
+    )
+    assert not S._is_unit(x_minus_root, split)
+    # The same polynomial *is* a unit in the irreducible regime, because a nonzero
+    # quartic residue is invertible in a field.
+    assert S._is_unit(x_minus_root, P_)
 
 
 def _fake_proof(challenge, challenge_prime) -> S.Proof:

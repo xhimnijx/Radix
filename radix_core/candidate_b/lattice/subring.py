@@ -36,19 +36,37 @@ class SubringError(ValueError):
     """A polynomial, slot, or parameter set does not fit the decomposition."""
 
 
+def _primitive_64th_root(modulus: int) -> int:
+    """An element of multiplicative order exactly 64, or SubringError."""
+    if (modulus - 1) % 64:
+        raise SubringError("q-1 is not divisible by 64: no quartic decomposition exists")
+    for base in range(2, 4096):
+        candidate = pow(base, (modulus - 1) // 64, modulus)
+        if pow(candidate, 32, modulus) == modulus - 1:
+            return candidate
+    raise SubringError("no element of order 64 found")
+
+
 @lru_cache(maxsize=8)
 def roots(modulus: int, degree: int) -> tuple[int, ...]:
-    """The 32 values r_i with r_i^32 = -1: the quartic factors' constant terms."""
-    table = ntt.transform()
-    if degree != table.degree:
-        raise SubringError("ring degree does not match the cached transform")
+    """The 32 values r_i with r_i^32 = -1: the quartic factors' constant terms.
+
+    They are `eta^(2i+1)` for `eta` a primitive 64th root. When a full NTT exists
+    `eta = zeta^4`, which reproduces the historical ordering exactly; when it does
+    not -- an irreducible-quartic modulus -- `eta` is found directly. The condition
+    is `64 | q - 1`, not `256 | q - 1`.
+    """
     if degree % SLOT_DEGREE:
         raise SubringError("ring degree must be a multiple of four")
-    zeta = table.root
+    transform = ntt.try_transform(modulus, degree)
+    if transform is not None:
+        eta = pow(transform.root, 4, modulus)
+    else:
+        eta = _primitive_64th_root(modulus)
+    if pow(eta, 32, modulus) != modulus - 1:
+        raise SubringError("the 64th root is not primitive")
     count = degree // SLOT_DEGREE
-    candidates = tuple(
-        pow(zeta, 2 * SLOT_DEGREE * index + SLOT_DEGREE, modulus) for index in range(count)
-    )
+    candidates = tuple(pow(eta, 2 * index + 1, modulus) for index in range(count))
     if len(set(candidates)) != count:
         raise SubringError("quartic factors are not distinct")
     for value in candidates:
@@ -66,13 +84,16 @@ def slot(poly: tuple[int, ...], index: int, parameters: SmileParameters | None =
     if len(poly) != p.ring_degree:
         raise SubringError("polynomial has the wrong length")
     r = table[index]
+    modulus = p.modulus
     residue = [0, 0, 0, 0]
+    power = 1
     for block in range(len(table)):
-        power = 1
-        for step in range(block):
-            power = power * r % p.modulus
-        for offset in range(SLOT_DEGREE):
-            residue[offset] = (residue[offset] + power * poly[block * SLOT_DEGREE + offset]) % p.modulus
+        base = block * SLOT_DEGREE
+        residue[0] = (residue[0] + power * poly[base]) % modulus
+        residue[1] = (residue[1] + power * poly[base + 1]) % modulus
+        residue[2] = (residue[2] + power * poly[base + 2]) % modulus
+        residue[3] = (residue[3] + power * poly[base + 3]) % modulus
+        power = power * r % modulus
     return tuple(residue)
 
 
@@ -91,10 +112,10 @@ def evaluate_slot(residue: tuple[int, ...], point: int, parameters: SmileParamet
     return value
 
 
-def glue(
+def _glue_ntt(
     residues: tuple[tuple[int, ...], ...], parameters: SmileParameters | None = None
 ) -> tuple[int, ...]:
-    """NTT^-1 of a slot vector: the unique y with those quartic residues."""
+    """The NTT-based inverse, valid only when a 256th root of unity exists."""
     p = SMILE if parameters is None else parameters
     table = roots(p.modulus, p.ring_degree)
     if len(residues) != len(table):
@@ -126,6 +147,20 @@ def from_constants(
     )
 
 
+def multiply(
+    left: tuple[int, ...], right: tuple[int, ...], parameters: SmileParameters | None = None
+) -> tuple[int, ...]:
+    """Product in R_q through the quartic CRT, for moduli with no 256th root.
+
+    Slotwise quartic products, then reconstruct. The products do not wrap because
+    `glue_crt` sums idempotent multiples of quartics.
+    """
+    p = SMILE if parameters is None else parameters
+    if len(left) != p.ring_degree or len(right) != p.ring_degree:
+        raise SubringError("polynomial has the wrong length")
+    return glue_crt(slot_multiply(slots(left, p), slots(right, p), p), p)
+
+
 def g(poly: tuple[int, ...], parameters: SmileParameters | None = None) -> tuple[int, ...]:
     """The sum of the slot residues, which p. 7 states is 32*(y_0..y_3)."""
     p = SMILE if parameters is None else parameters
@@ -135,6 +170,40 @@ def g(poly: tuple[int, ...], parameters: SmileParameters | None = None) -> tuple
             total[offset] = (total[offset] + residue[offset]) % p.modulus
     return tuple(total)
 
+
+
+@lru_cache(maxsize=8)
+def _idempotents(modulus: int, degree: int) -> tuple[tuple[int, ...], ...]:
+    """All 32 CRT idempotents, built once per (modulus, degree)."""
+    table = roots(modulus, degree)
+    inverse = pow(len(table), -1, modulus)
+    out = []
+    for r in table:
+        r_inverse = pow(r, -1, modulus)
+        coefficients = [0] * degree
+        power = 1
+        for t in range(len(table)):
+            coefficients[SLOT_DEGREE * t] = power * inverse % modulus
+            power = power * r_inverse % modulus
+        out.append(tuple(coefficients))
+    return tuple(out)
+
+
+def glue(
+    residues: tuple[tuple[int, ...], ...], parameters: SmileParameters | None = None
+) -> tuple[int, ...]:
+    """Inverse of `slots`: the unique y with those quartic residues.
+
+    Dispatches on the modulus. When a 256th root of unity exists the NTT path runs;
+    otherwise the 32-way CRT. Both are tested against each other at the prototype
+    modulus, where both exist.
+    """
+    p = SMILE if parameters is None else parameters
+    if ntt.try_transform(p.modulus, p.ring_degree) is not None:
+        return _glue_ntt(residues, p)
+    if (p.modulus - 1) % 64 == 0:
+        return glue_crt(residues, p)
+    raise SubringError("no quartic decomposition for this modulus")
 
 
 def crt_idempotent(index: int, parameters: SmileParameters | None = None) -> tuple[int, ...]:
@@ -150,12 +219,7 @@ def crt_idempotent(index: int, parameters: SmileParameters | None = None) -> tup
     table = roots(p.modulus, p.ring_degree)
     if not 0 <= index < len(table):
         raise SubringError("slot index is outside the decomposition")
-    inverse = pow(len(table), -1, p.modulus)
-    r_inverse = pow(table[index], -1, p.modulus)
-    out = [0] * p.ring_degree
-    for t in range(len(table)):
-        out[4 * t] = pow(r_inverse, t, p.modulus) * inverse % p.modulus
-    return tuple(out)
+    return _idempotents(p.modulus, p.ring_degree)[index]
 
 
 def glue_crt(

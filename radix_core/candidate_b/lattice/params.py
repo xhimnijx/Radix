@@ -22,10 +22,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-#: 32-bit, prime, q == 1 mod 256. Chosen so a 2d-th root of unity exists for
-#: d=128 if NTT is added later. NOT yet verified to be the paper's modulus.
-PROTOTYPE_MODULUS = 4294962689
+#: 32-bit, prime, q = 1 mod 64 and q != 1 mod 128, so `ord_256(q) = 4` and
+#: `X^128 + 1` factors into 32 **irreducible** quartics. That is the property the
+#: reviewers require: it makes the quartic slots fields, so a nonzero residue is a
+#: unit (the extraction's `c - c~` vanishes in a slot only with probability
+#: `q^-4`), and it makes `v(v-1) = 0` force a 32-entry binary vector rather than a
+#: 128-coordinate idempotent. See REVIEW-FINDINGS.md.
+#:
+#: The cost: no 256th root of unity, so no 128-point NTT. Ring multiplication runs
+#: through the quartic CRT instead (subring.multiply). NOT the paper's modulus.
+PROTOTYPE_MODULUS = 4294966337
 MODULUS_FROM_PAPER = False
+
+#: The previous prototype modulus (`q = 1 mod 256`), which admits the full NTT.
+#: Kept because the CRT path is tested against the NTT path at a modulus where
+#: both exist.
+SPLIT_PROTOTYPE_MODULUS = 4294962689
 
 RING_DEGREE = 128
 SUBRING_DIMENSION = 32
@@ -88,6 +100,9 @@ class SmileParameters:
 
 
 SMILE = SmileParameters()
+
+#: The split-quotient parameter set, for the NTT reference path.
+SMILE_SPLIT = SmileParameters(modulus=SPLIT_PROTOTYPE_MODULUS)
 
 #: Ring signature sizes reported by the paper (Fig. 11, p. 48), in KB.
 PAPER_RING_SIGNATURE_KB = {

@@ -60,6 +60,14 @@ class Transform:
             raise TransformError("twiddle table has the wrong length")
 
 
+def try_transform(modulus: int, degree: int) -> "Transform | None":
+    """The transform for (modulus, degree), or None when no 2d-th root exists."""
+    try:
+        return _build(modulus, degree)
+    except TransformError:
+        return None
+
+
 def transform(parameters: SmileParameters | None = None) -> Transform:
     """Build (and cache) the twiddle tables for a parameter set."""
     p = SMILE if parameters is None else parameters
