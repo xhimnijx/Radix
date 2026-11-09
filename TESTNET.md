@@ -1,4 +1,4 @@
-﻿# Radix testnet
+# Radix testnet
 
 A local harness for exercising the Candidate-B proof end to end: a wallet that
 signs a real 1024-member ring signature, a node that verifies it with the real
@@ -8,77 +8,136 @@ verifier, and a miner that settles it in a block.
 > network, no economic layer, no security claim. One process on localhost, one
 > chain, one miner. See `STATUS.md` for where the cryptography actually stands.
 
-## Quickstart
+## Run it
+
+From source:
 
 ```powershell
-python -m radix_testnet.cli node                 # http://127.0.0.1:8642
-python -m radix_testnet.cli status               # in another terminal
-python -m radix_testnet.cli address              # the faucet's address
-python -m radix_testnet.cli send --to rtx1... --amount 100 --fee 10
-python -m radix_testnet.cli mine
-python -m radix_testnet.cli gui                  # opens the browser UI
+python -m radix_testnet                 # starts the node and opens the wallet
+python -m radix_testnet --no-browser    # headless
 ```
 
-Or open <http://127.0.0.1:8642> once the node is running. The page polls the node
-every three seconds, shows the chain, the mempool and the faucet balance, and has
-a send form and a mine button.
+From the packaged executable (Windows):
 
-## What a send actually costs
+```powershell
+.\dist\RadixTestnet.exe
+```
 
-It signs a real tagged ring signature over **1024 ring members** at
-`q = 4,294,966,337`. In CPython that takes **1-2 minutes**, and the UI says so
-while it waits. The Rust arithmetic layer is measured at 20 µs per multiplication
-(≈0.47 s to prove, 37 ms to verify), but **the proof is not ported yet**, so the
-harness runs the Python reference rather than pretending to be fast.
+Either way you land on <http://127.0.0.1:8642/> with the wallet open. Ctrl+C stops
+it. State lives in `%LOCALAPPDATA%\RadixTestnet` on Windows and
+`~/.local/share/RadixTestnet` elsewhere; `--data-dir` overrides it.
 
-`--backend rust` exists and **refuses** rather than silently falling back to the
-slow path. `radix_testnet/prover.py` is the single seam: node, miner, wallet and
-GUI call `prove_spend` and `verify_spend` and nothing else, so the Rust port will
-attach there.
+## Build the packaged app
 
-## Double spends
+PyInstaller **cannot cross-compile**. The Windows `.exe` must be built on Windows,
+the macOS binary on macOS, the Linux binary on Linux. `.github/workflows/build.yml`
+does exactly that on three native runners and uploads one artefact per platform —
+that is the supported way to get all three.
 
-A ring signature deliberately hides which key it opens, so a plain UTXO set cannot
-tell a first spend from a second. The **linkable tag** is what restores
-double-spend detection, and this harness uses the same-witness extension
-(`sign_tagged` / `verify_tagged`, `k′ = 4`) — the sound version, not the withdrawn
-one. A reused tag is refused both in the mempool and on the chain.
+```powershell
+# Windows, from the repository root
+.\packaging\build-windows.ps1            # -> dist\RadixTestnet.exe
+.\packaging\build-windows.ps1 -Clean     # from scratch
+```
+
+```bash
+# macOS and Linux
+python -m pip install -e . pyinstaller
+python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/radix-testnet.spec
+```
+
+The bundle contains the Python runtime, `segno` for QR codes, and the GUI as static
+data. It does not contain a browser engine: the window is your own browser pointed
+at the local server.
+
+## The wallet
+
+Four accounts derived from one seed, a send flow with a review step, receive with a
+locally generated QR code, history, an address book, and light/dark themes. The
+banner on every screen says TESTNET · NO VALUE · NO SECURITY CLAIM, because a
+finished-looking wallet over unaudited cryptography is how people get hurt.
+
+**Why accounts, not notes.** Two facts from the cryptography force this:
+
+1. A ring signature hides *which* output it spends, so the chain can never remove
+   one. Every output ever created is kept; double spends are prevented by tags.
+2. The same-witness tag is `T = A' s` — a function of the **secret**, not of the
+   note. One keypair therefore owns one tag and can be spent exactly once.
+
+So an account is the unit of spendability, and change goes to the next account. A
+real wallet gives every output its own key through one-time addressing; that is B2
+work and is not built here.
+
+**What a send costs.** A real tagged ring signature over 1024 members takes 1–2
+minutes in CPython, and the UI shows elapsed time while it runs. The Rust arithmetic
+is measured at 20 µs per multiplication (≈0.47 s to prove, 37 ms to verify) but the
+proof is not ported, so the harness runs the reference implementation rather than
+pretending to be fast. `--backend rust` refuses instead of silently falling back.
+
+## CLI
+
+```powershell
+python -m radix_testnet.cli status
+python -m radix_testnet.cli address
+python -m radix_testnet.cli send --to rtx1... --amount 100 --fee 10
+python -m radix_testnet.cli mine
+python -m radix_testnet.cli gui
+```
+
+## Node API
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/` | GET | the wallet page |
+| `/api/status` | GET | height, tip, balances, parameters, backend |
+| `/api/accounts` | GET | the four accounts, balances and whether spent |
+| `/api/history` | GET | confirmed and pending transactions |
+| `/api/mempool` | GET | pending transactions |
+| `/api/blocks` | GET | block list |
+| `/api/addressbook` | GET/POST | saved contacts |
+| `/api/settings` | GET/POST | theme and preferences |
+| `/api/qr?text=` | GET | SVG QR code, generated locally |
+| `/api/send` | POST | sign and submit a spend *(slow: 1–2 min)* |
+| `/api/mine` | POST | mine the mempool into a block |
+| `/api/tx` | POST | submit a pre-built envelope |
 
 ## Layout
 
 | File | Role |
 |---|---|
-| `chain.py` | blocks, trivial proof of work, mempool, UTXO, 1024-key decoy pool, tag rejection |
+| `chain.py` | blocks, trivial proof of work, mempool, outputs, 1024-key decoy pool, tag rejection |
 | `tagged.py` | tagged spend builder and verifier |
-| `wallet.py` | seed → keypair, address, note tracking, send with change |
+| `wallet.py` | seed → accounts, addresses, tags, notes, send with change |
 | `prover.py` | the python/rust seam |
 | `codec.py` | `Proof` decoder and the spend envelope |
-| `node.py` | HTTP API and the GUI server |
+| `store.py` | atomic on-disk chain, address book and settings |
+| `node.py` | HTTP API and GUI server |
+| `app.py` | desktop launcher |
 | `miner.py` | mine the mempool |
-| `cli.py` | one entry point |
-| `static/index.html` | the browser page, no external dependencies |
+| `cli.py` | command line |
+| `static/index.html` | the wallet page, no external dependencies |
 
 Rings travel as **pool indices**, not keys: a depth-2 ring is 1024 lattice keys
 (≈2 MB) and no chain would put that in a block, so an envelope is ~70 KB.
 
 ## Limitations, stated rather than hidden
 
-* **No persistence.** The chain lives in memory; restarting the node resets it.
-* **No consensus.** One node, no peers, no fork choice, longest-chain-by-fiat.
+* **No consensus.** One node, no peers, no fork choice.
+* **No persistence of trust.** The chain file is trusted on load and is not
+  re-verified; do not share a data directory between machines.
 * **No economic layer.** The faucet is funded at genesis from nothing.
-* **One keypair per wallet.** Outputs are addressed to a public key directly;
-  one-time addressing needs a key exchange the scheme does not provide yet (B2).
-* **Trivial proof of work.** `POW_BITS = 10`, for block shape, not for security.
-* **Deterministic parameters.** A fixed seed so the node, wallet and tests agree;
-  a real deployment takes parameters from a reviewed manifest and keys from entropy.
+* **One key per account.** Spending an account burns it; change moves to the next.
+* **Trivial proof of work.** `POW_BITS = 10`, for block shape, not security.
+* **Deterministic parameters.** A fixed seed so node, wallet and tests agree; a real
+  deployment takes parameters from a reviewed manifest and keys from entropy.
 
 ## Tests
 
 ```powershell
 python -m pytest -q tests/test_testnet_chain.py        # 9 tests, ~4 s, stub verifier
-python -m pytest -q tests/test_testnet_end_to_end.py   # real proof, several minutes
+python -m pytest -q tests/test_testnet_end_to_end.py   # real proof, ~5 min
 ```
 
-The fast suite tests the plumbing with a stub verifier. The slow one runs an
-actual proof through the node and checks the recipient's note, the sender's
-change, and that the second spend is refused by its tag.
+The fast suite tests the plumbing with a stub verifier. The slow one runs an actual
+proof through the node, checks the recipient's note and the sender's change, and
+checks that the second spend is refused by its tag.

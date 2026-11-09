@@ -1,4 +1,4 @@
-﻿"""Tests for aggregation of k BDLOP commitments (SMILE Fig. 5)."""
+"""Tests for aggregation of k BDLOP commitments (SMILE Fig. 5)."""
 
 import random
 from functools import lru_cache

@@ -1,4 +1,4 @@
-﻿"""Aggregation of k BDLOP commitments into one (SMILE Fig. 5, p. 14).
+"""Aggregation of k BDLOP commitments into one (SMILE Fig. 5, p. 14).
 
 Fig. 5 takes ``k`` commitments
 

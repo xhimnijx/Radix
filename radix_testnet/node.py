@@ -301,10 +301,17 @@ class Handler(BaseHTTPRequestHandler):
             self._error(500, str(error))
 
 
-def serve(host: str = "127.0.0.1", port: int = 8642, node: Node | None = None) -> ThreadingHTTPServer:
+def make_server(
+    host: str = "127.0.0.1", port: int = 8642, node: Node | None = None
+) -> tuple[ThreadingHTTPServer, "Node"]:
+    """Build the server without starting it, for the launcher and the tests."""
     node = node or Node()
     handler = type("BoundHandler", (Handler,), {"node": node})
-    server = ThreadingHTTPServer((host, port), handler)
+    return ThreadingHTTPServer((host, port), handler), node
+
+
+def serve(host: str = "127.0.0.1", port: int = 8642, node: Node | None = None) -> ThreadingHTTPServer:
+    server, node = make_server(host, port, node)
     print(f"radix testnet node on http://{host}:{port}  (Ctrl+C to stop)")
     print("TESTNET - NO VALUE - NO SECURITY CLAIM")
     try:

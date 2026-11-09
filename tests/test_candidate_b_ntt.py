@@ -1,4 +1,4 @@
-﻿"""Tests for the negacyclic NTT (the substrate of the Fig. 6 recursion)."""
+"""Tests for the negacyclic NTT (the substrate of the Fig. 6 recursion)."""
 
 import random
 

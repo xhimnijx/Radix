@@ -1,4 +1,4 @@
-﻿"""A valueless local testnet for Candidate B. Not a cryptocurrency."""
+"""A valueless local testnet for Candidate B. Not a cryptocurrency."""
 
 TESTNET_BANNER = (
     "RADIX TESTNET -- NO VALUE, NO SECURITY CLAIM, NOT A CURRENCY. "

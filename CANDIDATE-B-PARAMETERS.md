@@ -1,4 +1,4 @@
-﻿# Candidate-B lattice parameters (B1)
+# Candidate-B lattice parameters (B1)
 
 **Status:** manifest pinned from the primary source; first components implemented.
 **Source:** `studies/2021-564.pdf` — the full version of *SMILE: Set Membership

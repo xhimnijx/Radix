@@ -1,4 +1,4 @@
-﻿# Status â€” 2026-11-08
+# Status â€” 2026-11-08
 
 **One line:** the tree builds, the suite is green, the verified safety defects are
 fixed, and the mainnet launch gate exists and ships **closed**. The proof side is

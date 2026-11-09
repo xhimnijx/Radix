@@ -1,4 +1,4 @@
-﻿"""Tests for multi-message BDLOP commitments (the omega of Fig. 5/Fig. 6)."""
+"""Tests for multi-message BDLOP commitments (the omega of Fig. 5/Fig. 6)."""
 
 import random
 

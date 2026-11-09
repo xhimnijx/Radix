@@ -1,4 +1,4 @@
-﻿"""Tests for the SMILE set-membership proof (Figs. 7-9).
+"""Tests for the SMILE set-membership proof (Figs. 7-9).
 
 The honest path costs ~20 s to prove and ~20 s to verify at m = 2 (a 1024-member
 ring): it builds a 128 x 1024 set matrix over M_q and runs the Fig. 8 recursion.

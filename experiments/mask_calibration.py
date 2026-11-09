@@ -1,4 +1,4 @@
-﻿"""Calibrate the masking width, and check C1's numbers.
+"""Calibrate the masking width, and check C1's numbers.
 
 C1: the irreducible-quartic q changes the CRT basis, not the ring multiplication,
 so the time-domain coefficient vector of `c r` is the same negacyclic convolution

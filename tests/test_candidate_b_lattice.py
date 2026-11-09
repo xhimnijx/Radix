@@ -1,4 +1,4 @@
-﻿"""Tests for the SMILE parameter manifest, ring arithmetic, and BDLOP commitment."""
+"""Tests for the SMILE parameter manifest, ring arithmetic, and BDLOP commitment."""
 
 import random
 

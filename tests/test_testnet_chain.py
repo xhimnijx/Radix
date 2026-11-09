@@ -6,6 +6,7 @@ rather than the two minutes a real proof costs; the real-crypto path is covered 
 """
 
 import random
+from dataclasses import replace
 
 import pytest
 
@@ -122,12 +123,14 @@ def test_an_unbalanced_spend_is_refused(built):
 def test_a_spend_anchored_to_another_block_is_refused(built):
     rng, _parameters, _secret, public, chain = built
     spend, indices = _spend(chain, public, rng)
+    old_anchor = chain.anchor
     chain.submit(spend, indices)
     chain.mine()
-    # A fresh tag, so the tag check does not fire first: this is about the anchor.
-    stale, stale_indices = _spend(chain, public, rng, tag=ring.constant(2))
+    # A fresh tag and the *old* anchor, so only the anchor check can fire.
+    fresh, fresh_indices = _spend(chain, public, rng, tag=ring.constant(2))
+    stale = replace(fresh, anchor=old_anchor)
     with pytest.raises(C.ChainError, match="anchored"):
-        chain.submit(stale, stale_indices)
+        chain.submit(stale, fresh_indices)
 
 
 def test_mining_an_empty_mempool_is_refused(built):

@@ -24,3 +24,9 @@ studies/
 # Local secrets and wallet fixtures produced by examples
 *.wallet
 nonce-history.sqlite*
+
+# Packaged artefacts
+build/
+dist/
+*.spec.bak
+build-log.txt

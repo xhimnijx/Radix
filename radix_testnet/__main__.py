@@ -1,8 +1,9 @@
-﻿"""`python -m radix_testnet` is the same entry point as `radix_testnet.cli`."""
+﻿"""`python -m radix_testnet` starts the app; arguments fall through to the CLI."""
 
 import sys
 
-from .cli import main
+from .app import main as app_main
+from .cli import main as cli_main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(app_main() if len(sys.argv) == 1 else cli_main())

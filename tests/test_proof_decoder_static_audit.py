@@ -1,4 +1,4 @@
-﻿import re
+import re
 from math import prod
 from pathlib import Path
 
