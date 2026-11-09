@@ -1,149 +1,116 @@
-# Review request: fifth pass
+# Review request: sixth pass
 
-For C1 and C2. The fourth pass answered the blocker and changed the picture:
+For C1 and C2. Three questions are now blocking, and for the first time they are
+blocking a *build*, not a claim: the chain has proof of work, rewards and a two-node
+network, and the owner wants amounts hidden **from launch**.
 
-| | fourth pass | now |
-|---|---|---|
-| Q-A | "the parameters are not priced" | **answered: ~2^158 (A) and ~2^175 (B0). Not short.** My dimensions were wrong; corrected below |
-| Q-B | restate Theorem B.1 | answered: signable with four edits; C2 added the split-regime objection |
-| Q-C | discrete Gaussian | answered: required, and the decisive reason is portability |
-| Q-D | does the tag weaken M-SIS | answered: it strengthens it; `k' = 1` is sufficient |
-| Q-E | run it | answered: **the spend layer was still on the withdrawn tag — fixed** |
+The full history of what was asked and answered is in `REVIEW-FINDINGS.md`. This page is
+only what is open.
 
-What remains is narrower and more concrete. Five items, in priority order.
+## Where the project is
 
-## The corrected numbers, for the record
+- Set-membership proof (SMILE Figs. 7–9) implemented twice, cross-verified both ways,
+  **21,760-byte** proofs (down from 32,512 after bounding and packing the responses).
+- Real proof of work: per-block target, LWMA-90, 2× clamps, MTP-11.
+- Block rewards: 20 units decaying to a 0.6-unit tail, 10% treasury, 100-block maturity.
+- Two nodes agree: linear sync, fork reconciliation by work, deterministic ties.
+- Android app, wallet with a BIP-39 phrase, deploy kit.
 
-My Q-A inputs mixed two conventions: 1664 is the full solution lattice of `A`
-(`ell*d`), but 2944 is `23*d` where 23 is the **commitment arity**, not the width. The
-width is `W = 33`, so `W*d = 4224`.
-
-| relation | n | `det^{1/n}` | target | delta | block | Core-SVP |
-|---|---|---|---|---|---|---|
-| `A`, untagged, k = 4 | 1664 | `2^9.85` | `2^17.56` | 1.003218 | 541 | **`2^158`** |
-| `A`, tagged, k + k' = 8 | 1664 | `2^19.69` | `2^17.56` | < 1 | n/a | beyond the model |
-| `B_0`, W = 33 | 4224 | `2^9.70` | `2^27.90` | 1.002992 | 598 | **`2^175`** |
-
-The binding relation is the untagged base at about `2^158`. The "3.6 bits of slack"
-framing was backwards: targets *below* the reachable norms mean a stronger reduction
-is required, not a weaker one.
-
-**Nothing is being changed on the strength of these numbers**, because they are a
-delta-heuristic sanity check, not an estimator run.
-
-`experiments/estimate_sis.py --check` recomputes the table from the formulas and
-asserts it against these figures, so the arithmetic can be checked without trusting it.
-`docs/ESTIMATOR.md` records why `lattice-estimator` cannot run on the Windows machine
-(it needs SageMath) and gives the exact commands for a Linux box — **the estimator run
-no longer needs a cryptographer, only a machine with Sage.** If either of you has one
-spare, the arguments are printed by `--homework`.
+No security claim. No value.
 
 ---
 
-## Q-F. Ring-pool binding — both of you called this the most serious item outside Q-A
+## Q-K. Reference [25] — blocking half of hidden amounts
 
-The proof binds the message, `w`, the commitments, `h`, `omega` and `c`. It does **not**
-bind the ring. The verifier rebuilds the ring from its own pool, so today it is sound
-only because prover and verifier are the same process.
+SMILE §E.1 (p. 54) says balance in the confidential-transaction construction is proven
+with "the addition proof from [25]", that the technique extends from binary to base-4, and
+that the difficulty is the **carry vector**: with many integers it is no longer binary and
+"can not be proven to be small with algebraic techniques", resolved with "an approximate
+shortness proof" said to have negligible cost.
 
-Both of you propose the same cheap fix: absorb a ring digest as a transcript label
-beside the message, with the anchor committing to the pool root. Zero proof bytes.
+**Asks:**
 
-**Status: implemented as described below, pending your confirmation of the placement.**
+1. **What is [25]?** The exact citation. This single document is the difference between
+   "hidden amounts are specified" and "hidden amounts are a sketch".
+2. Does the approximate-shortness argument for a non-binary carry need its own rejection
+   sampling, and if so what is rejected?
+3. Is the carry proof compatible with the same `B′₀` we already use, or does it need a
+   second commitment matrix?
 
-The digest is absorbed immediately after the message, before `w`, and squeezes 32
-bytes of SHAKE256 over the encoded keys in order. Zero proof bytes; no new check. Both
-implementations changed together and the cross-language fixtures were regenerated.
+`docs/CONFIDENTIAL-TRANSACTIONS.md` §5 and §7 record exactly where this stops.
 
-**Questions:**
+## Q-L. One-time addressing — blocking *launch*, in two places
 
-1. **Where exactly** should the digest be absorbed — inside `_head`, before `message`,
-   or as a separate label immediately after? Does the placement interact with the
-   extraction's transcript rewinding?
-2. The digest is over the **ordered** key list. Does the order need to be canonicalised
-   (e.g. sorted, or by pool index) or is any order fine as long as prover and verifier
-   agree?
-3. Does this change any soundness constant? My reading is no — it only removes the
-   trusted-pool assumption — but say so if that is wrong.
+This was "the other research risk". It is now on the critical path twice over.
 
-## Q-G. The discrete Gaussian — which one, and at what precision
+The problem: the tag is `T = A'·s`, a function of the secret, so **one keypair is
+spendable exactly once**. A wallet needs a fresh key per output. The natural lattice
+construction — publish `P_spend = A·s_spend` and `P_view = A·s_view`, let the sender pick a
+scalar `r` and set `pk_out = P_spend + H(r)·P_view` — works algebraically and the sender
+cannot spend it, but it **fails on the norm**: keeping `s_out = s_spend + H(r)·s_view`
+inside `‖·‖∞ ≤ μ = 5` forces `H(r)` to be a small, guessable scalar, which collapses the
+privacy.
 
-Both of you require a discrete sampler before the rejection argument can be invoked.
-C2's decisive point is portability: if both languages round floats, `libm` disagreement
-makes them *different distributions*, and the analysis applies to neither.
+**Ask:** is there a published lattice stealth-address construction without a
+Diffie–Hellman-like operation?
 
-**Questions:**
+If the answer is "no, and the norm bound is the obstruction", the follow-up is the one
+that would actually help: **can the proof be made to tolerate a large shift in `s_out`**,
+for example by proving shortness of `s_spend` and `s_view` separately and carrying the
+shift as a public scalar? That would repair the natural construction, and it is the only
+route I can see to an ordinary address format.
 
-1. Which construction, concretely, for a **32-bit-ish q** and `sigma ~ 2^11`:
-   Folláth–Peikert inversion, Peikert's rejection sampler, or a CDT with a fixed tail
-   cut? The cost is irrelevant next to a 9 ms multiplication, so the criterion is
-   simplicity and cross-language reproducibility.
-2. What **precision** is sufficient — how many bits of the cumulative distribution, and
-   what tail cut — such that the statistical distance to `D_{Z,sigma}` is negligible?
-3. Is there a test we can write that would catch the two implementations drifting?
+Two places it now bites:
 
-## Q-H. The confidence gap at `ord_256(q) = 4`
+- **Wallets** hold a handful of notes, not thousands (`vault/One-Time Addressing.md`).
+- **Block rewards cannot accumulate.** Output identity is the hash of `(key, value)`, so
+  two rewards to one key with the same value are one output — and the tag makes that key
+  spendable once anyway. A miner reusing one key earns one reward, not *n*. There is a
+  test asserting this (`tests/test_testnet_rewards.py`).
 
-C2's note: the hardness proofs for module-LWE in the literature are stated for
-`q = 1 mod 2n`. At `ord_256(q) = 4` we have the same lattice (the coefficient embedding
-depends only on `log q`) but not the theorem.
+## Q-M. Is set membership the right primitive for digit ranges?
 
-**Question:** is there a published result covering this modulus class, or are we
-correctly recording it as a conjecture in `SECURITY-NOTES.md`? If a result exists, cite
-it and we will stop hedging; if not, we will keep the hedge.
+The paper encodes an amount as 32 base-4 digits in `{0,1,2,3}` (p. 52), so an in-range
+output is one whose every digit is in a four-element set. This codebase already proves
+"one of these 1024 keys" — the `α`-slot construction.
 
-## Q-I. Where do the 110 ms actually go? (C2's suggestion)
+**Ask:** does the extraction argument survive when the set is the four *field elements*
+`{0,1,2,3}` rather than a ring of public keys? Specifically:
 
-C2 guessed the CRT glue and re-encoding dominate, and that both are recoverable without
-cryptographic change. This project measured that batching has nothing to amortise
-(every stage depends on the proof's own challenges) and that parallelism gives 4.22x on
-8 cores.
+1. The extraction produces a one-hot selector over the ring. Does a four-element set give
+   the same `v_i ∈ {0,1}` conclusion, or does the argument need the set to have a
+   particular size or algebraic structure?
+2. The digit proof must be **per coefficient position** (32 of them), not per key. Is that
+   a different statement type, or the same tensor decomposition applied differently?
+3. Does the `q^{-d/l}` uniformity step (C2's Q-B edit) behave the same way at set size 4?
 
-**Question:** is that profile worth chasing, or is 110 ms simply what a 32 KB lattice
-proof of this shape costs? If the glue is the cost, is there a representation change
-worth making — or does that reopen the coefficient-basis questions in `Q-C`?
+This is the piece I believe is buildable without [25], so knowing early whether it is
+sound changes what gets written next.
 
-## Q-J. `k' = 1` or `k' = 4` — a decision, not a question
+---
 
-Both of you now say `k' = 1` is sufficient (C2: 85 bits of margin on the collision
-instance; the tag strengthens the signature either way). The implementation defaults
-to 4.
+## Still open from earlier passes
 
-**Question:** confirm 1 is acceptable, and we will drop it — 4.6 KB and a fifth of the
-set-matrix work per tagged proof. If there is a reason to keep 4 that the collision
-estimate does not capture, say so.
+| Item | Ask | Status |
+|---|---|---|
+| **Estimator run** | `docs/ESTIMATOR.md` has the commands; needs SageMath on Linux. Or confirm the delta-model figures (2^158 / 2^175) are close enough to rely on | open |
+| **Theorem B.1 restatement** | C2's four edits accepted — would you sign the restatement? | open |
+| **`k′` = 1 or 4** | C2 says 1 is sufficient (2^213 collision margin); C1 recommended 4. The implementation defaults to 4 | open |
+| **Errata** | Both confirmed the `e₁` double count and the eq. (24) index by derivation. A later ePrint revision would let the record say "erratum" | open |
 
-## Smaller items, still open
+## What would change the plan
 
-- **The errata.** Both confirmed the `e_1` double count and the eq. (24) index by
-  derivation, not by a later revision. If either of you can obtain the 2022-05-20
-  version, a diff would let the record say "erratum" instead of "suspected erratum".
-- **The `q^-4` constant.** C1: the relevant distribution is the *difference*
-  (coefficients in `-2..2`), so `q^-4` is an approximation that must be computed
-  rather than assumed. Worth a worked line in the restatement.
-
-## What changed in the code since the fourth pass
-
-- **The withdrawn tag path is gone** (`74f68ae`): `spend.build_spend`/`verify_spend` no
-  longer accept `tag_keys`, `Spend.tags` returns `None` and says why, and
-  `setmembership.prove`/`verify` **raise** if `tag_keys` is supplied. The old
-  tagged-spend tests were replaced by guards that the path is gone.
-- The dangerous docstring sentences are corrected: "No rejection sampling" and "the
-  `c^1` part cancels identically".
-- `cli --backend rust` exists and works; the node reports `backend=rust` when selected.
-- Wallet portability: a BIP-39 phrase, a versioned derivation tag, and refusals when the
-  phrase is corrupt or missing beside an existing chain.
-- Parallel verification: `verify_many`, 4.22x on 8 cores.
+- **[25] says the carry proof is impractical at these parameters** → hidden amounts need
+  a different design, and we would rather know now.
+- **One-time addressing has a known solution** → the wallet and reward limitations both
+  disappear, and the launch path shortens by months.
+- **Digit membership does not transfer from key sets** → the range proof needs a
+  different primitive, and the timeline changes.
 
 ## Reproducing
 
 ```powershell
-python -m pytest -q -m "not slow"        # 435 passed, 1 xfailed
-cd proof_rust && cargo test              # 70 passed
-python experiments/verify_rust_proof.py  # Rust proof -> Python verifier
-cd proof_rust && cargo run --release --bin bench_batch   # the 4.22x
+python -m pytest -q -m "not slow"   # 490 passed, 1 xfailed
+cd proof_rust && cargo test         # 74 passed
+python experiments/estimate_sis.py --check
 ```
-
-The suite has one known flake: `tests/test_nonce_multiprocess.py` fails roughly once in
-a full run under concurrency and passes 6/6 in isolation. It is Candidate-A legacy and
-unrelated to the lattice work, but it is recorded rather than hidden.
