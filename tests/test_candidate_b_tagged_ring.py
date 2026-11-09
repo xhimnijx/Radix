@@ -1,78 +1,75 @@
-"""A tagged ring signature: the B3 linkability layer end to end."""
+"""The same-witness tag: A_ext = [A; A'], one proof, no separate tag proof.
+
+This replaces the withdrawn separate-tag construction. The tag T = A' s is a row
+of the same relation the ring signature already proves, so a forger cannot choose
+it independently of the secret it opened.
+"""
 
 import random
 
 import pytest
 
-from radix_core.candidate_b.lattice import params, ring, setmembership as S, tag as T
+from radix_core.candidate_b.lattice import params, ring, ring_signature as RS
 
 pytestmark = pytest.mark.slow
 
 P_ = params.SMILE
 DEPTH = 2
+TAG_ROWS = 1
 MESSAGE = b"spend once"
+
+
+def _random_key(rng):
+    return tuple(ring.sample_uniform(rng) for _ in range(P_.matrix_rows))
 
 
 @pytest.fixture(scope="module")
 def built():
-    rng = random.Random(61)
-    keys = S.setup(rng, DEPTH)
-    tag_keys = T.setup(rng, P_)
-    matrix = tuple(
-        tuple(ring.sample_uniform(rng) for _ in range(P_.matrix_cols))
-        for _ in range(P_.matrix_rows)
-    )
-    secret, public = S.keygen(rng, matrix)
-    ring_keys = [
-        tuple(ring.sample_uniform(rng) for _ in range(P_.matrix_rows))
-        for _ in range(32**DEPTH)
-    ]
-    ring_keys[42] = public
-    statement = S.Statement(matrix=matrix, keys=tuple(ring_keys), depth=DEPTH)
-    proof = S.prove(keys, statement, secret, 42, MESSAGE, rng, None, tag_keys)
-    return keys, tag_keys, statement, secret, proof
+    rng = random.Random(31)
+    parameters = RS.setup(rng, DEPTH, None, TAG_ROWS)
+    secret, public = RS.keygen(parameters, rng)
+    ring_keys = [_random_key(rng) for _ in range(parameters.ring_size)]
+    ring_keys[200] = public
+    ring_keys = tuple(ring_keys)
+    proof, tag = RS.sign_tagged(parameters, secret, public, ring_keys, MESSAGE, rng)
+    second, second_tag = RS.sign_tagged(parameters, secret, public, ring_keys, MESSAGE, rng)
+    return parameters, secret, public, ring_keys, proof, tag, second, second_tag
 
 
 def test_tagged_proof_verifies(built):
-    keys, tag_keys, statement, _secret, proof = built
-    assert S.verify(keys, statement, proof, MESSAGE, None, tag_keys)
+    parameters, _s, _p, ring_keys, proof, tag, _second, _st = built
+    assert RS.verify_tagged(parameters, ring_keys, tag, MESSAGE, proof)
 
 
-def test_the_tag_is_the_committed_linear_image(built):
-    _keys, tag_keys, _statement, secret, proof = built
-    assert proof.tag_proof is not None
-    assert proof.tag_proof.tag == T.tag_of(tag_keys, secret, P_)
+def test_the_tag_is_a_linear_image_of_the_note_secret(built):
+    parameters, secret, _p, _rk, _proof, tag, _second, _st = built
+    assert tag == RS.tag_of(parameters, secret)
 
 
-def test_a_tagged_proof_is_not_silently_accepted_untagged(built):
-    """A ledger that forgets to check the tag would accept it; this forbids that."""
-    keys, _tag_keys, statement, _secret, proof = built
-    assert not S.verify(keys, statement, proof, MESSAGE)
+def test_the_same_note_gives_the_same_tag_every_time(built):
+    """Linkability: the tag is deterministic in s, not in the mask."""
+    _parameters, _s, _p, _rk, _proof, tag, second, second_tag = built
+    assert second != _proof  # different mask, different proof
+    assert second_tag == tag
 
 
-def test_a_tampered_tag_is_rejected(built):
-    keys, tag_keys, statement, _secret, proof = built
-    rng = random.Random(62)
-    forged_tag = T.TagProof(
-        t=proof.tag_proof.t,
-        u=proof.tag_proof.u,
-        tag=ring.sample_small(rng),
-        proof=proof.tag_proof.proof,
-    )
-    forged = S.Proof(
-        commitment=proof.commitment,
-        h=proof.h,
-        omega=proof.omega,
-        challenge=proof.challenge,
-        challenge_prime=proof.challenge_prime,
-        response_prime=proof.response_prime,
-        response=proof.response,
-        tag_proof=forged_tag,
-    )
-    assert not S.verify(keys, statement, forged, MESSAGE, None, tag_keys)
+def test_a_modified_tag_is_rejected(built):
+    parameters, _s, _p, ring_keys, proof, tag, _second, _st = built
+    rng = random.Random(32)
+    forged = tuple(ring.add(t, ring.constant(1, P_)) for t in tag)
+    assert not RS.verify_tagged(parameters, ring_keys, forged, MESSAGE, proof)
+    # and a tag that is not even the right shape
+    assert not RS.verify_tagged(parameters, ring_keys, (), MESSAGE, proof)
 
 
-def test_the_tagged_proof_is_larger_by_the_mask_commitment(built):
-    _keys, _tag_keys, _statement, _secret, proof = built
-    # 32,512 + kappa + ell (mask commitment) + 1 (tag) + ell (opening response)
-    assert proof.size_bytes == 51_584
+def test_the_untagged_api_refuses_tagged_parameters(built):
+    parameters, secret, public, ring_keys, _proof, _tag, _second, _st = built
+    with pytest.raises(RS.RingSignatureError, match="sign_tagged"):
+        RS.sign(parameters, secret, public, ring_keys, MESSAGE, random.Random(33))
+    assert not RS.verify(parameters, ring_keys, b"x", _proof)
+
+
+def test_the_extended_proof_is_only_slightly_larger(built):
+    _parameters, _s, _p, _rk, proof, _tag, _second, _st = built
+    assert proof.size_bytes == RS.tagged_size_bytes(DEPTH, TAG_ROWS)
+    assert 32_000 <= proof.size_bytes <= 36_000

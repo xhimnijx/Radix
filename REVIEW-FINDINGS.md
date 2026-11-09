@@ -150,3 +150,65 @@ the scheme would be unsound, not merely mis-shaped. Fig. 11 of the paper lists
 4. Check the later ePrint revisions of the `e₁` issue.
 5. Re-review: the brief is `REVIEW-REQUEST.md`; Q3 and Q5 have now changed enough
    to warrant a second pass on their own.
+
+## Resolution (same day): the tag is rebuilt as a same-witness extension
+
+C1's follow-up rejected the obvious repair and gave the right one. Committing the
+individual `u_j` would bind the *mask*, not the secret: a cheating prover can use
+a different `y'` for `u` than the one behind `z'`, and the verifier cannot tell.
+The fix is to stop proving a separate relation at all.
+
+**Adopted design.** Let `A_ext = [A; A']` over `R_q^{(k+k') x ell}` and
+`T = A' s`. The spender publishes `T`; the verifier builds the extended ring
+`{(pk_j, T)}` -- the *same* `T` in every member, so the index stays hidden -- and
+runs the unchanged Fig. 7-9 proof over `A_ext`. One proof, one witness, no second
+sigma, and no free response to forge. The proof forces
+`A_ext s* = c* (pk_iota, T)`, so `s*/c*` is a preimage of both.
+
+Implemented as `ring_signature.setup(..., tag_rows=1)` plus `sign_tagged` /
+`verify_tagged` / `tag_of`. The proof machinery was parameterised by the height of
+`A` (`setmembership.masking_width` now takes a row count) rather than changed.
+
+| Shape | Size | vs base |
+|---|---|---|
+| untagged (k = 4) | 32,512 B | 1x |
+| **extended, k' = 1** | **33,536 B** | 1.03x |
+| extended, k' = 4 (not built) | ~38.7 KB | ~1.2x |
+| the withdrawn separate proof | 51,584 B | -- |
+
+Six tests: it verifies, the tag equals `A' s`, two signatures of one note over the
+same ring carry the **same** tag while the proofs differ, a modified tag is
+rejected, the untagged API refuses tagged parameters, and the size matches.
+
+**k' = 1 vs k' = 4.** k' = 1 gives same-note linkability only. C1's estimate is
+that a 1 x 13 `A'` is *not* 128-bit collision-resistant for distinct notes (kernel
+shortest ~60 in l2 against an allowed secret difference of ~408), and that k' = 4
+puts the kernel shortest at ~2^17, far above the ~2^8.7 target. The code takes
+`tag_rows` as a parameter; the default and the tests use 1, so the B3
+"distinct notes never collide" property is **not** claimed. That is a parameter
+decision to be priced with an estimator, and it is now a one-argument change.
+
+## Two corrections from C2, applied
+
+1. **`invertible()` is exact for any valid SMILE modulus, not because of this `q`.**
+   Every valid `q` forces the quartics to split, because the constant term
+   `r_i = (zeta^{2i+1})^4` is an explicit fourth power. The docstring attributed it
+   to "this modulus", which would mislead anyone who later swaps `q`. Fixed.
+2. **The number to quote is `beta' = 2^25.4`, target `2^26.35`.** C2's conversion:
+   the verifier's per-coefficient bound `2^20 + 8192` over `ell*d = 1664`
+   coefficients gives `beta' = 2^25.36` worst case, `2^24.57` typical, and the
+   extractor takes a difference, so the M-SIS target is `2*beta' = 2^26.35`. Every
+   reading lands between `2^47` and `2^72` Core-SVP; the paper's Gaussian
+   `beta' ~ 2^11` sits below the Gaussian heuristic and is unreachable by this
+   bookkeeping. The other relation, `M-SIS_{kappa, 8d beta}` at `beta = 2^25.94`,
+   lands at ~`2^91`, so the key relation is the weak one.
+
+## A caveat C2 raised that is not yet handled anywhere
+
+Because every valid `q` splits completely, `v(v-1) = 0` in `R_q` means binary at
+each of the 128 evaluation points -- not "binary on the 32 slots with constant
+entries". The extracted object is therefore a 128-coordinate binary vector, not a
+32-entry one-hot vector. This is equally true of the paper. It matters only if the
+`v_i` arriving from the extractor must be slot-constant, which the tag extension
+does not need but a future composed proof (B5) might. **Not currently addressed in
+code, in the brief, or in the paper.**

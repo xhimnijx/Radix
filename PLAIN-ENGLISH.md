@@ -37,7 +37,7 @@ Think of a coin as a locked box with a public padlock. The owner knows the key.
 |---|---|---|
 | **The lock** (public key) | A padlock derived from a secret key, using lattice maths | works, tested |
 | **The ring signature** | "One of these 1,024 padlocks is mine and I can prove it, without saying which" | **works**, 32.5 KB, ~20 s to make and ~20 s to check in Python |
-| **The tag** | A serial number that is *the same* every time you spend the same coin, so the network can refuse a second spend | **broken**: a review found it can be forged without any key, and I reproduced the forgery. Withdrawn, being redesigned |
+| **The tag** | A serial number that is *the same* every time you spend the same coin, so the network can refuse a second spend | **works, rebuilt.** The first version was forgeable (a review found it, I reproduced it); it is now folded into the same proof as the signature, 33.5 KB. Same-note linkability only |
 | **The spend** | "Here is a signature, here are the coins I am creating, and the values balance" | works, checks balance and refuses a reused tag |
 | **Encrypted notes / addresses** | The message to the recipient, sealed with post-quantum key exchange and AES | works (inherited from the earlier design), tested |
 | **The mainnet switch** | A deliberately locked door that refuses to open until a human signs off | works, and it is **closed** |
@@ -77,8 +77,10 @@ system.
 - The verifier learns **that** one of 1,024 keys signed, and nothing about which.
   That is the same privacy Monero's ring signature gives, at a ring size of 1,024
   instead of 16.
-- There is **no working linkability**. The tag we built can be forged without a
-  key, so for now nothing here can catch a double spend.
+- The verifier learns a **tag** that is the same for two spends of the same coin,
+  so double spending is detectable. It is a random-looking value, not an
+  identity. Caveat: the tag is only collision-resistant for *distinct* notes at
+  the larger parameter setting, which is not the default.
 - The verifier currently learns the **amount** (see the gap above).
 - Timing and network-level privacy are not addressed at all.
 

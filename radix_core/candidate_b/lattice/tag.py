@@ -50,8 +50,10 @@ Assumptions, stated rather than implied:
   same ``<A', .>`` would collide, so the tag's unforgeability rests on that
   hardness assumption, not on the ring signature alone;
 * ``c'`` invertibility is checked by requiring every NTT coordinate to be
-  non-zero (the quartic factors split completely for this modulus, so that *is*
-  invertibility);
+  non-zero. Every valid SMILE modulus forces the quartics to split, since the
+  constant term ``r_i = (zeta^{2i+1})^4`` is an explicit fourth power, so that is
+  exactly invertibility -- this is a property of the construction, not of the
+  prototype ``q``;
 * this is a second proof attached to the ring signature, not a single composed
   witness. Composition is milestone B5 and is not attempted here.
 """

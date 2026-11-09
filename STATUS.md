@@ -15,10 +15,10 @@ in `REVIEW-FINDINGS.md`. Summary:
 | Figs. 7-9 transcription | **held up.** The line-13 decomposition and the `e_1` repair were both confirmed |
 | `c` / `c'` unit checks | **missing**, now fixed in code with tests (`test_candidate_b_unit_checks.py`) |
 | Masking without rejection sampling | **soundness failure**: the response bound `2^20`, not `mu = 5`, is the security parameter; the core is roughly `2^50`, not `2^128` |
-| The linkable tag | **forgeable**, reproduced here without any key; withdrawn, `xfail`-guarded |
+| The linkable tag | first version **forgeable** (reproduced here without a key); rebuilt as a same-witness extension on C1's advice, `A_ext = [A; A']`, 33.5 KB, 6 tests. k' = 1 gives same-note linkability; distinct-note collision resistance needs k' = 4 and is **not** claimed |
 | Parameters | open; `beta` and `beta'` must be re-derived and priced with a lattice estimator |
 
-The suite is 409 tests: 408 passing and one strict-xfail that guards the withdrawn tag. Nothing in this repository may claim 128-bit security
+The suite is 410 tests: 409 passing and one strict-xfail that guards the withdrawn tag construction. Nothing in this repository may claim 128-bit security
 until the masking is restored and the parameters are re-derived.
 
 ## Repository layout (2026-11-08)
@@ -320,5 +320,6 @@ each figure and equation, the five deviations from the paper with the risk each
 one carries, the three gaps that keep this from being a transaction layer (no
 nullifier proof, no range proofs, no linkability), and the four things a reviewer
 should check first. It says in the first paragraph that no security claim is made.
+
 
 

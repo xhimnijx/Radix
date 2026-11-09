@@ -81,12 +81,21 @@ def _ones(p: SmileParameters) -> Poly:
     return _lift(tuple((1, 0, 0, 0) for _ in range(SLOTS)), p)
 
 
-def masking_width(depth: int, p: SmileParameters | None = None) -> int:
-    """W = kappa + lambda + k + 2m + 1, the width of r, y, z and the key rows."""
-    sm = _p(p)
+def masking_width(
+    depth: int, parameters: SmileParameters | None = None, row_count: int | None = None
+) -> int:
+    """W = kappa + lambda + rows + 2m + 1, the width of r, y, z and the key rows.
+
+    ``row_count`` is the height of the public matrix: ``k`` for the paper's
+    protocol, ``k + k'`` when the tag rows of ``A_ext = [A; A']`` are folded in.
+    """
+    sm = _p(parameters)
     if type(depth) is not int or depth < 2:
         raise SetMembershipError("depth must be at least 2 (see the module docstring)")
-    return sm.challenge_dim + sm.masking_dim + sm.matrix_rows + 2 * depth + 1
+    rows = sm.matrix_rows if row_count is None else row_count
+    if type(rows) is not int or rows < 1:
+        raise SetMembershipError("the matrix must have at least one row")
+    return sm.challenge_dim + sm.masking_dim + rows + 2 * depth + 1
 
 
 def _poly_from(raw: bytes, p: SmileParameters) -> Poly:
@@ -124,14 +133,14 @@ def _is_unit(poly: Poly, p: SmileParameters) -> bool:
     return all(coefficient != 0 for coefficient in ntt.forward(poly, p))
 
 
-def _paper_to_slot(position: int, depth: int, p: SmileParameters) -> int:
+def _paper_to_slot(position: int, depth: int, rows: int, p: SmileParameters) -> int:
     """Map the paper's t-index (1..k+2m+1) to its position in the commitment vector.
 
     The vector starts with ``t_0`` (kappa entries), so paper position ``j`` maps to
     ``kappa + j - 1``; the ``g`` commitment sits right after ``t_{m+k}`` and the
     ``x_2 .. x_m`` commitments are appended at the end, before ``psi``.
     """
-    rows, kappa = p.matrix_rows, p.challenge_dim
+    kappa = p.challenge_dim
     if position == rows + 2 * depth + 1:
         return kappa + rows + 2 * depth  # psi, the final entry
     if position <= depth + rows:
@@ -148,29 +157,40 @@ class Keys:
     rows0: tuple[tuple[Poly, ...], ...]
     rows: tuple[tuple[Poly, ...], ...]
     depth: int
+    row_count: int | None = None
+
+    @property
+    def count(self) -> int:
+        return SMILE.matrix_rows if self.row_count is None else self.row_count
 
     def __post_init__(self) -> None:
-        width = masking_width(self.depth)
+        width = masking_width(self.depth, None, self.count)
         if len(self.rows0) != SMILE.challenge_dim:
             raise SetMembershipError("B_0 must have kappa rows")
-        if len(self.rows) != SMILE.matrix_rows + 2 * self.depth + 1:
+        if len(self.rows) != self.count + 2 * self.depth + 1:
             raise SetMembershipError("wrong number of b rows")
         for row in self.rows0 + self.rows:
             if len(row) != width:
                 raise SetMembershipError("key rows must have width W")
 
 
-def setup(rng: random.Random, depth: int, parameters: SmileParameters | None = None) -> Keys:
+def setup(
+    rng: random.Random,
+    depth: int,
+    parameters: SmileParameters | None = None,
+    row_count: int | None = None,
+) -> Keys:
     sm = _p(parameters)
-    width = masking_width(depth, sm)
+    rows = sm.matrix_rows if row_count is None else row_count
+    width = masking_width(depth, sm, rows)
     rows0 = tuple(
         tuple(ring.sample_uniform(rng, sm) for _ in range(width)) for _ in range(sm.challenge_dim)
     )
-    rows = tuple(
+    b_rows = tuple(
         tuple(ring.sample_uniform(rng, sm) for _ in range(width))
-        for _ in range(sm.matrix_rows + 2 * depth + 1)
+        for _ in range(rows + 2 * depth + 1)
     )
-    return Keys(rows0=rows0, rows=rows, depth=depth)
+    return Keys(rows0=rows0, rows=b_rows, depth=depth, row_count=row_count)
 
 
 @dataclass(frozen=True)
@@ -182,15 +202,15 @@ class Statement:
     depth: int
 
     def __post_init__(self) -> None:
-        if len(self.matrix) != SMILE.matrix_rows:
-            raise SetMembershipError("A must have k rows")
+        if not self.matrix:
+            raise SetMembershipError("A must have at least one row")
         if any(len(row) != SMILE.matrix_cols for row in self.matrix):
             raise SetMembershipError("A must have ell columns")
         if self.depth < 2:
             raise SetMembershipError("depth must be at least 2")
         if len(self.keys) != SLOTS**self.depth:
             raise SetMembershipError("the ring must have l^m keys")
-        if any(len(key) != SMILE.matrix_rows for key in self.keys):
+        if any(len(key) != len(self.matrix) for key in self.keys):
             raise SetMembershipError("each public key must have k components")
 
 
@@ -254,10 +274,13 @@ def _set_matrix(
     columns = []
     for key in statement.keys:
         element = []
-        for component in range(p.matrix_rows):
+        for component in range(len(statement.matrix)):
             element.extend(subring.slots(ring.neg(ring.mul(c_prime, key[component], p), p), p))
         columns.append(tuple(element))
-    return tuple(tuple(column[row] for column in columns) for row in range(p.matrix_rows * SLOTS))
+    return tuple(
+        tuple(column[row] for column in columns)
+        for row in range(len(statement.matrix) * SLOTS)
+    )
 
 
 def _b_transpose(poly: Poly, p: SmileParameters) -> Poly:
@@ -320,8 +343,8 @@ def prove(
         raise SetMembershipError("index is outside the ring")
     if tuple(ring.dot(row, secret, sm) for row in statement.matrix) != statement.keys[index]:
         raise SetMembershipError("the secret does not open the claimed ring member")
-    width = masking_width(depth, sm)
-    rows = sm.matrix_rows
+    rows = len(statement.matrix)
+    width = masking_width(depth, sm, rows)
 
     randomness = ring.sample_vector(rng, width, small=True, parameters=sm)
     mask = tuple(
@@ -523,10 +546,10 @@ def verify(
     sm = _p(parameters)
     try:
         depth = keys.depth
-        rows = sm.matrix_rows
         if depth != statement.depth or type(proof) is not Proof:
             return False
-        width = masking_width(depth, sm)
+        rows = len(statement.matrix)
+        width = masking_width(depth, sm, rows)
         if len(proof.commitment) != sm.challenge_dim + rows + 2 * depth + 1:
             return False
         if len(proof.response_prime) != sm.matrix_cols or len(proof.response) != width:
@@ -560,7 +583,7 @@ def verify(
 
         # line 04: t_{m+i} -= (A z')_i
         slot_of = {
-            position: _paper_to_slot(position, depth, sm)
+            position: _paper_to_slot(position, depth, rows, sm)
             for position in range(1, rows + 2 * depth + 2)
         }
         a_z = tuple(ring.dot(row, proof.response_prime, sm) for row in statement.matrix)
