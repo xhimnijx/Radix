@@ -576,3 +576,156 @@ estimator must confirm them before any security claim.**
 
 What this does *not* settle: whether 3.7 bits of RHF margin is 128 bits. That is
 the estimator's job, and it is the last open question in the parameter set.
+
+
+# Fourth review, 2026-11-09: the answer to the blocker was "you are not short"
+
+Both reviewers answered the five questions. The headline is that Q-A's premise was
+wrong: the parameters are **not** short. That is the most consequential result of the
+whole project so far, and it came with a correction to my own numbers.
+
+## Q-A — the estimator question, answered
+
+**My inputs mixed two lattice-dimension conventions.** For `A` I used 1664, which is
+the full solution-lattice dimension `ell*d`. For `B_0` I used 2944, which is
+`23*d` — and `23` is the **commitment arity** `kappa + rows + 2m + 1`, not the width.
+The width is `W = 33`, so the correct dimension is `W*d = 4224`.
+
+That is the *same class of error* as the commitment-arity defect the Rust port found:
+the arity and the width agree in one configuration and differ in every other.
+
+Recomputed with consistent conventions (`delta_b(n)` inverted for the target, Core-SVP
+`2^{0.292 b}`):
+
+| relation | n | `det^{1/n}` | target | delta | block | Core-SVP |
+|---|---|---|---|---|---|---|
+| `A`, untagged, k = 4 | 1664 | `2^9.85` | `2^17.56` | 1.003218 | 541 | **`2^157`** |
+| `A`, tagged, k + k' = 8 | 1664 | `2^19.69` | `2^17.56` | < 1 | n/a | beyond the model |
+| `B_0`, W = 33 | 4224 | `2^9.70` | `2^27.90` | 1.002992 | 598 | **`2^174`** |
+| `B_0`, at the wrong 2944 | 2944 | `2^13.91` | `2^27.90` | 1.003299 | 523 | `2^152` |
+
+**Both clear 128 bits with 25-47 bits to spare.** The binding relation is the untagged
+base `A` at `k = 4`, at about `2^157`.
+
+### The framing error was mine as well
+
+I reported "3.6 and 3.8 bits of slack" by comparing targets to reachable norms at
+`delta = 1.0042` and concluded the parameters were unproven. The comparison is
+backwards: because the targets sit **below** the reachable norms, the required `delta`
+is *smaller* than 1.0042, which means the reduction needed is *stronger* than the
+heuristic assumed. C2's conversion: one bit of target is worth roughly 33 bits of
+Core-SVP near this boundary, so the `A` margin is about 76 bits, not 3.6.
+
+### What this changes
+
+Nothing needs to change. The levers, if a real estimator disagrees, in order of
+bits per byte: `k += 1` (+110 bits for 512 B), `log q` 32 -> 40 (+109 bits for +25%
+bytes), halving `beta'` (+34 bits, no bytes, but weakens M-LWE). `ell` and the ring
+size are not the levers.
+
+**Two things that must not be overclaimed:**
+
+1. `2^157` is the cost of the **assumption**, not the bit-security of the scheme. The
+   extractor is a four-transcript rewinding argument, so a forger's advantage crosses
+   the reduction with a polynomial loss. Quote it as "the assumption is ~2^157".
+2. At `ord_256(q) = 4` the module-LWE hardness proofs in the literature, which are
+   stated for `q = 1 mod 2n`, do not apply: the modulus size and the lattice are
+   unchanged (the coefficient embedding of `A` depends only on `log q`), but we hold a
+   conjecture rather than a theorem. That belongs in `SECURITY-NOTES.md`.
+
+## Q-B — signable, with four edits and a sharper reason for the modulus
+
+C2 added a fourth edit: the `q^{-d/l}` uniformity step must be restricted to the field
+regime, and in the split regime it is not merely undefined but **unjustified** — a
+nonzero failure witness can be a zero divisor, so the product is confined to a
+1-dimensional submodule and the hit probability degrades from `q^-4` to `q^-1`. The
+split modulus was worse than the `2^-24` challenge-difference cap suggested, which is a
+better reason for the change than the one I had.
+
+C1's caveat: `q^-4` is the uniform-field approximation; the relevant distribution is
+the *difference* (coefficients in `-2..2`), so the exact constant must be worked out
+rather than assumed. The field property makes "nonzero iff unit" exact, not the
+probability.
+
+Both agree the induction loses one structural step (the idempotent-to-slot-constant
+lemma) and is not shorter in depth.
+
+## Q-C — a discrete sampler is required, and the reason is portability
+
+C2's correction to my estimate: rounding a continuous Gaussian differs from the
+discrete one by `1 + O(1/sigma^2)` pointwise, not `O(1/sigma)`, so about `2^-22.8` per
+coefficient and `2^-16.8` over the 4224-coefficient response — not the `2^-11` I quoted
+(per coefficient). C1's `sqrt(N)/s ~ 2^-5.4` is the coarser union bound.
+
+The decisive argument is the one neither of us had made clearly: a rejection argument
+compares the sampled distribution to a fixed one, and if Python and Rust both round
+floats, `libm` disagreement makes them *different distributions*, so the analysis
+applies to neither and `verify_rust_proof.py` is a weaker test than it looks. The fix
+is a table-driven discrete Gaussian driven from an integer RNG, identical in both
+languages. Cost: one lookup per coefficient, negligible.
+
+## Q-D — the tag strengthens the signature; k' = 1 is sufficient
+
+Both agree, and both correct my framing:
+
+- `A_ext` at `k + k' = 8` gives `det^{1/n} = 2^19.69`, above the target, i.e. beyond
+  what the delta model can price. **The tag strengthens the signature.**
+- C2: the tag's own collision instance at `k' = 1` is a 1x13 with block 729, about
+  `2^213` — 85 bits of margin. **`k' = 1` is sufficient**; `k' = 4` is
+  over-provisioned but harmless, and it does match `A`'s shape.
+- The binding instance in the whole system is the untagged base relation at `k = 4`,
+  which no choice of `k'` touches.
+
+So `k' = 4` was chosen for the right *property* (distinct-note collision) but the
+estimate does not require it. Keeping 4 is cheap insurance; the claim that it is
+"required" is wrong.
+
+## Q-E — what running it found, and what was fixed
+
+C1 found the concrete integration break, and it was real:
+
+> the spend layer is still wired to the withdrawn tag.
+
+`spend.build_spend` passed `tag_keys` into `RS.sign`, reaching `tagmod.prove_tag`; and
+`Spend.tags` read `signature.tag_proof`, which the same-witness extension never
+populates, so a tagged spend built the new way would have reported `None` and a ledger
+doing `if tags is None: skip` would have skipped its tag checks.
+
+**Fixed by removal and refusal** (commit `74f68ae`): the argument is gone from
+`build_spend`/`verify_spend`, `Spend.tags` returns `None` and says why, and
+`setmembership.prove`/`verify` **raise** if `tag_keys` is supplied, naming it
+WITHDRAWN. The old tests were replaced by guards that the path is gone. The two
+dangerous docstring sentences ("No rejection sampling", "the `c^1` part cancels
+identically") are corrected.
+
+## The most serious item outside Q-A: ring-pool binding
+
+Both reviewers agree, and it is my own finding from writing the vault: the proof binds
+the message, `w`, the commitments, `h`, `omega` and `c` — **not the ring**. The verifier
+rebuilds the ring from its own pool, so it is sound only because prover and verifier
+are one process.
+
+The fix they both give is the same and is cheap: absorb a ring digest (over the ordered
+public keys, or a pool Merkle root) as a transcript label beside the message, with the
+anchor committing to the pool root. Zero proof bytes. It changes the transcript, so
+Python and Rust must change together — the same portability discipline as Q-C.
+
+## Errata, confirmed by derivation
+
+Both hold in the 12 Aug 2021 PDF, per C2's derivation rather than a later revision:
+
+1. The `e_1` double count between Fig. 9 line 12 / eq. (27) and eq. (24).
+2. The sum index in eq. (24): the printed `sum_i gamma_{m,i}` must be
+   `sum_i gamma_{m,i+1}`, because the inner product pairs `e_1` with
+   `gamma_{m,2}..gamma_{m,m+1}`. The code uses the latter and is the consistent choice.
+
+Neither reviewer could retrieve the 2022-05-20 revision, so both stay "suspected
+erratum in the 2021 PDF".
+
+## Verification cost
+
+C1: batching does not transfer from Schnorr. C2: the all-linear part can be batched,
+but that does not remove the set-matrix cost, and the 110 ms is better attacked by
+measuring where it goes. Both align with what this project measured independently:
+algebraic batching has nothing to amortise, and parallelism gives 4.22x on 8 cores.
+C2's suggestion to profile the CRT glue and re-encoding is the next useful measurement.
