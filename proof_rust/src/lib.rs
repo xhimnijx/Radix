@@ -9,6 +9,8 @@
 //! Everything is exact integer arithmetic. `q < 2^32`, so a product of two
 //! residues fits in `u64` and the CRT accumulation uses `u128`.
 
+pub mod sample;
+pub mod bdlop;
 pub mod codec;
 pub mod sha3;
 pub mod transcript;
