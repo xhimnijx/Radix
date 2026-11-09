@@ -15,8 +15,7 @@ The protocol this project implements. Figures 7–9 are the prover, recursion an
 verifier; the parameter table is §6; the security argument is in the appendices.
 
 Read it with one correction: the `e₁` term in Fig. 9 line 12 is printed at order `c`
-but must be at order `c²` for the honest prover's check to pass ([[What Reviewers
-Found]], Q2). The code follows the correct version.
+but must be at order `c²` for the honest prover's check to pass ([[What Reviewers Found]], Q2). The code follows the correct version.
 
 ## Background, if lattices are new
 

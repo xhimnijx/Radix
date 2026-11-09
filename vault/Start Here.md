@@ -74,6 +74,7 @@ If you have A-Level Maths and Further Maths, read in this order:
 ### Engineering
 - [[The Python Reference]]
 - [[The Rust Port]]
+- [[The Rust Backend Seam]]
 - [[How the Port Was Verified]]
 - [[Performance Measurements]]
 - [[Packaging and Distribution]]

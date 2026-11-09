@@ -61,8 +61,7 @@ then subtracting the two answers extracts the witness:
 
 $$z_1 - z_2 = (c_1 - c_2)\,r \;\Longrightarrow\; r = (z_1 - z_2)(c_1 - c_2)^{-1}$$
 
-That division is exactly why `c₁ − c₂` must be a unit — [[Challenge Spaces and Ternary
-Secrets]] and the modulus decision in [[The NTT and the Quartic Decomposition]].
+That division is exactly why `c₁ − c₂` must be a unit — [[Challenge Spaces and Ternary Secrets]] and the modulus decision in [[The NTT and the Quartic Decomposition]].
 
 This is the **special soundness** property, and it is the engine of the whole security
 proof.
