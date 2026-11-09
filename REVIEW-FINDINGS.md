@@ -335,3 +335,35 @@ in any of the 128 scalar slots.
 Choosing one of these is not a drop-in: the M-LWE and M-SIS estimates have to be
 re-derived for the chosen `q`, the quartic-CRT multiplier has to replace the NTT,
 and `subring.glue` has to be driven by a 64th root rather than the 256th.
+
+## An open question for both reviewers: one modulus may close both holes
+
+C2 argued the slot-constant hole cannot be fixed by any modulus, "because
+`r_i = (zeta^{2i+1})^4` is an explicit fourth power for every valid `q`". C1's
+proposed `q` leaves the regime where that is true, and the consequence may be that
+C1's change also closes C2's hole.
+
+`experiments/slot_constancy_probe.py` checks it directly:
+
+| `q` | `q mod 128` | `ord_256` | `r_i` that are fourth powers | slots |
+|---|---|---|---|---|
+| 4,294,962,689 (prototype) | 1 | 1 | **32 of 32** | `Z_q^4`; idempotents are arbitrary subsets |
+| 4,294,966,337 (candidate) | 65 | 4 | **0 of 32** | `F_{q^4}`; idempotents are only 0 and 1 |
+
+If the candidate's slots are fields, then `v(v-1) = 0` forces every slot residue to
+be 0 or 1, i.e. the extracted `v_i` **is** a 32-scalar binary vector and
+slot-constancy is automatic -- the `alpha`-slot problem C2 described would not
+arise. The `sum_j (v_i)_j = 1` condition also becomes stronger, because it is then
+an equality of quartics rather than of four `Z_q` coordinates.
+
+This is my reading plus a computational check, not a reviewer's conclusion, and the
+two answers conflict on scope. It needs adjudication before anyone plans around it:
+
+- **to C1:** was the idempotent consequence of the irreducible-quartic `q`
+  intended, and does it remove the need for a separate slot-constant constraint in
+  a composed proof?
+- **to C2:** does the argument above survive, or is there a reason a product of
+  degree-4 field extensions does not deliver slot-constancy?
+
+If it holds, two of the three open items collapse into one decision, and the only
+independent work left is the masking.
