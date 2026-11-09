@@ -898,3 +898,26 @@ That exposed `tagged_size_bytes`, which still returned the old 38,656: it counte
 bytes per response coefficient after they had been compressed to two, and it ignored the
 row count the caller actually uses. It now matches the measured sizes exactly at both
 k' values.
+
+
+# The k' reduction cost 8 bits, 2026-11-09
+
+Found by running `experiments/estimate_sis.py --check` after the k' change, which is the
+argument for pinning a check to the current parameters instead of to a remembered number.
+
+`W = kappa + lambda + rows + 2m + 1` and `rows = k + k'`, so reducing k' from 4 to 1
+shrinks the commitment width from 33 to 30. B0's dimension is `W*d`, so it fell from 4224
+to 3840, and its Core-SVP estimate fell from **2^175 to 2^167**.
+
+C2 priced the tag's own collision instance (2^213 at k' = 1) and the module equations, and
+concluded k' = 1 was the better point — but the coupling between k' and B0's width was not
+in that analysis, and neither of us noticed it when the change was made. It is a real
+trade: k' = 1 gives 8 fewer bits on B0 in exchange for 2 KB per proof and one fewer module
+equation in s.
+
+The decision stands — 2^167 clears 128 with 39 bits to spare, and the binding relation is
+still A at 2^158 — but the number reported for B0 was wrong for several rounds and is now
+corrected here and in `SECURITY-NOTES.md`.
+
+Worth putting to C2: whether the k' trade should be re-priced now that both ends of it are
+visible — 8 bits of B0 against 2 KB and a fifth of the set-matrix work per tagged proof.

@@ -123,7 +123,7 @@ explicit `ValueError`.
 ## What `2^158` means, and what it does not (2026-11-09)
 
 A delta-model sanity check of the two M-SIS instances puts them at roughly `2^158` (the
-untagged `A` relation at `k = 4`) and `2^175` (`B_0` at `W = 33`). Two things must not
+untagged `A` relation at `k = 4`) and `2^167` (`B_0` at `W = 33`). Two things must not
 be inferred from that.
 
 **It is the cost of the assumption, not the security of the scheme.** The soundness
@@ -186,3 +186,12 @@ the sampler changes the *shape* of the mask, not its standard deviation.
 A test compares `from_uniform(width, uniform, sign)` across both languages over 420
 points — the boundaries, the centre, and 128 spread values. It is exact, not
 statistical, because the mapping is a pure function of integers in both.
+
+
+## A parameter change moved this number (2026-11-09)
+
+The B0 figure above is quoted at the current parameters, where `k' = 1`. It was 2^175 when
+`k' = 4`. The width is `W = kappa + lambda + rows + 2m + 1` with `rows = k + k'`, so the
+tag row count moves B0's lattice dimension — 4224 at `k' = 4`, 3840 at `k' = 1` — and with
+it the estimate. Reducing `k'` saved 2 KB per proof and cost 8 bits on B0. Both ends of
+that trade are now written down rather than one of them.

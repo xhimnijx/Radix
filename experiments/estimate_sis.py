@@ -43,10 +43,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from radix_core.candidate_b.lattice import params as P
 from radix_core.candidate_b.lattice import setmembership as S
 
-#: Classical and quantum Core-SVP exponents, after Alkim, Ducas, Poppelmann,
-#: Schwabe (2015) and the NIST submissions.
-CLASSICAL = 0.292
-QUANTUM = 0.265
+#: Named cost models, which is what C1 asked for: "name the model explicitly".
+#: ADPS16 is the 0.292*b Core-SVP convention of Alkim, Ducas, Poppelmann and Schwabe
+#: (2016), the classical figure quoted throughout the NIST submissions. MATZOV is the
+#: 0.265*b quantum convention from the MATZOV report. They differ by 10-15 bits at these
+#: block sizes, which the reported band already covers.
+ADPS16 = 0.292
+MATZOV = 0.265
 
 TWO_PI_E = 2.0 * math.pi * math.e
 
@@ -102,8 +105,11 @@ def estimate(dimension: int, log_det: float, log_target: float, label: str) -> d
         return row
     block = block_size_for(required_delta)
     row["block"] = block
-    row["classical"] = CLASSICAL * block
-    row["quantum"] = QUANTUM * block
+    row["classical"] = ADPS16 * block   # ADPS16
+    row["quantum"] = MATZOV * block     # MATZOV
+    # The sensitivity C2 measured: about 15 bits of Core-SVP per half-bit of target, so a
+    # band of +/-0.5 bit on the target is the honest width of this estimate.
+    row["band"] = (row["classical"] - 15.0, row["classical"] + 15.0)
     row["note"] = ""
     return row
 
@@ -151,16 +157,22 @@ def instances() -> list[dict]:
 
 
 def report(rows: list[dict]) -> None:
-    print(f"{'relation':38s} {'n':>5s} {'det^(1/n)':>10s} {'delta':>10s} {'block':>6s} {'classical':>10s} {'quantum':>9s}")
+    print("models: ADPS16 = 0.292*b (classical), MATZOV = 0.265*b (quantum)")
+    print("band: +/-15 bits, from C2's measured sensitivity of ~15 bits per half-bit of target")
+    print(f"{'relation':38s} {'n':>5s} {'det^(1/n)':>10s} {'delta':>10s} {'block':>6s} {'ADPS16':>10s} {'MATZOV':>9s}")
     for row in rows:
         block = "-" if row["block"] is None else f"{row['block']:.0f}"
         classical = "-" if row["classical"] is None else f"2^{row['classical']:.1f}"
         quantum = "-" if row["quantum"] is None else f"2^{row['quantum']:.1f}"
+        band = ""
+        if row.get("band"):
+            low, high = row["band"]
+            band = f"   band 2^{low:.0f}-2^{high:.0f}"
         print(
             f"{row['label']:38s} {row['dimension']:5d} "
             f"{'2^%.2f' % row['log_det_per_coordinate']:>10s} "
             f"{row['target_delta']:10.6f} {block:>6s} {classical:>10s} {quantum:>9s}"
-            + (f"   {row['note']}" if row["note"] else "")
+            + band + (f"   {row['note']}" if row["note"] else "")
         )
 
 
@@ -171,9 +183,14 @@ def check(rows: list[dict]) -> None:
     are worth failing a build over.
     """
     by_name = {row["label"].split(" (")[0]: row for row in rows}
+    # W = kappa + lambda + rows + 2m + 1 with rows = k + k', so k' moves the width and
+    # therefore B0's lattice dimension. At k' = 4 the width was 33 and B0 sat at 2^175;
+    # at k' = 1 it is 30, the dimension is 3840 rather than 4224, and B0 is 2^167.
+    # C2 priced the tag's collision instance but not this coupling, which is why the
+    # check is pinned to the current parameters rather than to a remembered number.
     expectations = [
         ("A", 1664, 158.0, 0.5),
-        ("B0", 4224, 175.0, 0.5),
+        ("B0", 3840, 167.0, 0.5),
     ]
     failures = []
     for name, dimension, classical_bits, tolerance in expectations:
@@ -190,7 +207,7 @@ def check(rows: list[dict]) -> None:
     if failures:
         raise SystemExit("estimates disagree with REVIEW-FINDINGS.md:\n  " + "\n  ".join(failures))
     print()
-    print("check: both instances reproduce the published figures (2^158 and 2^175).")
+    print("check: both instances reproduce the published figures (2^158 and 2^167 at k'=1).")
 
 
 def homework() -> None:

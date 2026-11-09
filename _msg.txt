@@ -1,0 +1,25 @@
+fix: B0's security estimate was stale, and k' = 1 cost 8 bits
+
+The estimate check is pinned to the current parameters, which is the only reason this
+surfaced. W = kappa + lambda + rows + 2m + 1 with rows = k + k', so reducing k' from 4 to
+1 shrank the commitment width from 33 to 30. B0's dimension is W*d: 4224 before, 3840 now.
+Its Core-SVP estimate fell from 2^175 to 2^167.
+
+Neither reviewer caught the coupling and neither did I. C2 priced the tag's own collision
+instance at 2^213 and the extra module equations, and concluded k' = 1 was the better
+point -- all correct -- but the effect on B0's width was not in that analysis. The number
+we published for B0 was wrong for several rounds.
+
+The decision stands: 2^167 clears 128 with 39 bits to spare, and the binding relation is
+still A at 2^158. But the trade is now stated at both ends -- 8 bits of B0 against 2 KB
+and a fifth of the set-matrix work per tagged proof -- and it is worth re-pricing with
+C2 now that both are visible.
+
+Also: the estimator now reports named cost models, which is what C1 asked for. ADPS16
+(0.292*b) and MATZOV (0.265*b) side by side, with a band of +/-15 bits from C2's measured
+sensitivity of about 15 bits per half-bit of target. The band is not a point estimate and
+the report says so.
+
+The estimator itself still cannot run here: it needs SageMath, Docker Desktop is installed
+but its daemon needs WSL2 or Hyper-V, neither is present, and no C++ toolchain exists for
+fpylll. The named-model computation is the part of the answer that does not need it.
