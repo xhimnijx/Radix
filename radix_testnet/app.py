@@ -16,6 +16,7 @@ import webbrowser
 from pathlib import Path
 
 from . import TESTNET_BANNER, __version__
+from . import prover
 from .node import Node, StateError, make_server
 from . import store
 
@@ -67,7 +68,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--data-dir", type=Path, default=None)
     parser.add_argument("--no-browser", action="store_true", help="do not open a window")
     parser.add_argument("--version", action="version", version=f"radix-testnet {__version__}")
+    parser.add_argument(
+        "--backend",
+        default="python",
+        choices=["python", "rust"],
+        help="which prover to use; rust needs prove_request built",
+    )
     args = parser.parse_args(argv)
+
+    try:
+        prover.set_backend(args.backend)
+    except prover.ProverUnavailable as error:
+        print(f"cannot use the {args.backend} backend: {error}", file=sys.stderr)
+        return 2
 
     data_dir = args.data_dir or store.default_data_dir()
     config = store.load_config(data_dir)

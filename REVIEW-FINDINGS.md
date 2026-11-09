@@ -566,8 +566,8 @@ The rejection curve matches C1's table to three digits: `M = 1.41` at `2^11`,
 
 | mask | `T` | `s = 1.57 T` | `beta` | target | reachable at `delta = 1.0042` | margin |
 |---|---|---|---|---|---|---|
-| `z` (W = 33) | 1700 | 2670 (`2^11.4`) | 245,386 (`2^17.9`) | `2^27.9` | `2^31.7` | **3.8 bits** |
-| `z'` (ell = 13) | 1072 | 1684 (`2^10.7`) | 97,120 (`2^16.6`) | `2^17.6` | `2^21.2` | **3.6 bits** |
+| `z` (W = 33) | 1700 | 2666 (`2^11.4`) | 244,992 (`2^17.9`) | `2^27.9` | `2^31.7` | **3.8 bits** |
+| `z'` (ell = 13) | 1072 | 1673 (`2^10.7`) | 96,512 (`2^16.56`) | `2^17.6` | `2^21.2` | **3.6 bits** |
 
 So the paper's own regime -- `s ~ 1.57 T`, `M = sqrt(3/2)`, overall `2M^2 ~ 3` --
 is the right choice, and it leaves about 3.7 bits of root-Hermite margin. The

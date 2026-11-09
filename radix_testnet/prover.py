@@ -4,19 +4,18 @@ Everything above this module -- node, miner, wallet, GUI -- calls `prove_spend` 
 `verify_spend` and nothing else. Swapping the backend is therefore a change here
 and nowhere else.
 
-There are two backends and only one is implemented:
+Both backends are real implementations of the same protocol:
 
 * ``python`` -- the reference implementation in `radix_core.candidate_b.lattice`.
-  Real proofs, no shortcuts. A depth-2 spend takes ~1-2 minutes to prove and ~20 s
-  to verify, because CPython runs the ring arithmetic in interpreted loops.
-* ``rust`` -- **not implemented**. `proof_rust` currently contains the arithmetic
-  layer only (ring, quartic slots, CRT, multiplication, norms) and has been
-  measured at 20.1 us per multiplication, which projects to ~0.47 s to prove and
-  37 ms to verify. It has no keygen, commitments, transcript, recursion or
-  challenge derivation, so it cannot produce a signature yet.
+  A depth-2 spend takes ~1-2 minutes to prove and ~20 s to verify, because CPython
+  runs the ring arithmetic in interpreted loops.
+* ``rust`` -- the ported implementation in `proof_rust/`. Measured on this machine
+  at 496 ms to prove and 110 ms to verify for an untagged proof, and ~0.9 s end to
+  end through this seam (subprocess start and serialisation included).
 
-Selecting ``rust`` raises rather than silently falling back: a demo that claims to
-use the fast path and quietly uses the slow one is worse than no demo.
+Selecting ``rust`` when the binary is absent raises rather than silently falling
+back: a demo that claims to use the fast path and quietly uses the slow one is worse
+than no demo.
 """
 
 from __future__ import annotations

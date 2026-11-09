@@ -38,7 +38,7 @@ proof bytes     32,512 (36,608 tagged) + 2,048 tag
 coefficient var 627
 T_z             1701     99th percentile, W = 33
 T_z'            1081     99th percentile, ell = 13
-s = 1.567 T     2670 (2^11.4) for z,  1684 (2^10.7) for z'
+s = 1.567 T     2666 (2^11.4) for z,  1673 (2^10.7) for z'
 M               1.225    = sqrt(3/2)
 attempts        2M^2 ≈ 3 per rejection point; measured 9.75 total
 beta            2^17.9   = s sqrt(2Wd)

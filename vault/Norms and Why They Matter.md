@@ -36,7 +36,7 @@ From these, the calibrated mask width is
 
 $$s = 1.567\,T \qquad(\text{so that } M = \sqrt{3/2},\ 2M^2 \approx 3)$$
 
-giving `s = 2670 (2^11.4)` for `z` and `s′ = 1684 (2^10.7)` for `z′`, and the bounds
+giving `s = 2666 (2^11.4)` for `z` and `s′ = 1673 (2^10.7)` for `z′`, and the bounds
 
 $$\beta = s\sqrt{2Wd} \approx 2^{17.9}, \qquad \beta' = s'\sqrt{2\ell d} \approx 2^{16.6}$$
 

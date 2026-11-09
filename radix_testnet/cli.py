@@ -21,6 +21,7 @@ import urllib.request
 import webbrowser
 
 from . import TESTNET_BANNER, __version__
+from . import prover
 
 DEFAULT_URL = "http://127.0.0.1:8642"
 
@@ -117,6 +118,12 @@ def build_parser() -> argparse.ArgumentParser:
         description="A valueless local testnet for the Candidate-B proof.",
     )
     parser.add_argument("--url", default=DEFAULT_URL, help=f"node URL (default {DEFAULT_URL})")
+    parser.add_argument(
+        "--backend",
+        default="python",
+        choices=["python", "rust"],
+        help="which prover to use; rust needs prove_request built",
+    )
     parser.add_argument("--version", action="version", version=f"radix-testnet {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -151,6 +158,10 @@ def main(argv: list[str] | None = None) -> int:
     # Parse first: --help and --version must exit without the banner.
     args = build_parser().parse_args(argv)
     _print_banner()
+    try:
+        prover.set_backend(args.backend)
+    except prover.ProverUnavailable as error:
+        raise SystemExit(f"cannot use the {args.backend} backend: {error}") from None
     return args.func(args)
 
 

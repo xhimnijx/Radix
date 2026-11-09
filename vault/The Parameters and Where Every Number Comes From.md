@@ -48,10 +48,10 @@ Not design choices — **measurements**. From `experiments/mask_calibration.py`:
 | `T` for `z` (`W = 33`) | 1701 (`2^10.7`) | 99th percentile |
 | `T′` for `z′` (`ℓ = 13`) | 1081 (`2^10.1`) | 99th percentile |
 | mask width `s` | `1.567·T` | so `M = √(3/2)` |
-| `s` for `z` | 2670 (`2^11.4`) | derived |
-| `s′` for `z′` | 1684 (`2^10.7`) | derived |
-| `β` | `s·√(2Wd)` ≈ 245,386 (`2^17.9`) | verifier bound |
-| `β′` | `s′·√(2ℓd)` ≈ 97,120 (`2^16.6`) | verifier bound |
+| `s` for `z` | 2666 (`2^11.4`) | derived |
+| `s′` for `z′` | 1673 (`2^10.7`) | derived |
+| `β` | `s·√(2Wd)` ≈ 244,992 (`2^17.9`) | verifier bound |
+| `β′` | `s′·√(2ℓd)` ≈ 96,512 (`2^16.56`) | verifier bound |
 
 ## Why `q` is what it is
 
