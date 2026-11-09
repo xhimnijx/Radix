@@ -343,3 +343,41 @@ that serves a longer chain is trusted to have a valid one apart from block-level
    is `P = A*p + e1`, not `A*p`, so it is not a SMILE key at all. This is the structural
    piece both hidden amounts and one-time addressing need.
 3. **The estimator run**, still. `docs/ESTIMATOR.md`; five minutes on any Linux box.
+
+
+## Plan revision, 2026-11-09 (range proof, noise, discovery)
+
+The three items that were specified but not built are now primitives with tests.
+
+| Item | Result |
+|---|---|
+| Digit membership | `digits.py`, 14 tests. 32 base-4 digits, two bits each, **two polynomials for 64 bits** |
+| Noise-aware statement | `noisy.py`, 7 tests. `A_noise = [A | I_k]`, witness `(p, e1)`, tag rows `[A' | 0]` |
+| One-hop discovery | `getpeers` and `discover`, 3 tests |
+
+**What C2's correction bought, measured.** `constraint_count(4)` is **9**, not 256. The
+equation `b(b-1) = 0` holds slotwise, a polynomial is 32 slots of four coefficients, so
+one polynomial carries 32 bits and one α challenge covers all of them. A test fails if
+that ever regresses toward one constraint per bit, because the difference is roughly
+thirty-fold in proof cost.
+
+**What C1's finding corrected.** I spent a round arguing about whether `p` was short
+enough. The obstruction was `e1`: `P = A·p + e1` is an MLWE sample and the exact relation
+`A·p = pk` **rejects a legitimately produced stealth key**. There is a test asserting that
+rejection, because it is the reason the statement had to change rather than the parameters.
+
+**The honest scope of each.** These are the primitives, not the wiring. The digit proof is
+not yet a constraint in the statement; the noisy relation is linear algebra, not a proof;
+discovery is one hop with no gossip and no self-announcement. Each module says so in its
+own docstring rather than letting its existence imply more.
+
+**Still open.** 538 passed, 1 xfailed, and the one long-documented Candidate-A flake
+(`test_nonce_multiprocess.py`, passes 6/6 in isolation).
+
+**The next three.**
+
+1. **Wire digit membership into the statement** -- the α slots, the ψ/ω bookkeeping, and a
+   proof over the packed polynomials rather than a check function.
+2. **A proof for the noisy relation** -- the linear algebra exists; the extraction argument
+   and the `k` extra witness components do not.
+3. **The estimator run**, still five minutes on any Linux box.
