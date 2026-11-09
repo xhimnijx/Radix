@@ -84,9 +84,45 @@ jobs:
           path: dist/${{ matrix.binary }}
           if-no-files-found: error
 
+  android:
+    name: build (android apk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: build the APK
+        working-directory: android
+        run: |
+          chmod +x gradlew 2>/dev/null || true
+          gradle assembleDebug --no-daemon --console=plain
+
+      - name: verify the APK rather than trusting the build
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -5
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$APK"
+          cp "$APK" RadixTestnet-android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RadixTestnet-android
+          path: RadixTestnet-android.apk
+          if-no-files-found: error
+
   publish:
     name: publish release
-    needs: build
+    needs: [build, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -100,6 +136,7 @@ jobs:
           cp artifacts/RadixTestnet-windows/RadixTestnet.exe   release/RadixTestnet-windows-x64.exe
           cp artifacts/RadixTestnet-macos/RadixTestnet         release/RadixTestnet-macos
           cp artifacts/RadixTestnet-linux/RadixTestnet         release/RadixTestnet-linux
+          cp artifacts/RadixTestnet-android/RadixTestnet-android.apk release/RadixTestnet-android.apk
           chmod +x release/RadixTestnet-macos release/RadixTestnet-linux
           ls -la release
 
@@ -124,6 +161,8 @@ jobs:
           - Windows: `RadixTestnet-windows-x64.exe` (unsigned, so SmartScreen will warn)
           - macOS: `RadixTestnet-macos` — you may need `xattr -d com.apple.quarantine`
           - Linux: `RadixTestnet-linux` — `chmod +x` then run
+          - **Android**: `RadixTestnet-android.apk` — copy to the phone, allow
+            unknown sources, install; then set the node address in the app
 
           Or run from source: `python -m pip install -e . && python -m radix_testnet`
 

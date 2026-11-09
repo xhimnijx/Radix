@@ -20,7 +20,8 @@ quantum computer running Shor's algorithm does not break it.
 
 ## Try it
 
-**Prebuilt binaries:** <https://github.com/xhimnijx/Radix/releases>
+**Prebuilt binaries:** <https://github.com/xhimnijx/Radix/releases> — desktop apps
+for Windows, macOS and Linux, plus an **Android APK**.
 
 Releases are built by CI on native runners — the Windows `.exe` on Windows, the macOS
 binary on macOS, the Linux binary on Linux, because PyInstaller cannot cross-compile.
@@ -102,6 +103,7 @@ full prover). See [`proof_rust/PORTING.md`](proof_rust/PORTING.md).
 | `vault/` | **The documentation.** 38 notes, A-Level → protocol internals |
 | `radix_core/candidate_b/lattice/` | The Python reference implementation |
 | `radix_testnet/` | Chain, node, miner, wallet, GUI, packaging |
+| `android/` | A native Android wallet app (framework-only, 24 KB APK) |
 | `proof_rust/` | The Rust implementation and the porting record |
 | `experiments/` | Measurements, cross-checks, the modulus search |
 | `archive/` | Two abandoned tracks, kept for honesty |
