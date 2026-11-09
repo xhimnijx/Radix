@@ -6,6 +6,7 @@ is run the real verifier on every submitted transaction and refuse a reused tag.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -76,6 +77,11 @@ class Node:
         # After the chain, not before: a corrupt chain file should report itself
         # rather than being masked by the wallet check.
         self.peers: list[str] = list(peers or [])
+        #: Transaction keys already seen, so relay does not loop. Keyed by a hash of
+        #: the wire payload rather than by the id `chain.submit` returns, because the
+        #: loop has to be broken BEFORE submitting: a second submission of the same
+        #: transaction is an error, and an error reply per relay hop is noise.
+        self.seen_txs: set[str] = set()
         self.wallet_created = False
         if faucet is not None:
             self.faucet = faucet
@@ -170,6 +176,21 @@ class Node:
                 "blocks": [block.to_wire() for block in self.chain.blocks],
                 "allocations": self.chain.allocations_wire(),
             }
+
+        if kind == "tx":
+            payload = message.get("payload")
+            if not isinstance(payload, dict):
+                return {"type": "error", "reason": "tx has no payload"}
+            key = self.transaction_key(payload)
+            if key in self.seen_txs:
+                return {"type": "ok", "known": True}
+            self.seen_txs.add(key)
+            try:
+                result = self.submit_raw(payload)
+            except Exception as error:  # noqa: BLE001 - a peer must not kill the server
+                self.log.event("tx.rejected", reason=str(error), route="relay")
+                return {"type": "error", "reason": str(error)}
+            return {"type": "ok", "id": result["id"]}
 
         if kind == "block":
             try:
@@ -402,7 +423,14 @@ class Node:
             identifier = self.chain.submit(spend, indices)
             self._persist()
             self.log.event("tx.accepted", id=identifier.hex()[:16], fee=fee, amount=amount)
-            return {"id": identifier.hex()[:16], "fee": fee, "amount": amount}
+            payload = C.spend_to_wire(spend, indices)
+            result = {"id": identifier.hex()[:16], "fee": fee, "amount": amount}
+        # Outside the lock, and after the spend is safely in our own mempool: a peer
+        # that is slow or dead must not turn a successful send into a failure.
+        self.seen_txs.add(self.transaction_key(payload))
+        if self.peers:
+            self.relay_tx(payload)
+        return result
 
     def mine(self) -> dict:
         with self.lock:
@@ -423,13 +451,36 @@ class Node:
                 "transactions": len(block.transactions),
             }
 
+    def transaction_key(self, payload: dict) -> str:
+        """A stable key for a transaction payload, used to suppress relay loops."""
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest()
+
+    def relay_tx(self, payload: dict) -> dict:
+        """Best-effort flood of a transaction to every configured peer."""
+        from . import p2p
+
+        results = {}
+        for peer_text in self.peers:
+            try:
+                reply = p2p.Peer.parse(peer_text).call({"type": "tx", "payload": payload})
+                results[peer_text] = reply.get("type")
+            except (p2p.PeerError, OSError) as error:
+                results[peer_text] = f"unreachable: {error}"
+        return results
+
     def submit_raw(self, payload: dict) -> dict:
         with self.lock:
             spend, indices = C.spend_from_wire(payload, self.chain.pool, self.chain.depth, self.chain.rows)
             identifier = self.chain.submit(spend, indices)
             self._persist()
             self.log.event("tx.accepted", id=identifier.hex()[:16], route="raw")
-            return {"id": identifier.hex()[:16]}
+            result = {"id": identifier.hex()[:16]}
+        # Outside the lock: a slow peer must not block the node's own submission.
+        self.seen_txs.add(self.transaction_key(payload))
+        if self.peers:
+            self.relay_tx(payload)
+        return result
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -1,0 +1,25 @@
+feat: transaction relay, so a spend submitted to one node reaches the others
+
+Only blocks propagated before this. A transaction lived in the mempool of whichever node
+received it, so peers disagreed about what was pending and only that one node could mine
+it. For a network of independent nodes that is not a network.
+
+A 'tx' message now carries the wire payload. On receipt the node checks a seen-set keyed
+by a hash of the payload, submits through the same path the HTTP endpoint uses, and
+relays onward. Both submission routes -- submit_raw for the raw endpoint and send for the
+wallet/GUI path -- add the key and relay after the spend is safely in their own mempool,
+so a slow or dead peer cannot turn a successful send into a failure.
+
+The seen-set is keyed by the PAYLOAD hash rather than by the id chain.submit returns,
+because the loop has to be broken before submitting: a second submission of the same
+transaction is an error, and one error reply per relay hop would flood the logs of a
+two-node network.
+
+Tested end to end, not just at the plumbing. A real tagged spend built by Node.send --
+the same path the GUI uses -- submitted to node A appears in node B's mempool. That test
+costs 174 seconds because it produces a real proof, so it is marked slow; four fast tests
+cover the routing, the no-payload case, the seen-set and the key canonicalisation.
+
+Two of my own errors, both from assuming rather than checking: spend_to_wire is a module
+function rather than a Chain method, and a recipient is the 2,735-character address, not
+the short form.
