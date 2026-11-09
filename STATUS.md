@@ -148,3 +148,43 @@ documentation. Re-running them would produce the same result and is not evidence
 anything.
 
 CI is green on `main`.
+
+## Plan revision, 2026-11-09 (after the peer-to-peer layer)
+
+Three items closed: the estimator was attempted, the amount question was answered from
+the paper, and two nodes can now agree.
+
+**What the work found.**
+
+- **The estimator's blocker is mechanical.** `lattice-estimator` needs SageMath, Sage
+  does not run on Windows, `fpylll` will not build without a C++ toolchain, and WSL is
+  not installed. `docs/ESTIMATOR.md` has the commands and errors. **The oldest open item
+  in the project is now a five-minute job for anyone with a Linux machine.**
+- **Writing the fallback corrected my own arithmetic twice.** Relation `A` extracts
+  against `2*beta'`, not `2*beta`; mixing them gave `2^125.9` instead of `2^158`. And
+  the published figures were **truncated, not rounded** (`0.292*541 = 157.97`, printed
+  as `2^157` by `%d`). Both reviewers had written `2^158` and `2^175`; they were right.
+  Five documents corrected, and the check now fails if it drifts.
+- **Amounts are affordable; our implementation is not efficient.** The paper's own
+  confidential-transaction size is **26.49 KB** for 2 inputs and 2 outputs at ring
+  1024 — smaller than our 31.75 KB for one input with visible amounts. The gap is
+  compression, and page 55 names it: compressed public keys, Bai–Galbraith, and entropy
+  coding of `z`.
+- **Two more defects found by making two nodes agree**, neither visible from reading:
+  genesis was timestamped `int(time.time())`, so **no two nodes could ever share a
+  chain**; and the genesis allocation is not in the genesis block, so a replica cannot
+  reconstruct state from blocks alone.
+
+**What is next, in order.**
+
+1. **Compression.** Entropy-coded `z`, compressed keys, Bai–Galbraith. Target: 31.75 KB
+   to the paper's ~17 KB ring signature, then the 26.49 KB confidential transaction. This
+   is the highest-value change available and it does not touch soundness.
+2. **Fork reconciliation.** The chain has no undo journal, so a fork is refused rather
+   than resolved. Until that exists, the p2p layer is a linear sync, not a network.
+3. **Test architecture.** Ten proof tests account for 285 of the 326 seconds in the fast
+   suite. Run them against the Rust backend, keep the cross-language oracle. Same
+   assertions, five times faster, nothing discarded.
+
+**Not re-run, and why.** The Rust suite last passed at 70 and no Rust file changed since.
+CI was re-checked because it runs on push.
