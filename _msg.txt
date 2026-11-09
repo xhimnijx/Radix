@@ -1,28 +1,28 @@
-feat: genesis is a protocol constant, so two nodes agree without talking
+feat: mempool policy and fees paid to the miner
 
-Before this the genesis allocation came from whatever wallet the node happened to create,
-so two independently started nodes were on different chains and the sync had to transmit
-an allocation list together with the chain -- a shortcut recorded in p2p.py. The
-consequence was structural: a network only worked if every node was handed the same
-wallet, which is not a network anyone can join.
+A fee was a number the sender typed. Nothing rejected a zero fee, nothing bounded the
+mempool, and the miner received none of it -- a chain where a free transaction is
+indistinguishable from a paid one and a block producer is paid only by the emission.
 
-Block zero is now derived from GENESIS_MNEMONIC in params.py, and the phrase is the
-standard BIP-39 test vector -- 'abandon abandon ... about'. That choice is the point: it
-is unmistakably public, and the docstring says plainly that anyone reading the file can
-derive the keys and spend the genesis coins. That is a faucet, not a launch. A mainnet
-needs an allocation specified and audited before genesis, and a published phrase must not
-be carried forward.
+Three rules, written as pure functions so they can be tested without producing a proof
+(a real tagged spend costs about a minute, which would make fee ordering untestable):
 
-The sync payload no longer carries 'allocations'. A receiver derives the allocation from
-the protocol, so a peer cannot hand us a chain whose block zero pays a different set of
-keys -- which is what the earlier per-node allocation would have permitted.
+  MIN_FEE_ATOMS = 1, because a free transaction is a denial of service with extra steps
+  MEMPOOL_MAX = 64, with eviction by FEE RATE rather than absolute fee, so a large cheap
+  transaction cannot displace a small expensive one
+  block_reward(height, fees) credits fees entirely to the miner, with the treasury slice
+  taken from the emission only
 
-Measured: two nodes created in separate temporary directories, with no communication,
-produce the same genesis hash, hold the same faucet key, and see a balance of 4000.
+The last point is a policy choice worth stating: splitting fees would make a miner
+indifferent between including a transaction and leaving it.
 
-One stale assertion surfaced: the node status test still expected tag_rows == 4, which has
-been 1 since the k' change. It was failing for a reason unrelated to this work, and it is
-worth noting that a parameter change left a test asserting the old value rather than
-failing loudly at the time.
+_apply now applies transactions BEFORE building the coinbase, because the block's fees
+must be summed before the miner's output is created. The coinbase value is
+emission-share + fees; the treasury still takes its percentage of the emission.
 
-5 new tests, 54 across the four affected suites.
+10 tests: zero fee refused, below-minimum refused, duplicate refused, fee rate is
+atoms-per-byte, full pool evicts the cheapest, a worse rate is refused when full, eviction
+ranks by rate and not by absolute fee, fees go to the miner and not the treasury, an
+empty-fee block pays exactly the emission, and a negative fee cannot reduce the reward.
+
+54 tests across the four affected suites still pass.

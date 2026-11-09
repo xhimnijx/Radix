@@ -43,6 +43,12 @@ TAIL_REWARD_ATOMS = 60  # 0.6 units, forever
 DECAY_BLOCKS = 525_600  # two years at a 120-second block
 TREASURY_BPS = 1000  # 10% of every reward
 COINBASE_MATURITY = 100  # blocks before a reward can be spent
+
+#: Mempool policy. A fee of zero is not a transaction, it is a denial of service with
+#: extra steps, so the minimum is one atom. The cap bounds memory; the eviction rule
+#: is by fee rate so a large cheap transaction cannot push out a small expensive one.
+MIN_FEE_ATOMS = 1
+MEMPOOL_MAX = 64
 #: Fixed, so two nodes can agree on the genesis block. `int(time.time())` made every
 #: node's genesis unique, which made a shared chain impossible.
 GENESIS_TIME = 1_700_000_000
@@ -145,6 +151,51 @@ def emission(height: int) -> int:
         return TAIL_REWARD_ATOMS
     span = INITIAL_REWARD_ATOMS - TAIL_REWARD_ATOMS
     return INITIAL_REWARD_ATOMS - span * height // DECAY_BLOCKS
+
+
+def fee_rate(fee: int, size: int) -> float:
+    """Atoms per byte. The eviction order, and the only thing a miner should rank by."""
+    return fee / max(1, size)
+
+
+def admit(mempool: dict, identifier: bytes, payload: dict, fee: int, size: int,
+          maximum: int = MEMPOOL_MAX) -> bytes | None:
+    """Apply the mempool policy. Returns the evicted id, or None.
+
+    Pure apart from the `mempool` it is given, so the policy can be tested without
+    producing a proof -- which costs about a minute each and would make the rule
+    untestable in practice.
+    """
+    if fee < MIN_FEE_ATOMS:
+        raise ChainError(f"fee {fee} is below the minimum of {MIN_FEE_ATOMS} atom")
+    if identifier in mempool:
+        raise ChainError("this transaction is already in the mempool")
+    if len(mempool) < maximum:
+        mempool[identifier] = payload
+        return None
+
+    cheapest = min(mempool, key=lambda key: fee_rate(int(mempool[key].get("fee", 0)),
+                                                     len(str(mempool[key]))))
+    existing_rate = fee_rate(int(mempool[cheapest].get("fee", 0)), len(str(mempool[cheapest])))
+    if fee_rate(fee, size) <= existing_rate:
+        raise ChainError(
+            f"mempool is full and this fee rate is not better than the cheapest "
+            f"({fee_rate(fee, size):.6f} <= {existing_rate:.6f} atoms/byte)"
+        )
+    del mempool[cheapest]
+    mempool[identifier] = payload
+    return cheapest
+
+
+def block_reward(height: int, total_fees: int) -> tuple[int, int]:
+    """`(miner_atoms, treasury_atoms)` including fees.
+
+    The treasury takes its slice of the *emission* only. Fees go entirely to the miner:
+    they are payment for including a transaction, and splitting them would make a miner
+    indifferent between including one and leaving it.
+    """
+    miner_atoms, treasury_atoms = split_reward(height)
+    return miner_atoms + max(0, int(total_fees)), treasury_atoms
 
 
 def split_reward(height: int) -> tuple[int, int]:
@@ -279,7 +330,9 @@ class Chain:
         self._check_spend(spend, indices)
         payload = spend_to_wire(spend, indices)
         identifier = _hash(str(payload).encode())
-        self.mempool[identifier] = payload
+        payload = dict(payload, fee=int(getattr(spend, "fee", 0)))
+        admit(self.mempool, identifier, payload, int(getattr(spend, "fee", 0)),
+              len(str(payload)))
         self.pending_tags.update(spend.tag_bytes())
         return identifier
 
@@ -481,21 +534,10 @@ class Chain:
         return fresh
 
     def _apply(self, block: Block) -> None:
-        # Coinbase first: the miner is paid for the block, and the treasury takes its
-        # slice. Genesis carries no recipient, so it pays nobody.
-        if block.coinbase and block.height > 0:
-            miner_atoms, treasury_atoms = split_reward(block.height)
-            if treasury_atoms:
-                self.treasury[block.height] = treasury_atoms
-            if miner_atoms:
-                key = self._decode_key(block.coinbase)
-                note = Output(key=key, value=miner_atoms)
-                identifier = output_id(note)
-                self.outputs[identifier] = note
-                # A reward is not spendable until COINBASE_MATURITY blocks later, so a
-                # chain that reorgs out the block cannot be spent into the new chain.
-                self.immature[identifier] = block.height
-
+        # The transactions are applied first so the block's fees are known before the
+        # coinbase is built: the miner is paid for the block AND for the transactions it
+        # chose to include.
+        total_fees = 0
         for payload in block.transactions:
             spend, indices = spend_from_wire(payload, self.pool, self.depth, self.rows)
             for tag in spend.tag_bytes():
@@ -507,6 +549,22 @@ class Chain:
             for tag in spend.tag_bytes():
                 self.spent_tags.add(tag)
                 self.pending_tags.discard(tag)
+            total_fees += int(getattr(spend, "fee", 0))
+
+        # Coinbase last, now that the fees are summed. Genesis carries no recipient, so
+        # it pays nobody.
+        if block.coinbase and block.height > 0:
+            miner_atoms, treasury_atoms = block_reward(block.height, total_fees)
+            if treasury_atoms:
+                self.treasury[block.height] = treasury_atoms
+            if miner_atoms:
+                note = Output(key=self._decode_key(block.coinbase), value=miner_atoms)
+                identifier = output_id(note)
+                self.outputs[identifier] = note
+                # A reward is not spendable until COINBASE_MATURITY blocks later, so a
+                # chain that reorgs the block out cannot be spent into the new chain.
+                self.immature[identifier] = block.height
+
         self.blocks.append(block)
         self._mature_coinbase()
 
