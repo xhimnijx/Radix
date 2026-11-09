@@ -21,10 +21,12 @@ So an account — one keypair — is spendable exactly once, and change must go 
 *different* account. That is not a harness shortcut; it is what per-key linkability
 means.
 
-> [!warning] The real design is one key per output
+> [!warning] The real design is one key per output — and it is unsolved here
 > A production wallet gives every output its own keypair via one-time addressing, so
 > each note has its own tag. That needs a key exchange the scheme does not provide yet
-> and is B2 work, not built here.
+> and is B2 work, not built here. The obstacle is written up in
+> [[One-Time Addressing]]: the natural construction needs a Diffie–Hellman-like
+> operation that lattices do not have.
 
 ## Structure
 

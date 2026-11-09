@@ -64,6 +64,7 @@ If you have A-Level Maths and Further Maths, read in this order:
 - [[The Chain]]
 - [[The Node and Miner]]
 - [[The Wallet and Its Accounts]]
+- [[One-Time Addressing]]
 
 ### Security
 - [[Security Analysis]]
