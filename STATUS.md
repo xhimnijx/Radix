@@ -71,7 +71,7 @@ lattice work, and it is recorded rather than hidden.
 
 | Gap | Why it matters | Who unblocks it |
 |---|---|---|
-| **Amounts are visible and unproven** | The largest functional gap between this and a privacy currency | Design + range proofs, needs a cryptographer |
+| **Amounts are visible and unproven** | The largest functional gap. `vault/Amount Confidentiality.md` surveys the options and says why **Bulletproofs are the wrong answer here** — they are curve/DLP-based and would silently make the whole protocol quantum-vulnerable | Design + range proofs, needs a cryptographer |
 | **No one-time addressing** | One keypair is spendable once, so a wallet has four notes, not four thousand. `vault/One-Time Addressing.md` explains why the obvious construction fails on the norm bound | Research |
 | ~~Discrete Gaussian not implemented~~ | **Closed 2026-11-09.** A table-driven discrete Gaussian, one binary file that Python reads and Rust `include_bytes!`s, so the two cannot sample different distributions. Truncation tail 2^-49.5 | done |
 | **Ring not bound to the pool** | Sound today only because prover and verifier are one process | Cheap fix, changing the transcript in both languages |
