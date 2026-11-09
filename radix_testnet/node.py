@@ -14,6 +14,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import __version__
 from . import chain as C
 from . import params as P
 from . import prover, store
@@ -162,6 +163,7 @@ class Node:
     def status(self) -> dict:
         return {
             "banner": "TESTNET - NO VALUE - NO SECURITY CLAIM",
+            "version": __version__,
             "height": self.chain.height,
             "tip": self.chain.tip.block_hash().hex(),
             "anchor": self.chain.anchor.hex(),

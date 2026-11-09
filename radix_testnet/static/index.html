@@ -89,6 +89,8 @@
   th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); font-size:13px; }
   th { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
   tr:last-child td { border-bottom:0; }
+  tr.clickable { cursor:pointer; }
+  tr.clickable:hover td { background:var(--panel-2); }
   .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
   .pill.pending { background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn); }
   .pill.confirmed { background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--good); }
@@ -426,8 +428,8 @@ function viewHistory() {
     <section class="card">
       ${rows.length ? `<table>
         <thead><tr><th>status</th><th>id</th><th>block</th><th>value</th><th>fee</th></tr></thead>
-        <tbody>${rows.map((entry) => `
-          <tr>
+        <tbody>${rows.map((entry, index) => `
+          <tr class="clickable" data-history="${index}">
             <td><span class="pill ${entry.status}">${entry.status}</span></td>
             <td class="mono">${esc(entry.id)}</td>
             <td>${entry.height === null ? "—" : entry.height}</td>
@@ -482,7 +484,7 @@ function viewSettings() {
       </section>
       <section class="card">
         <div class="stat"><div class="k">node</div><div class="v" style="font-size:16px">${esc(location.origin)}</div>
-          <div class="h">single local process · no peers</div></div>
+          <div class="h">single local process · no peers · v${esc(state.status.version)}</div></div>
         <div class="stats" style="margin-top:12px">
           <div class="mono">backend ${esc(state.status.backend)}</div>
           <div class="mono">q = ${state.status.parameters.q}</div>
@@ -527,6 +529,9 @@ function wire() {
   if (mineBtn) mineBtn.onclick = mine;
   const reviewBtn = $("#reviewBtn");
   if (reviewBtn) reviewBtn.onclick = review;
+  for (const row of document.querySelectorAll("[data-history]")) {
+    row.onclick = () => showTransaction(state.history[Number(row.dataset.history)]);
+  }
   const bookSave = $("#bookSave");
   if (bookSave) bookSave.onclick = saveContact;
   for (const button of document.querySelectorAll("[data-use]")) {
@@ -576,6 +581,32 @@ async function loadQr() {
     const host = $("#qrHost");
     if (host) host.innerHTML = `<div class="hint" style="width:190px">No QR code available.<br>${esc(error.message)}</div>`;
   }
+}
+
+function showTransaction(entry) {
+  if (!entry) return;
+  const when = entry.timestamp
+    ? new Date(entry.timestamp * 1000).toLocaleString()
+    : "not mined yet";
+  $("#modalBody").innerHTML = `
+    <h1 style="font-size:18px;margin:0 0 4px">Transaction</h1>
+    <div class="sub" style="margin-bottom:14px">
+      <span class="pill ${entry.status}">${entry.status}</span>
+    </div>
+    <div class="review">
+      <div class="line"><span>id</span><b class="mono">${esc(entry.id)}</b></div>
+      <div class="line"><span>block</span><b>${entry.height === null ? "—" : entry.height}</b></div>
+      <div class="line"><span>time</span><b>${esc(when)}</b></div>
+      <div class="line"><span>outputs</span><b>${entry.outputs}</b></div>
+      <div class="line"><span>value</span><b>${num(entry.value)}</b></div>
+      <div class="line"><span>fee</span><b>${num(entry.fee)}</b></div>
+    </div>
+    <div class="actions" style="justify-content:flex-end">
+      <button class="btn ghost" id="closeTx">Close</button>
+    </div>`;
+  const modal = $("#modal");
+  modal.showModal();
+  $("#closeTx").onclick = () => modal.close();
 }
 
 function review() {
@@ -684,14 +715,21 @@ try {
   if (saved) document.documentElement.dataset.theme = saved;
 } catch { /* private mode */ }
 
-window.addEventListener("hashchange", () => {
-  const view = location.hash.replace(/^#/, "") || "wallet";
+function route() {
+  // #history/0 is a link to one transaction, so a detail view can be shared.
+  const [name, argument] = location.hash.replace(/^#/, "").split("/");
+  const view = VIEWS[name] ? name : "wallet";
   if (view !== state.view) setView(view, false);
-});
+  if (view === "history" && argument !== undefined) {
+    const entry = state.history[Number(argument)];
+    if (entry) showTransaction(entry);
+  }
+}
 
-const initial = location.hash.replace(/^#/, "") || "wallet";
-setView(VIEWS[initial] ? initial : "wallet", false);
-refresh().then(render);
+window.addEventListener("hashchange", route);
+
+setView(VIEWS[location.hash.replace(/^#/, "").split("/")[0]] ? location.hash.replace(/^#/, "").split("/")[0] : "wallet", false);
+refresh().then(() => { render(); route(); });
 setInterval(refresh, 3000);
 </script>
 </body>

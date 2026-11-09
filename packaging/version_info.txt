@@ -1,0 +1,27 @@
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(0, 1, 0, 0),
+    prodvers=(0, 1, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('040904B0', [
+        StringStruct('CompanyName', 'Radix testnet'),
+        StringStruct('FileDescription', 'Valueless local testnet harness for the Candidate-B proof'),
+        StringStruct('FileVersion', '0.1.0.0'),
+        StringStruct('InternalName', 'RadixTestnet'),
+        StringStruct('LegalCopyright', 'No value. No security claim. Not a cryptocurrency.'),
+        StringStruct('OriginalFilename', 'RadixTestnet.exe'),
+        StringStruct('ProductName', 'Radix Testnet'),
+        StringStruct('ProductVersion', '0.1.0.0')
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)

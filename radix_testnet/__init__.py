@@ -5,4 +5,6 @@ TESTNET_BANNER = (
     "Local harness for exercising the Candidate-B proof."
 )
 
-__all__ = ["TESTNET_BANNER"]
+__version__ = "0.1.0"
+
+__all__ = ["TESTNET_BANNER", "__version__"]

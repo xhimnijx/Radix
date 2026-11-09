@@ -55,5 +55,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=str(ROOT / "packaging" / "icon.ico"),
+    version=str(ROOT / "packaging" / "version_info.txt"),
 )

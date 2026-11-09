@@ -15,7 +15,7 @@ import time
 import webbrowser
 from pathlib import Path
 
-from . import TESTNET_BANNER
+from . import TESTNET_BANNER, __version__
 from .node import Node, StateError, make_server
 from . import store
 
@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--data-dir", type=Path, default=None)
     parser.add_argument("--no-browser", action="store_true", help="do not open a window")
+    parser.add_argument("--version", action="version", version=f"radix-testnet {__version__}")
     args = parser.parse_args(argv)
 
     data_dir = args.data_dir or store.default_data_dir()

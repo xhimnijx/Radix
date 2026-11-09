@@ -80,6 +80,14 @@ is measured at 20 µs per multiplication (≈0.47 s to prove, 37 ms to verify) b
 proof is not ported, so the harness runs the reference implementation rather than
 pretending to be fast. `--backend rust` refuses instead of silently falling back.
 
+## Version and packaging details
+
+`--version` on the launcher and the CLI, `version` in `/api/status`, and the same
+string in the Settings page all come from `radix_testnet.__version__`, so they
+cannot drift. The executable carries that version plus the disclaimer as Windows
+file metadata, and ships with an icon: right-click it in Explorer and the
+description reads "Valueless local testnet harness for the Candidate-B proof".
+
 ## Configuration and logs
 
 First start writes `config.json` next to the chain:
@@ -147,6 +155,8 @@ python -m radix_testnet.cli gui
 | `miner.py` | mine the mempool |
 | `cli.py` | command line |
 | `static/index.html` | the wallet page, no external dependencies |
+| `log.py` | JSONL event log |
+| `packaging/` | PyInstaller spec, icon, version metadata, build script |
 
 Rings travel as **pool indices**, not keys: a depth-2 ring is 1024 lattice keys
 (≈2 MB) and no chain would put that in a block, so an envelope is ~70 KB.
@@ -157,6 +167,12 @@ Rings travel as **pool indices**, not keys: a depth-2 ring is 1024 lattice keys
 * **No persistence of trust.** The chain file is trusted on load and is not
   re-verified; do not share a data directory between machines.
 * **No economic layer.** The faucet is funded at genesis from nothing.
+* **The faucet seed is a public constant.** Anyone running this harness can derive
+  the same keys and spend the same units. That is deliberate — a faucet nobody can
+  use is not a faucet — and it is why there is no encrypted keystore: encrypting a
+  seed that is printed in the source would imply a security property the harness
+  does not have. `radix_core/wallet_keystore.py` has the sealed-key machinery if a
+  real wallet ever needs it.
 * **One key per account.** Spending an account burns it; change moves to the next.
 * **Trivial proof of work.** `POW_BITS = 10`, for block shape, not security.
 * **Deterministic parameters.** A fixed seed so node, wallet and tests agree; a real
