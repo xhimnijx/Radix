@@ -56,7 +56,7 @@ Aggregate from the last recorded run: **411 passed, 1 xfailed** for
 | **integration** `python_proof.rs` | 1 | **Python proof accepted by Rust** |
 | **integration** `round_trip.rs` | 3 | Rust proves → Rust verifies; tampered rejected; wire round-trip |
 
-Aggregate: **69 Rust tests**, all passing.
+Aggregate: **70 Rust tests**, all passing.
 
 ## The tests that matter most
 

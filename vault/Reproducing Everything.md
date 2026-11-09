@@ -34,7 +34,7 @@ signature and pushes it through the node.
 & .\scripts\rust.ps1 test -Directory proof_rust
 ```
 
-Expected: **69 passing** across the library and two integration tests.
+Expected: **70 passing** across the library and two integration tests.
 On macOS/Linux: `cd proof_rust && cargo test`.
 
 ## 4. The cross-language checks

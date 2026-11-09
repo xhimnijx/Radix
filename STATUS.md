@@ -14,7 +14,7 @@ The previous status said "no complete transaction proof exists". That is no long
 | Item | Then | Now |
 |---|---|---|
 | **Security pricing** | `2^50`, unpriced | **~`2^157` (A) and ~`2^174` (B₀)** by the delta model; both reviewers concur it clears 128. A real estimator run is still outstanding |
-| **Rust port** | arithmetic layer only | **complete**, 69 tests, and it accepts Python proofs while Python accepts Rust proofs |
+| **Rust port** | arithmetic layer only | **complete**, 70 tests, and it accepts Python proofs while Python accepts Rust proofs |
 | **Prover cost** | projected | **measured**: 475 ms to prove, 105.8 ms to verify, 9.75 attempts, 32,512 B untagged |
 | **Node verification** | 20–40 s (Python) | **0.44 s** through Rust — 91× on the tagged spend, the path a node actually uses |
 | **Batch verification** | assumed to help | **measured**: it cannot; proofs share nothing but the statement. Parallelism gives **4.22× on 8 cores** |
@@ -60,7 +60,7 @@ the same class of mistake as the arity defect the Rust port found, and it is rec
   — a corrupt phrase file and a missing phrase beside an existing chain both stop the
   node.
 - **Testnet**: node, miner, wallet UI, CLI, Rust backend, Android app, systemd deployment.
-- **Tests**: 435 passing plus 1 xfail on the fast path; 69 Rust.
+- **Tests**: 436 passing plus 1 xfail on the fast path; 70 Rust.
 
 One known flake: `tests/test_nonce_multiprocess.py` fails roughly once per full run under
 concurrency and passes 6/6 in isolation. It is Candidate-A legacy, unrelated to the

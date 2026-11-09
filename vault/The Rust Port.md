@@ -49,7 +49,7 @@ Everything in `lib.rs` at the root: `R_q` arithmetic, slots, CRT, norms.
 
 ## Tests
 
-69 tests: 13 module groups plus two integration tests (`python_proof.rs`,
+70 tests: 13 module groups plus two integration tests (`python_proof.rs`,
 `round_trip.rs`). [[Test Inventory]] has the table.
 
 ## What is not ported

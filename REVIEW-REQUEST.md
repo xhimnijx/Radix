@@ -126,7 +126,7 @@ estimate does not capture, say so.
 
 ```powershell
 python -m pytest -q -m "not slow"        # 435 passed, 1 xfailed
-cd proof_rust && cargo test              # 69 passed
+cd proof_rust && cargo test              # 70 passed
 python experiments/verify_rust_proof.py  # Rust proof -> Python verifier
 cd proof_rust && cargo run --release --bin bench_batch   # the 4.22x
 ```
