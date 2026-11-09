@@ -381,3 +381,26 @@ own docstring rather than letting its existence imply more.
 2. **A proof for the noisy relation** -- the linear algebra exists; the extraction argument
    and the `k` extra witness components do not.
 3. **The estimator run**, still five minutes on any Linux box.
+
+## Where the goal actually stands (round 9)
+
+| Item | State |
+|---|---|
+| 1. Hidden amounts | range witness carried and validated; **alpha slots specified in `docs/ALPHA-SLOTS.md`, not built** |
+| 2. Noise-aware statement | **wired end to end at ell = 17**; C1's extraction argument unwritten |
+| 3. One-time addressing | **derivation works** (7 tests); KEM and wallet integration outstanding |
+| 4. Network hardening | **complete** -- auth, multi-hop, slow start, checkpoints |
+| 5. Paper | draft, claims and limitations fixed, prose TODO |
+| 6. Green | 578 passed, 1 xfail, 74 Rust |
+
+**The honest bottleneck.** Items 1 and 2 both need the proof statement to grow, and that
+is one integrated change: commitment arity, `masking_width`, the beta challenges, the psi
+and omega terms, the relaxed carry rows, the verifier, both fixtures and the Gaussian
+tables, all at once. It cannot be done in fragments, and three attempts that tried failed
+for exactly that reason. `docs/ALPHA-SLOTS.md` writes the plan down so the next attempt
+starts from it.
+
+**What becomes the blocker.** Once the alpha slots land, shipping the range proof requires
+C1's extraction argument for `[A | I_k]` and the alpha-slot soundness accounting C2
+supplied. A range proof with an unwritten soundness argument is not shippable. Building it
+is not blocked; shipping it is.

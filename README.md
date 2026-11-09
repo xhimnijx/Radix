@@ -119,6 +119,7 @@ Root documents:
 - [`docs/CONFIDENTIAL-TRANSACTIONS.md`](docs/CONFIDENTIAL-TRANSACTIONS.md) — hiding transaction amounts, in detail
 - [`docs/COMPRESSION.md`](docs/COMPRESSION.md) — what is left of the 4 KB, and why it stops there
 - [`docs/PAPER.md`](docs/PAPER.md) — an implementation-study draft, with the claims and the limitations
+- [`docs/ALPHA-SLOTS.md`](docs/ALPHA-SLOTS.md) — the change specification for the range proof
 - [`DEPLOY.md`](DEPLOY.md) — running a stagenet node on a second machine
 - [`TESTNET.md`](TESTNET.md) — how to run and build the app
 - [`PLAIN-ENGLISH.md`](PLAIN-ENGLISH.md) — the same story without jargon
