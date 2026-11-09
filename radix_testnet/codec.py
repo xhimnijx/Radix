@@ -46,7 +46,8 @@ def decode_proof(
     width = S.masking_width(depth, p, rows)
     # z is two bytes per coefficient, everything else four.
     expected = (
-        (commitment_count + 2 + p.matrix_cols) * poly_bytes
+        (commitment_count + 2) * poly_bytes
+        + p.matrix_cols * p.ring_degree * 2
         + width * p.ring_degree * 2
         + 2 * p.ring_degree
     )
@@ -66,7 +67,10 @@ def decode_proof(
     commitment = take(commitment_count)
     h = take(1)[0]
     omega = take(1)[0]
-    response_prime = take(p.matrix_cols)
+    response_prime = S.decode_bounded(
+        data[cursor : cursor + p.matrix_cols * p.ring_degree * 2], p.matrix_cols
+    )
+    cursor += p.matrix_cols * p.ring_degree * 2
     response = S.decode_bounded(data[cursor : cursor + width * p.ring_degree * 2], width)
     cursor += width * p.ring_degree * 2
     challenge = tuple(value - 1 for value in data[cursor : cursor + p.ring_degree])

@@ -350,11 +350,10 @@ class Proof:
         residue modulo `q` costs four bytes for no added information.
         """
         body = b"".join(
-            ring.encode(poly)
-            for poly in self.commitment
-            + (self.h, self.omega)
-            + self.response_prime
+            ring.encode(poly) for poly in self.commitment + (self.h, self.omega)
         )
+        # Both responses are bounded by 12 sigma and fit 16 bits; z' has its own sigma.
+        body += encode_bounded(self.response_prime)
         body += encode_bounded(self.response)
         body += bytes(coefficient + 1 for coefficient in self.challenge)
         body += bytes(coefficient + 1 for coefficient in self.challenge_prime)
@@ -735,6 +734,10 @@ def verify(
                 return False
         if _l2_squared(proof.response, sm) > _response_bound(width, sm):
             return False
+        limit_prime = response_bound_infinity(sm.matrix_cols)
+        for poly in proof.response_prime:
+            if any(min(value, sm.modulus - value) > limit_prime for value in poly):
+                return False
         if _l2_squared(proof.response_prime, sm) > _response_bound(sm.matrix_cols, sm):
             return False
         # The line-13 argument divides by c^2 and the tag argument by c', so both

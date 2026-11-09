@@ -59,7 +59,7 @@ protocol**, and section 4.5 gives its sizes. Figures below are from
 **This reverses the estimate I wrote in the first draft of this note.** I guessed that a
 range proof would add 15–20× and blow the size budget. The paper's own number for a
 *complete* confidential transaction — hidden amounts, hidden sender, ring size 1024 — is
-**26.49 KB**, which is *smaller than our current 24.5 KB untagged proof for a single
+**26.49 KB**, which is *smaller than our current 21.25 KB untagged proof for a single
 input.*
 
 The consequence is the opposite of the one I expected:
@@ -67,7 +67,7 @@ The consequence is the opposite of the one I expected:
 - **Amounts are affordable.** At 26.49 KB per transaction, ten transactions per
   120-second block is 69 GB/year, and one per block is 7 GB/year — inside the 100–300 GB
   budget set in `docs/CONSENSUS.md`.
-- **Our implementation is the problem, not the design.** We are at 24.5 KB for one
+- **Our implementation is the problem, not the design.** We are at 21.25 KB for one
   input with visible amounts, against the paper's 26.49 KB for two inputs and two
   outputs with hidden amounts. Roughly a 2.5× gap, and it is *compression*, not
   cryptography.
@@ -141,7 +141,7 @@ that is fatal unless the notes are cheap.
 The question is no longer whether amounts fit — the paper says they do, at 26.49 KB for
 a 2-in/2-out transaction. The questions are:
 
-1. **Close the compression gap first.** 24.5 KB → the paper's ~17 KB ring signature is
+1. **Close the compression gap first.** 21.25 KB → the paper's ~17 KB ring signature is
    a representation problem (entropy-coded `z`, compressed keys, Bai–Galbraith), not a
    cryptographic one. Until that is done, we are not comparing like with like, and every
    amount-related estimate inherits the overhead.

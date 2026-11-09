@@ -101,6 +101,15 @@ fn verify_inner(
     if proof.response.iter().map(|p| l2_squared(p) as f64).sum::<f64>() > bound {
         return Ok(false);
     }
+    let limit_prime = (12.0 * crate::statement::mask_std(MATRIX_COLS)) as i64;
+    for poly in &proof.response_prime {
+        if poly.iter().any(|value| {
+            let centred = crate::centered(*value);
+            centred <= -limit_prime || centred >= limit_prime
+        }) {
+            return Ok(false);
+        }
+    }
     let bound_prime = response_bound(MATRIX_COLS);
     if proof
         .response_prime

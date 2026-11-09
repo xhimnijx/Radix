@@ -109,7 +109,8 @@ impl ProofWire {
     /// The exact byte length for a statement with `commitment_count` commitment
     /// polynomials and a `width`-component response.
     pub fn expected_len(commitment_count: usize, response_prime_count: usize, width: usize) -> usize {
-        (commitment_count + 2 + response_prime_count) * POLY_BYTES
+        (commitment_count + 2) * POLY_BYTES
+            + response_prime_count * D * 2
             + width * D * 2
             + 2 * CHALLENGE_BYTES
     }
@@ -139,7 +140,11 @@ impl ProofWire {
         let commitment = take(commitment_count)?;
         let h = take(1)?[0];
         let omega = take(1)?[0];
-        let response_prime = take(response_prime_count)?;
+        let mut response_prime = Vec::with_capacity(response_prime_count);
+        for _ in 0..response_prime_count {
+            response_prime.push(decode_bounded_poly(bytes, cursor)?);
+            cursor += D * 2;
+        }
         let mut response = Vec::with_capacity(width);
         for _ in 0..width {
             response.push(decode_bounded_poly(bytes, cursor)?);
@@ -171,7 +176,7 @@ impl ProofWire {
         out.extend_from_slice(&encode_poly(&self.h));
         out.extend_from_slice(&encode_poly(&self.omega));
         for poly in &self.response_prime {
-            out.extend_from_slice(&encode_poly(poly));
+            out.extend_from_slice(&encode_bounded_poly(poly));
         }
         for poly in &self.response {
             out.extend_from_slice(&encode_bounded_poly(poly));

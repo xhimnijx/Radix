@@ -50,7 +50,7 @@ build, eight proofs:
 
 | | measured |
 |---|---|
-| proof size | **25,088 bytes** (was 32,512 before the `z` compression) |
+| proof size | **21,760 bytes** (was 32,512 before compressing both responses) |
 | **prove** | **496 ms** |
 | **verify** | **110 ms** |
 | attempts per proof | 9.75 |

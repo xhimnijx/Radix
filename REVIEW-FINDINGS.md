@@ -810,11 +810,14 @@ four bytes to carry a value that needs two.
 
 ## Measured
 
+Both responses are bounded this way, so the same treatment applies to `z'` with its
+own sigma (`12 * 1673 = 20,076`, also 16 bits).
+
 | | before | after |
 |---|---|---|
-| untagged proof | 32,512 B | **25,088 B** (‑22.8%) |
-| tagged proof | 36,608 B | **28,160 B** |
-| tagged total with tag | 38,656 B | **30,208 B** |
+| untagged proof | 32,512 B | **21,760 B** (‑33.1%) |
+| tagged proof | 36,608 B | **24,832 B** |
+| tagged total with tag | 38,656 B | **26,880 B** |
 
 Verified rather than assumed: the reduced proof still verifies; it round-trips through
 the decoder with an identical `response` vector; both cross-language fixtures were
