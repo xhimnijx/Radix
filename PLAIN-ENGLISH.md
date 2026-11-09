@@ -6,18 +6,41 @@ dated record and `AUDIT-PACKET-LATTICE.md` is the technical audit.
 
 ## The one-sentence version
 
-We have a working mathematical proof that lets someone demonstrate *"I am allowed
-to spend one of these 1,024 coins, and I will not tell you which one"*, on maths a
-quantum computer cannot break. It runs and it is tested. Two independent
-cryptographers reviewed it in November 2026: the proof itself held up, but at the
-current parameters the argument is only about **24-bit sound**, not 128, and the
-first serial number for catching double spending could be forged — I reproduced
-that forgery. It has since been rebuilt into the same proof and now works (with a
-caveat about distinct coins, below).
+We have a working mathematical proof that lets someone demonstrate *"I am allowed to
+spend one of these 1,024 coins, and I will not tell you which one"*, on maths a quantum
+computer cannot break. It runs, it is tested, it is written twice in two languages that
+agree, and two independent cryptographers have now put a number on it: the hard problem
+underneath is worth about **2^157** operations — far beyond anything a classical or
+quantum computer can do today.
 
-So: the privacy half exists and is sound in construction; the anti-double-spend
-half does not exist; the parameters are open. It is **not** a coin: there is no
-network, no wallet app, no mining.
+## What changed since this page was first written
+
+This document used to say the proof had been reviewed and the parameters were unpriced.
+That is now out of date in three ways, and the corrections are more interesting than the
+original text.
+
+**The parameters are priced, and they are fine.** Two cryptography reviewers, working
+independently, put the hard problem at roughly 2^157 and 2^174 operations. The earlier
+worry that it might be far weaker came from a comparison that was backwards: the proof's
+tolerance sat *below* what an attacker could reach, which means the attack is harder than
+expected, not easier.
+
+**I had the numbers wrong.** My own estimate used the wrong dimension for one of the two
+problems — I used 23×128 where the correct figure was 33×128. The number 23 is the count
+of commitments, which happens to equal the width in one special configuration. That is
+the second time in this project that mixing up "how many commitments" with "how wide the
+proof is" produced a wrong answer, and both times an independent implementation caught
+it rather than a review.
+
+**It now runs fast enough for a node.** The same proof can be produced by a second
+implementation written in Rust, which agrees with the first in both directions, and a
+node checking a spend goes from 40 seconds to under half a second — about 91 times
+faster. That is the difference between a demonstration and something you could run on a
+phone's behalf.
+
+**And it fits in your pocket.** There is an Android app, 24 KB, that talks to a node on
+your network. It holds no keys: the node signs. That limitation is stated in the app
+itself.
 
 ## What it is trying to be
 
