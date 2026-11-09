@@ -1,4 +1,4 @@
-# Status — 2026-11-08
+﻿# Status â€” 2026-11-08
 
 **One line:** the tree builds, the suite is green, the verified safety defects are
 fixed, and the mainnet launch gate exists and ships **closed**. The proof side is
@@ -17,10 +17,11 @@ in `REVIEW-FINDINGS.md`. Summary:
 | Masking without rejection sampling | **soundness failure**: the response bound `2^20`, not `mu = 5`, is the security parameter; the core is roughly `2^50`, not `2^128` |
 | The linkable tag | first version **forgeable** (reproduced here without a key); rebuilt as a same-witness extension on C1's advice, `A_ext = [A; A']`, 33.5 KB, 6 tests. k' = 1 gives same-note linkability; distinct-note collision resistance needs k' = 4 and is **not** claimed |
 | Modulus | **migrated, 2026-11-09.** `q = 4,294,966,337`, `ord_256 = 4`, 32 irreducible quartics. The `c - c~` cap moves from ~2^-24 to ~2^-123 and the extracted `v` becomes a 32-entry binary vector, so both Q3' and Q6 are closed by the one change. Proof still verifies, 32,512 B, 23.8 s / 20.7 s |
-| Masks | open, and now the only independent blocker. Calibrated in `experiments/mask_calibration.py`: `s = 2^11.4`, `s' = 2^10.7`, `M = sqrt(3/2)`, ~3.7 bits of root-Hermite margin. Not yet implemented |
+| Masks | **implemented, 2026-11-09.** Gaussian masks with the paper's `Rej1`, calibrated in `experiments/mask_calibration.py` (`s = 2^11.4`, `s' = 2^10.7`, `M = sqrt(3/2)`), and the verifier checks the paper's l2 bound `beta = s sqrt(2Wd)`. The `2^20` uniform mask, which made the response bound rather than the secret bound the security parameter, is gone. Suite green, 415 passed |
+| Performance | **measured, 2026-11-09** (`PERFORMANCE.md`). Rust arithmetic cross-checked against Python bit for bit: prove ~0.47 s, verify 37 ms. Verify passes 100 ms on desktop and is marginal on a phone |
 | Theorem B.1 under the new modulus | **salvageable**: three edits to the statement, none to the argument (C2). `p` redefined over `F_{q^4}`, `c-bar` invertibility made an explicit hypothesis, and the slot-constant property noted as coming from the modulus. The induction gets shorter, not longer |
 
-The suite is 410 tests: 409 passing and one strict-xfail that guards the withdrawn tag construction. Nothing in this repository may claim 128-bit security
+The suite is 416 tests: 415 passing and one strict-xfail that guards the withdrawn tag construction. Nothing in this repository may claim 128-bit security
 until the masking is restored and the parameters are re-derived.
 
 ## Repository layout (2026-11-08)
@@ -72,7 +73,7 @@ wraps that. This is a real build and a real test run, not a type-check.
 | SHAKE256 Candidate-A hashes | implemented, known-answer vectors |
 | ML-KEM-768 + AES-256-GCM adapters (`cryptography==50.0.2`) | real providers, round-trip and negative tests |
 | Wallet keygen, note create/recover, bounded and authenticated scan | implemented; scan containment fixed and regression-tested |
-| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `archive/candidate-a/Radix-Workspace-Review.md` §3.I1) |
+| Sparse depth-64 tree, anchors, integer balance, atomic `apply_block` | implemented; **quadratic replay** (see `archive/candidate-a/Radix-Workspace-Review.md` Â§3.I1) |
 | Nonce registries (process-local + SQLite) | implemented; default is now unbounded |
 | Pruned-storage arithmetic model | implemented as an unenforced planning model |
 | Launch gate (`radix_core/launch.py`) | implemented, 20 tests; **closed by default** |
@@ -86,17 +87,17 @@ wraps that. This is a real build and a real test run, not a type-check.
 The half-landed key-schedule overlay was reverted to a contiguous 1,920-bit bank
 (the split was not consistent and the overlay's column lifetime was unproven).
 That costs 1,152 trace columns and makes the fail-closed preflight worse, not
-better — recorded honestly rather than hidden:
+better â€” recorded honestly rather than hidden:
 
 | Quantity | Value |
 |---|---|
-| RDXL trace | 8,192 × 15,629 BabyBear values (512,131,072 B) |
-| Randomized matrix | 16,384 × 15,633 (1,024,524,288 B) |
+| RDXL trace | 8,192 Ã— 15,629 BabyBear values (512,131,072 B) |
+| Randomized matrix | 16,384 Ã— 15,633 (1,024,524,288 B) |
 | PCS LDE payload | 4,098,097,152 B (3.82 GiB) |
 | Randomized + LDE coexistence | 5,122,621,440 B (4.77 GiB) |
 | Cross-target process cap used by the guard | 1,073,741,824 B (1 GiB) |
 | Best measured input-half profile | `RDXJ64P1`, 9,518 MiB peak working set |
-| Component proof sizes | 175,252–327,502 B |
+| Component proof sizes | 175,252â€“327,502 B |
 
 ## Decision: the M3 lean-relation experiment (executed 2026-11-08)
 
@@ -169,7 +170,7 @@ so the prototype fixes an NTT-friendly 32-bit prime and sets
   one column, 9 tests.
 - `ntt.py` is the negacyclic number-theoretic transform: exact integer arithmetic,
   twist + radix-2, `O(d log d)` instead of `O(d^2)`. It is not an optimisation
-  nicety — the Fig. 6 recursion is stated in the NTT domain (Lemmas 2.1/2.2 are
+  nicety â€” the Fig. 6 recursion is stated in the NTT domain (Lemmas 2.1/2.2 are
   statements about NTT coefficients and the "first `d/l` zero coefficients"), and
   every honest value there is committed as `NTT^-1` of a short vector. `ring.mul`
   uses it; `mul_naive` stays as the audited reference and the tests assert they
@@ -288,7 +289,7 @@ the active path; C is the designated fallback** with explicit re-open triggers. 
 | Skipped | Reason | Re-enable when |
 |---|---|---|
 | 7 Rust proof tests (`#[ignore]`) | peak RSS is unbounded and exceeds the provisional device budgets | a profile is measured under a 4 GiB desktop cap |
-| `RDXL64P1` proving | preflight returns `ResourceBudgetExceeded` before allocation | the lean-relation experiment (§ M3) produces a fitting profile |
+| `RDXL64P1` proving | preflight returns `ResourceBudgetExceeded` before allocation | the lean-relation experiment (Â§ M3) produces a fitting profile |
 
 ## Launch posture
 
@@ -322,6 +323,7 @@ each figure and equation, the five deviations from the paper with the risk each
 one carries, the three gaps that keep this from being a transaction layer (no
 nullifier proof, no range proofs, no linkability), and the four things a reviewer
 should check first. It says in the first paragraph that no security claim is made.
+
 
 
 
