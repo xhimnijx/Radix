@@ -47,6 +47,30 @@ pub fn verify(
     proof: &ProofWire,
     message: &[u8],
 ) -> Result<bool, ProofError> {
+    verify_inner(keys, statement, proof, message, &mut Vec::new())
+}
+
+/// Like `verify`, but records the name of each stage it enters. The last name is
+/// the stage that failed, which is the difference between debugging this port and
+/// staring at it.
+pub fn verify_traced(
+    keys: &Keys,
+    statement: &Statement,
+    proof: &ProofWire,
+    message: &[u8],
+) -> Result<(bool, Vec<&'static str>), ProofError> {
+    let mut trace = Vec::new();
+    let ok = verify_inner(keys, statement, proof, message, &mut trace)?;
+    Ok((ok, trace))
+}
+
+fn verify_inner(
+    keys: &Keys,
+    statement: &Statement,
+    proof: &ProofWire,
+    message: &[u8],
+    trace: &mut Vec<&'static str>,
+) -> Result<bool, ProofError> {
     let depth = keys.depth;
     let rows = statement.rows();
     let width = masking_width(depth, keys.row_count)?;
@@ -55,6 +79,7 @@ pub fn verify(
         return Ok(false);
     }
 
+    trace.push("bounds");
     // l2 bounds, as the paper states them.
     let bound = response_bound(width);
     if proof.response.iter().map(|p| l2_squared(p) as f64).sum::<f64>() > bound {
@@ -71,6 +96,7 @@ pub fn verify(
         return Ok(false);
     }
 
+    trace.push("units");
     // Both challenges must be units: the line-13 argument divides by c^2.
     let challenge = crate::lift_challenge(&proof.challenge);
     let challenge_prime = crate::lift_challenge(&proof.challenge_prime);
@@ -84,11 +110,14 @@ pub fn verify(
         w.push(sub(&dot(row, &proof.response), &mul_crt(&challenge, &proof.commitment[index])));
     }
 
+    trace.push("head");
     let head_length = CHALLENGE_DIM + depth + rows + 1;
     let mut transcript = head(message, &w, &proof.commitment[..head_length]);
+    trace.push("c-prime");
     if draw_ternary(&mut transcript, b"c-prime") != proof.challenge_prime {
         return Ok(false);
     }
+    trace.push("z-prime");
     transcript.absorb(b"z-prime", &crate::statement::encode_vector(&proof.response_prime));
 
     // The paper's position -> commitment-slot map.
@@ -97,6 +126,7 @@ pub fn verify(
         slot_of[position] = paper_to_slot(position, depth, rows)?;
     }
 
+    trace.push("values");
     // line 04: t_{m+i} -= (A z')_i
     let a_z: Vec<Poly> = statement
         .matrix
@@ -109,6 +139,7 @@ pub fn verify(
         values[at] = sub(&values[at], &a_z[index - 1]);
     }
 
+    trace.push("f");
     // line 05
     let mut f: Vec<Poly> = vec![zero(); rows + 2 * depth + 2];
     for position in 1..=rows + 2 * depth + 1 {
@@ -118,6 +149,7 @@ pub fn verify(
         );
     }
 
+    trace.push("descent");
     // lines 06-09: the descent.
     let mut matrix = set_matrix(&challenge_prime, statement);
     let mut weights: Vec<Vec<Poly>> = vec![Vec::new(); depth + 1];
@@ -133,10 +165,13 @@ pub fn verify(
         );
     }
 
+    trace.push("gamma-m");
     let gamma_m: Vec<Poly> = (0..=depth).map(|_| draw(&mut transcript, b"gamma-m")).collect();
+    trace.push("final_x");
     let x_last = final_x(&matrix, &gamma_m, depth)?;
     let e1_sum = add_all(gamma_m[1..=depth].iter().cloned());
 
+    trace.push("total-10");
     // line 10
     let mut total = add(
         &mul_crt(&f[1], &f[depth + rows + 1]),
@@ -148,6 +183,7 @@ pub fn verify(
         ),
     );
 
+    trace.push("total-11");
     // line 11
     for level in 2..depth {
         total = add(
@@ -162,6 +198,7 @@ pub fn verify(
         );
     }
 
+    trace.push("total-12");
     // line 12, with e_1 at order c^2
     total = add(
         &total,
@@ -177,23 +214,28 @@ pub fn verify(
         ),
     );
 
+    trace.push("inner");
     // line 13
     let inner = sub(
         &sub(&total, &mul_crt(&challenge, &f[rows + 2 * depth])),
         &mul_crt(&mul_crt(&challenge, &challenge), &proof.h),
     );
+    trace.push("h");
     transcript.absorb(b"h", &crate::codec::encode_poly(&proof.h));
+    trace.push("alphas");
     let alphas: Vec<Poly> = (0..=depth).map(|_| draw(&mut transcript, b"alpha")).collect();
     transcript.absorb(
         b"t-psi",
         &crate::codec::encode_poly(&proof.commitment[proof.commitment.len() - 1]),
     );
     transcript.absorb(b"omega", &crate::codec::encode_poly(&proof.omega));
+    trace.push("c");
     if draw_ternary(&mut transcript, b"c") != proof.challenge {
         return Ok(false);
     }
 
-    let lhs = sub(
+    // The final term is *added*, not subtracted: python's `ring.add(x, f[...])`.
+    let lhs = add(
         &add(
             &mul_crt(&alphas[0], &inner),
             &add_all((0..depth).map(|index| {
@@ -208,10 +250,12 @@ pub fn verify(
         ),
         &f[rows + 2 * depth + 1],
     );
+    trace.push("omega");
     if lhs != proof.omega {
         return Ok(false);
     }
 
+    trace.push("prefix");
     // lines 14-15
     let prefix = crate::D / SLOTS;
     if proof.h[..prefix].iter().any(|value| *value != 0) {

@@ -41,6 +41,17 @@ pub fn masking_width(depth: usize, rows: usize) -> Result<usize, ProofError> {
     Ok(CHALLENGE_DIM + MASKING_DIM + rows + 2 * depth + 1)
 }
 
+/// The number of polynomials in the commitment vector.
+///
+/// `kappa + rows + 2m + 1`: the `kappa` `t_0` entries, one per paper position
+/// `1..k+2m+1`, and `psi`. An earlier version of this file used
+/// `kappa + lambda + depth + 1`, which happens to equal 23 for the *tagged*
+/// parameters (rows = 8) and is wrong everywhere else -- the Python testnet codec
+/// has the same latent bug for the same reason.
+pub fn commitment_count(rows: usize, depth: usize) -> usize {
+    CHALLENGE_DIM + rows + 2 * depth + 1
+}
+
 /// The masking width `s = 464 * sqrt(W)`, calibrated by
 /// `experiments/mask_calibration.py` so that `M = sqrt(3/2)`.
 pub fn mask_std(width: usize) -> f64 {

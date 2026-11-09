@@ -39,7 +39,10 @@ def decode_proof(
     """
     p = SMILE if parameters is None else parameters
     poly_bytes = p.ring_degree * 4
-    commitment_count = p.challenge_dim + p.masking_dim + depth + 1
+    # kappa + rows + 2m + 1. The previous formula was kappa + lambda + depth + 1,
+    # which is 23 for the tagged parameters (rows = 8) and wrong for every other
+    # shape -- it happened to work only because the harness only used tagged ones.
+    commitment_count = p.challenge_dim + rows + 2 * depth + 1
     width = S.masking_width(depth, p, rows)
     expected = (commitment_count + 2 + p.matrix_cols + width) * poly_bytes + 2 * p.ring_degree
     if len(data) != expected:

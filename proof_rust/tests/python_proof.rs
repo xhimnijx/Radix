@@ -9,9 +9,9 @@
 use radix_lattice::codec::{decode_poly, ProofWire};
 use radix_lattice::sample::uniform_from;
 use radix_lattice::statement::{
-    masking_width, Keys, Statement, CHALLENGE_DIM, MASKING_DIM, MATRIX_COLS,
+    commitment_count, masking_width, Keys, Statement, CHALLENGE_DIM, MATRIX_COLS,
 };
-use radix_lattice::verifier::verify;
+use radix_lattice::verifier::verify_traced;
 use radix_lattice::{Poly, D};
 
 const DEPTH: usize = 2;
@@ -31,7 +31,6 @@ fn fixture() -> Vec<u8> {
 // Python proof, so at least one stage disagrees with the reference. Left visible
 // and ignored rather than deleted or weakened: `cargo test -- --ignored` runs it.
 #[test]
-#[ignore = "cross-language verification not yet debugged"]
 fn the_rust_verifier_accepts_a_python_proof() {
     let bytes = fixture();
     let public_bytes = ROWS * D * 4;
@@ -78,12 +77,17 @@ fn the_rust_verifier_accepts_a_python_proof() {
     ring_keys[HONEST] = public;
     let statement = Statement::new(matrix, ring_keys, DEPTH).expect("statement");
 
-    let commitment_count = CHALLENGE_DIM + MASKING_DIM + DEPTH + 1;
-    let proof = ProofWire::decode(proof_bytes, commitment_count, MATRIX_COLS, width)
+    let proof = ProofWire::decode(
+        proof_bytes,
+        commitment_count(ROWS, DEPTH),
+        MATRIX_COLS,
+        width,
+    )
         .expect("decode the python proof");
 
+    let (ok, trace) = verify_traced(&keys, &statement, &proof, MESSAGE).expect("verify");
     assert!(
-        verify(&keys, &statement, &proof, MESSAGE).expect("verify"),
-        "the rust verifier rejected a valid python proof"
+        ok,
+        "rejected after stages: {trace:?} (the last one is where it stopped)"
     );
 }
