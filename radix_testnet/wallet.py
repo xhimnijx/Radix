@@ -25,6 +25,7 @@ from radix_core.candidate_b.lattice import ring, ring_signature as RS
 from radix_core.candidate_b.lattice.params import SMILE, SmileParameters
 from radix_core.candidate_b.lattice.spend import Output
 
+from . import mnemonic as M
 from . import tagged as T
 
 ADDRESS_PREFIX = "rtx"
@@ -106,11 +107,54 @@ class Account:
 
 @dataclass
 class Wallet:
-    """A seed, a set of accounts, and the notes each account can spend."""
+    """A seed, a set of accounts, and the notes each account can spend.
+
+    The seed comes from a mnemonic phrase (see `mnemonic.py`), so a wallet is
+    portable: the same twelve words rebuild the same four accounts on any device.
+    """
 
     seed: bytes
     parameters: RS.Parameters
     accounts: list[Account] = field(default_factory=list)
+    #: The phrase this wallet came from, when it came from one.
+    phrase: str | None = None
+    #: Which derivation produced the seed; bumping it keeps old phrases working.
+    version: str = "v1"
+
+    @classmethod
+    def generate(cls, parameters: RS.Parameters, strength: int = 128) -> "Wallet":
+        """A fresh wallet from the operating system's CSPRNG."""
+        phrase = M.new_phrase(strength)
+        return cls(
+            seed=M.wallet_seed(phrase),
+            parameters=parameters,
+            phrase=phrase,
+        )
+
+    @classmethod
+    def from_mnemonic(
+        cls, phrase: str, parameters: RS.Parameters, version: str = "v1"
+    ) -> "Wallet":
+        """Rebuild a wallet from a phrase. Raises `MnemonicError` if it is corrupt."""
+        cleaned = M.normalise(phrase)
+        # Raises on a bad checksum before any key derivation happens.
+        M.to_entropy(cleaned)
+        return cls(
+            seed=M.wallet_seed(cleaned, version),
+            parameters=parameters,
+            phrase=cleaned,
+            version=version,
+        )
+
+    @property
+    def fingerprint(self) -> str:
+        """A short, non-secret identifier for this wallet.
+
+        Two devices showing the same fingerprint hold the same wallet. It is derived
+        from the seed with a separate domain tag, so it reveals nothing usable.
+        """
+        digest = hashlib.sha256(b"radix/wallet/fingerprint" + self.seed).digest()
+        return digest[:4].hex()
 
     def __post_init__(self) -> None:
         if not self.accounts:

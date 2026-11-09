@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import threading
 import traceback
 import urllib.parse
@@ -24,6 +25,10 @@ from .tagged import SpendError
 from .wallet import Wallet, WalletError, address_of
 
 STATIC = Path(__file__).with_name("static")
+
+#: The mnemonic phrase, stored beside the chain. It is a secret: anyone who reads
+#: this file owns the wallet, which is why it is written 0600 and excluded from git.
+WALLET_FILE = "wallet.mnemonic"
 
 
 class StateError(RuntimeError):
@@ -50,8 +55,6 @@ class Node:
             level=self.config.get("log_level", "info"),
         )
         self.log.event("node.start", data_dir=str(self.data_dir), persist=persist)
-        self.faucet = faucet or Wallet(seed=P.faucet_seed(), parameters=self.parameters)
-
         loaded = None
         if chain is None and self.persist:
             state = self.data_dir / store.STATE_FILE
@@ -68,6 +71,14 @@ class Node:
                         "a new chain; the old file is left untouched."
                     ) from None
         self.chain = chain or loaded or Chain(parameters=self.parameters, depth=P.DEPTH)
+
+        # After the chain, not before: a corrupt chain file should report itself
+        # rather than being masked by the wallet check.
+        self.wallet_created = False
+        if faucet is not None:
+            self.faucet = faucet
+        else:
+            self.faucet, self.wallet_created = self._load_or_create_wallet()
         if not self.chain.blocks:
             # One note holding the whole faucet balance: identical outputs would
             # collapse into a single UTXO and silently shrink the supply.
@@ -87,6 +98,47 @@ class Node:
             outputs=len(self.chain.outputs),
             pool=len(self.chain.pool),
         )
+
+    def _load_or_create_wallet(self) -> tuple[Wallet, bool]:
+        """The node's wallet, from `wallet.mnemonic` or freshly generated.
+
+        A wallet that does not match the chain is worse than no wallet: every output
+        on the chain would belong to keys nobody holds. So a missing phrase beside an
+        existing chain is an error, not a reason to mint a new wallet.
+        """
+        params = self.parameters
+        if not self.persist:
+            return Wallet.generate(params), True
+
+        path = self.data_dir / WALLET_FILE
+        if path.exists():
+            phrase = path.read_text(encoding="utf-8").strip()
+            if not phrase:
+                raise StateError(f"{path} is empty")
+            try:
+                return Wallet.from_mnemonic(phrase, params), False
+            except Exception as error:
+                raise StateError(
+                    f"{path} could not be read as a wallet phrase ({error}). "
+                    "Move it aside only if you accept losing this wallet."
+                ) from None
+
+        if (self.data_dir / store.STATE_FILE).exists():
+            raise StateError(
+                f"{path} is missing but a chain exists. The chain's outputs belong to "
+                "keys derived from that phrase; starting a new wallet would orphan them. "
+                "Restore the phrase or remove the chain deliberately."
+            )
+
+        wallet = Wallet.generate(params)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((wallet.phrase + "\n").encode("utf-8"))
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            # Windows has no POSIX mode bits; the directory permissions apply instead.
+            pass
+        return wallet, True
 
     def _persist(self) -> None:
         if not self.persist:
@@ -188,6 +240,11 @@ class Node:
             "mempool": len(self.chain.mempool),
             "outputs": len(self.chain.outputs),
             "pool": len(self.chain.pool),
+            "wallet": {
+                "fingerprint": self.faucet.fingerprint,
+                "fresh": self.wallet_created,
+                "phrase_file": WALLET_FILE,
+            },
             "faucet": {
                 "address": self.faucet.accounts[0].short,
                 "full_address": self.faucet.accounts[0].address,

@@ -97,6 +97,15 @@ def main(argv: list[str] | None = None) -> int:
 
     print(TESTNET_BANNER)
     print()
+    if node.wallet_created:
+        print("NEW WALLET - write these twelve words down. They are the only way to")
+        print("restore this wallet on another device, and nothing else stores them:")
+        print()
+        print(f"    {node.faucet.phrase}")
+        print()
+        print(f"(also saved to {data_dir / 'wallet.mnemonic'})")
+        print()
+    print(f"wallet   {node.faucet.fingerprint}")
     print(f"node     {url}")
     print(f"data     {data_dir}")
     print(f"accounts {len(node.faucet.accounts)}")

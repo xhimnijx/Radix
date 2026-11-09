@@ -30,3 +30,6 @@ build/
 dist/
 *.spec.bak
 build-log.txt
+
+# Wallet recovery phrases - a secret, never committed
+*.mnemonic

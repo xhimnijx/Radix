@@ -105,6 +105,64 @@ def command_send(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_wallet(args: argparse.Namespace) -> int:
+    """Inspect or restore the wallet stored beside the chain.
+
+    The phrase lives on the machine running the node, not behind the HTTP API, so
+    this command reads the data directory directly rather than talking to a node.
+    """
+    from . import mnemonic as M
+    from . import params as P
+    from . import store
+    from .node import WALLET_FILE
+    from .wallet import Wallet
+
+    data_dir = args.data_dir or store.default_data_dir()
+    path = data_dir / WALLET_FILE
+    parameters = P.parameters()
+
+    if args.restore:
+        if path.exists() and not args.force:
+            raise SystemExit(
+                f"a wallet already exists at {path}; pass --force to replace it "
+                "(which loses the old one)"
+            )
+        if (data_dir / store.STATE_FILE).exists() and not args.force:
+            raise SystemExit(
+                "a chain exists here, so replacing the wallet would orphan its outputs; "
+                "pass --force only if that is what you mean"
+            )
+        cleaned = M.normalise(args.restore)
+        try:
+            M.to_entropy(cleaned)
+        except M.MnemonicError as error:
+            raise SystemExit(f"that phrase is not valid: {error}") from None
+        data_dir.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((cleaned + "\n").encode("utf-8"))
+        wallet = Wallet.from_mnemonic(cleaned, parameters)
+        print(f"restored wallet {wallet.fingerprint} to {path}")
+        return 0
+
+    if not path.exists():
+        raise SystemExit(
+            f"no wallet at {path}. Start the node once to create one, or restore an "
+            "existing phrase with: wallet --restore \"word1 word2 ...\""
+        )
+
+    phrase = path.read_text(encoding="utf-8").strip()
+    wallet = Wallet.from_mnemonic(phrase, parameters)
+    print(f"fingerprint  {wallet.fingerprint}")
+    print(f"file         {path}")
+    print(f"accounts     {len(wallet.accounts)}")
+    if args.show:
+        print()
+        print("WARNING: anyone who sees this phrase owns the wallet.")
+        print(f"phrase       {wallet.phrase}")
+    else:
+        print("phrase       hidden (pass --show to print it)")
+    return 0
+
+
 def command_gui(args: argparse.Namespace) -> int:
     url = args.url + "/"
     print(f"opening {url}")
@@ -118,6 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="A valueless local testnet for the Candidate-B proof.",
     )
     parser.add_argument("--url", default=DEFAULT_URL, help=f"node URL (default {DEFAULT_URL})")
+    parser.add_argument("--data-dir", default=None, help="where the chain and wallet live")
     parser.add_argument(
         "--backend",
         default="python",
@@ -148,6 +207,12 @@ def build_parser() -> argparse.ArgumentParser:
     send.add_argument("--amount", type=int, required=True)
     send.add_argument("--fee", type=int, default=10)
     send.set_defaults(func=command_send)
+
+    wallet = sub.add_parser("wallet", help="inspect or restore the wallet beside the chain")
+    wallet.add_argument("--show", action="store_true", help="print the recovery phrase")
+    wallet.add_argument("--restore", metavar="PHRASE", help="install a recovery phrase")
+    wallet.add_argument("--force", action="store_true", help="replace an existing wallet")
+    wallet.set_defaults(func=command_wallet)
 
     gui = sub.add_parser("gui", help="open the browser GUI")
     gui.set_defaults(func=command_gui)
