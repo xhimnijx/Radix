@@ -1,25 +1,27 @@
-feat: ell = 17 works end to end, which the noise-aware statement requires
+feat: slow start, so a fresh chain cannot be mined flat in minutes
 
-C1 and C2 both said the same thing in different words: A_noise = [A | I_k] has ell + k = 17
-columns where the default is 13, so the statement, keys, prover and verifier must all run
-at that width. Two hardcoded checks made it impossible to construct anything at a width
-other than the default:
+docs/CONSENSUS.md section 3.5 flagged this as NOT DECIDED and as the parameter most
+likely to be got wrong. It is decided now.
 
-  Parameters.__post_init__ validated A's rows against SMILE.matrix_cols
-  Statement.__post_init__ did the same
+For the first BOOTSTRAP_BLOCKS the target follows a fixed schedule -- halving every
+BOOTSTRAP_STEP blocks from the genesis target down to the hardest the chain allows --
+rather than the measured interval. Without it, a chain that starts with an easy target is
+mined flat by whoever starts first, which the 2x clamp only bounds rather than prevents.
 
-Both now derive the width from the rows they are given, so a statement is self-consistent
-rather than pinned to a global default. That is the correct rule anyway: a Statement that
-validates its own shape should not be consulting a module constant.
+The schedule is a hard ceiling on EASINESS, not on hardness: the measured target may be
+harder than the schedule and never easier. That asymmetry is deliberate -- an early miner
+who is honest and slow should not be punished for it, while an early miner who arrives
+first must not be rewarded for that either.
 
-A full prove and verify at ell = 17 now completes: 22,784 bytes, z' with 17 components,
-accepted against the right message and rejected against a different one. The test is marked
-slow because it produces a real proof (140 s).
+Measured: 2^50 at height 1, halving every 100 blocks, reaching the 2^32 floor after about
+1,800 blocks and ending at 4,000. Four tests: the schedule halves, it never asks for less
+than the floor, a fast miner cannot outrun it, and the measured target takes over once the
+window closes.
 
-Also generated the Gaussian table for width 17, since z' is masked at sigma = 464*sqrt(17)
-and the sampler refuses widths it has no table for -- which is the behaviour that was
-designed in, and it caught this correctly rather than substituting a nearby distribution.
+A pre-existing test had to move: `test_slow_blocks_make_the_target_larger` asserted that
+slow blocks ease difficulty off, which slow start now forbids DURING the window -- that is
+the feature, not a regression. The test now fast-forwards past the window and asserts the
+same property where it applies. Its timestamps were also in 2033, which the future rule
+rejects, so it had been passing for the wrong reason before.
 
-This is a prerequisite, not the statement itself: the proof at ell = 17 proves the plain
-SMILE relation over a 17-column matrix. Wiring the [A | I_k] split into the witness and the
-tag rows [A' | 0] is the next step, and the extraction argument for it is C1's.
+16 difficulty tests, and the chain, node and reward suites still pass.

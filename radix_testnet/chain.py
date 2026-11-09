@@ -31,6 +31,13 @@ MIN_TARGET = 1 << 32  #: hardest the chain will ever ask for
 MAX_TARGET = (1 << 64) - 1  #: easiest, and the width of the field
 #: Target spacing, and the LWMA window, from docs/CONSENSUS.md section 3.
 TARGET_INTERVAL = 120
+#: Slow start: for the first BOOTSTRAP_BLOCKS the target follows a fixed schedule
+#: rather than the measured interval, halving every BOOTSTRAP_STEP blocks. Without
+#: it a chain that starts with an easy target is mined flat in minutes by whoever
+#: starts first -- an instamine in everything but name, which the 2x clamp only
+#: bounds rather than prevents.
+BOOTSTRAP_BLOCKS = 4000
+BOOTSTRAP_STEP = 100
 LWMA_WINDOW = 90
 MEDIAN_WINDOW = 11
 FUTURE_DRIFT = 7200
@@ -359,6 +366,19 @@ class Chain:
         ordered = sorted(recent)
         return ordered[len(ordered) // 2]
 
+    def bootstrap_target(self, height: int) -> int | None:
+        """The scheduled target during slow start, or None once it is over.
+
+        Halves every `BOOTSTRAP_STEP` blocks from the genesis target down to the hardest
+        the chain allows, which reaches the floor in about 1,800 blocks. During this
+        window the measured interval is ignored: a miner who arrives early gets the
+        schedule, not the reward for arriving early.
+        """
+        if height >= BOOTSTRAP_BLOCKS:
+            return None
+        halvings = height // BOOTSTRAP_STEP
+        return max(MIN_TARGET, GENESIS_TARGET >> halvings)
+
     def next_target(self) -> int:
         """LWMA over the last 90 solve times, clamped to a factor of two.
 
@@ -394,7 +414,15 @@ class Chain:
         # A single block may move the target by at most 2x, so one bad timestamp
         # cannot collapse the difficulty.
         clamped = max(base // 2, min(base * 2, scaled))
-        return max(MIN_TARGET, min(MAX_TARGET, clamped))
+        result = max(MIN_TARGET, min(MAX_TARGET, clamped))
+
+        # During slow start the schedule is a hard ceiling: the measured target may be
+        # harder than the schedule, never easier. That keeps an early miner from
+        # outrunning the schedule without also punishing one who is honest and slow.
+        schedule = self.bootstrap_target(self.height + 1)
+        if schedule is not None:
+            result = min(result, schedule)
+        return result
 
     def mine(self, timestamp: int | None = None, allow_empty: bool = False) -> Block:
         """Take the mempool, find a nonce, append the block.

@@ -16,6 +16,8 @@ import pytest
 
 from radix_testnet import params as P
 from radix_testnet.chain import (
+    BOOTSTRAP_BLOCKS,
+    BOOTSTRAP_STEP,
     GENESIS_TARGET,
     GENESIS_TIME,
     LWMA_WINDOW,
@@ -114,14 +116,27 @@ def test_fast_blocks_make_the_target_smaller():
     assert chain.next_target() < start
 
 
+def skip_bootstrap(chain):
+    """Fast-forward past the slow-start window with a steady interval.
+
+    Slow start caps how far the target may ease off, so a test about easing off has
+    to run after it -- which is itself the behaviour asserted elsewhere.
+    """
+    stamp = GENESIS_TIME
+    for _ in range(BOOTSTRAP_BLOCKS + 2):
+        append_synthetic(chain, stamp, target=GENESIS_TARGET)
+        stamp += TARGET_INTERVAL
+    return chain
+
+
 def test_slow_blocks_make_the_target_larger():
-    chain = chain_with_genesis()
-    stamp = 2_000_000_000
-    for _ in range(5):
+    chain = skip_bootstrap(chain_with_genesis())
+    stamp = GENESIS_TIME + (BOOTSTRAP_BLOCKS + 3) * TARGET_INTERVAL
+    # Enough slow blocks to outweigh the on-schedule ones still inside the window.
+    for _ in range(60):
         append_synthetic(chain, stamp)
         stamp += 600  # five times slower than the target
     assert chain.next_target() > GENESIS_TARGET
-
 
 def test_a_single_block_cannot_move_the_target_more_than_twofold():
     """One liar, or one empty block, must not collapse the difficulty."""
@@ -253,3 +268,57 @@ def test_mining_converges_to_the_target_interval():
         f"settled at {average:.0f} s against a {TARGET_INTERVAL} s target; "
         f"first quarters were {intervals[:3]}"
     )
+
+
+def test_slow_start_halves_the_target_on_a_schedule():
+    """docs/CONSENSUS.md section 3.5: the parameter most likely to be got wrong.
+
+    Without a schedule, a chain that starts with an easy target is mined flat in minutes
+    by whoever starts first. The schedule ignores the measured interval for the first
+    BOOTSTRAP_BLOCKS, so an early miner gets the schedule rather than a reward for
+    arriving early.
+    """
+    chain = chain_with_genesis()
+    assert chain.bootstrap_target(0) == GENESIS_TARGET
+    assert chain.bootstrap_target(BOOTSTRAP_STEP) == GENESIS_TARGET >> 1
+    assert chain.bootstrap_target(BOOTSTRAP_STEP * 3) == GENESIS_TARGET >> 3
+    assert chain.bootstrap_target(BOOTSTRAP_BLOCKS) is None, "the schedule must end"
+
+
+def test_slow_start_never_asks_for_less_than_the_floor():
+    chain = chain_with_genesis()
+    for height in range(0, BOOTSTRAP_BLOCKS, 37):
+        target = chain.bootstrap_target(height)
+        if target is not None:
+            assert target >= MIN_TARGET
+
+
+def test_a_fast_miner_cannot_outrun_the_schedule():
+    """The measured target may be harder than the schedule, never easier."""
+    chain = chain_with_genesis()
+    stamp = GENESIS_TIME
+    for _ in range(6):
+        append_synthetic(chain, stamp)
+        stamp += 1  # absurdly fast blocks
+
+    schedule = chain.bootstrap_target(chain.height + 1)
+    measured = chain.next_target()
+
+    assert schedule is not None, "this test is meant to run inside the bootstrap window"
+    assert measured <= schedule, (
+        f"the measured target 2^{measured.bit_length()-1} ran ahead of the schedule "
+        f"2^{schedule.bit_length()-1}"
+    )
+
+
+def test_the_measured_target_takes_over_after_the_window():
+    chain = chain_with_genesis()
+    # A synthetic chain that has passed the bootstrap window.
+    stamp = GENESIS_TIME
+    for index in range(BOOTSTRAP_BLOCKS + 2):
+        append_synthetic(chain, stamp, target=GENESIS_TARGET)
+        stamp += TARGET_INTERVAL
+
+    assert chain.bootstrap_target(chain.height + 1) is None
+    # With a steady interval the measured target is unchanged by the clamp.
+    assert chain.next_target() == GENESIS_TARGET
