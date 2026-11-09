@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.radix.testnet'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.radix.testnet"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    buildTypes {
+        debug {
+            // Debug builds are signed with a generated debug key so the APK can be
+            // installed on a phone without any signing setup. That key is not a
+            // secret and must never sign anything real.
+            applicationIdSuffix ""
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+// No dependencies block: nothing outside the Android framework.

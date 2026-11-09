@@ -1,0 +1,6 @@
+// Root build file. The app has no third-party dependencies on purpose:
+// every extra dependency is another thing that can fail to download, and this
+// app only needs the Android framework, org.json and HttpURLConnection.
+plugins {
+    id 'com.android.application' version '8.1.4' apply false
+}

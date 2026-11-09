@@ -143,6 +143,23 @@ class Node:
             )
         return entries[:limit]
 
+    def qr_png(self, text: str, scale: int = 8) -> bytes:
+        """PNG for the Android app, which cannot render SVG natively."""
+        try:
+            import segno
+        except ImportError:  # pragma: no cover - dependency is declared
+            raise RuntimeError("segno is required for QR codes") from None
+        if len(text) > 2953:
+            raise ValueError("that value is too large for a QR code")
+        buffer = io.BytesIO()
+        try:
+            segno.make(text, error="l").save(
+                buffer, kind="png", scale=scale, border=2, dark="#000000", light="#FFFFFF"
+            )
+        except Exception as error:  # noqa: BLE001 - segno raises its own type
+            raise ValueError(f"cannot encode that value as a QR code: {error}") from None
+        return buffer.getvalue()
+
     def qr_svg(self, text: str) -> bytes:
         try:
             import segno
@@ -290,6 +307,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"addressbook": self.node.addressbook})
             elif path == "/api/settings":
                 self._json(200, {"settings": self.node.settings})
+            elif path == "/api/qr.png":
+                query = self.path.split("?", 1)[1] if "?" in self.path else ""
+                text = urllib.parse.parse_qs(query).get("text", [""])[0]
+                if not text:
+                    self._error(400, "text is required")
+                else:
+                    self._send(200, self.node.qr_png(text), "image/png")
             elif path == "/api/qr":
                 query = self.path.split("?", 1)[1] if "?" in self.path else ""
                 text = urllib.parse.parse_qs(query).get("text", [""])[0]
