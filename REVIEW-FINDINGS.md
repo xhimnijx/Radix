@@ -109,11 +109,22 @@ should be checked before recording the paper as wrong.
 
 ## Q5 — `q` is load-bearing, and `m = 1` is worse than the docstring says
 
-Reviewer 2 corrected their own first answer: the `q^{-4}` term is a rejection
-probability, and the extraction threshold is `32p^{d/l} + q^{-d/l}`, dominated by
-`32p^{d/l} ≈ 2^-8`. So `q ≈ 2^32` is necessary but not what delivers 128 bits; the
-128 bits are entirely the two M-SIS assumptions, which are functions of `β` and
-`β′` — the same numbers the masking deviation broke. Q3 and Q5 are one question.
+**Struck 2026-11-09: this paragraph was wrong, and C2 says so.** It recorded
+their first-round "correction" that the extraction threshold `32p^{d/l} + q^{-d/l}`
+is dominated by `32p^{d/l} ≈ 2^-8`, and concluded that the 128 bits come entirely
+from the two M-SIS assumptions and that "Q3 and Q5 are one question".
+
+The error was in reading `p`. `p` is the maximum point mass of a **coefficient of
+`c`'s reduction**, not of `c` itself. A sum of 128 ternary terms against powers of
+`ζ` is essentially uniform in `Z_q`, so `p ≈ 1/q` and `p^{d/l} = q^{-4} ≈ 2^-128`;
+the paper's own juxtaposition `2p^{d/l} + q^{-d/l}` only makes sense when the two
+terms are the same order. So the threshold is ≈`2^-123` at `q = 2^32`, the
+challenge space **does** contribute `q^{-4}`, and the split modulus is capped at
+~24 bits by the **c̄-inversion** term, not by this threshold. Q3 and Q5 are *not*
+one question.
+
+Kept visible rather than deleted: a wrong number in an audit record should be seen
+to be wrong. The corrected position is in the second-review section below.
 
 On `m = 1`: refusing it is right, but for a stronger reason than the docstring
 gives. At `m = 1` there is no `B` block, so `⟨1, vᵢ⟩ = 1` is never proved at all —
@@ -456,3 +467,63 @@ quote the pair together. If it comes out short, the lever is `mu`, not the modul
    `k' = 1` would be defensible.
 7. **Check the later ePrint revisions** before recording the paper's `e_1`
    double-count and sum index as errata.
+
+## C2 on Theorem B.1 under the irreducible modulus
+
+Asked whether the extraction argument survives the modulus change, C2 answers:
+**salvageable, with three edits to the statement and none to the argument.**
+
+The skeleton is ring-generic. Four transcripts, `c̄ = c - c~`, divide, extract
+`r*, y*` and the messages, expand `f_j`, read the `c²` coefficient, induct down the
+levels, collision step. Nothing in it evaluates at points in `Z_q`; it uses only
+that `M_q` is 4-dimensional over `Z_q`, that `g` is `Z_q`-linear, and that the
+"first `d/l` coefficients" map is a `Z_q`-linear bijection `M_q -> Z_q^4`. All three
+hold for `M_q ≅ F_{q^4}`.
+
+**Edit 1 — redefine `p`.** It is defined via `c mod X^{d/l} - ζ^{2j+1}`, which
+presupposes `ζ ∈ Z_q`. Replace it with the max point mass of `c`'s image in
+`F_{q^4}`. Bookkeeping only: `p` enters through the success threshold in Lemma B.2
+and the base case. It also *improves* — a field has no zero divisors, so "if the
+relation fails, the first block is uniform, hence hits a fixed value with
+probability `q^{-d/l}`" becomes exact rather than conservative.
+
+**Edit 2 — make `c̄` invertibility an explicit clause.** `r* = c̄^{-1}(z - z~)` is
+the extractor's first move and Theorem B.1 never states that `c̄` is a unit. Add
+either a hypothesis on `C` ("`c - c~` is a unit for `c ≠ c~`") or an error term.
+Same four transcripts, same division, one named failure probability — `~2^-24` at a
+split `q`, `~2^-123` at an irreducible-quartic `q`.
+
+**Edit 3 — the conclusion is repaired, not salvaged.** "A binary vector
+`v = v_1 (x) ... (x) v_m` with one 1 in some `ι`-th position" is not well-typed in
+the split ring: there `v_i` is an idempotent of `R_q ≅ Z_q^128` with 128 binary
+evaluations, and "one 1" has no referent. That is exactly the missing
+slot-constancy lemma. In the irreducible regime `v_i ∈ F_{q^4}^32` with residues in
+`{0,1}`, so it *is* a 32-entry binary vector and the sentence means what it says.
+**The modulus change is what makes the theorem's statement true** — the "one
+modulus, two holes" result, now at theorem level. A free strengthening comes with
+it: the `B`-block condition becomes `(Σ_j (v_i)_j - 1)·γ_0 = 0` with `γ_0` a nonzero
+field element, so it is exact rather than a 4-of-4-coordinate condition.
+
+What must be *rewritten*, though not restructured: binaryness lands directly in
+`{0,1}^32`, so one-hot follows from `Σ_j (v_i)_j = 1` immediately — the induction
+gets **shorter** — and the several "uniform in `M_q`" sentences must be re-justified
+by "multiplication by a nonzero field element is a bijection".
+
+### What this does to the code estimate
+
+C2, on scope: `subring.slot` computes `y mod (X^4 - r_i)` by Horner, which is valid
+whether the quartic is irreducible or split, and `quartic_multiply` is unchanged —
+field multiplication is the same routine. **Only `glue` (and `from_constants`, which
+calls it) must move off `ntt.inverse` to a 32-way CRT, and the root search must find
+a 64th root instead of a 256th.** So `slot`, `slots`, `g`, `pairing`,
+`quartic_multiply` and the whole recursion layer are untouched.
+
+The corrected work estimate for adopting the modulus:
+1. `subring.glue` / `from_constants` -> 32-way CRT (the one real piece of new code).
+2. `subring.roots` -> find a 64th root directly instead of deriving it from the NTT.
+3. `ring.mul` -> quartic-CRT (32 slotwise products) instead of the 128-point NTT.
+4. `_is_unit` -> "all 32 quartic residues nonzero".
+5. Re-derive the M-LWE/M-SIS estimates at the chosen `q`.
+6. Restate Theorem B.1 with the three edits above.
+
+Nothing in items 1-4 is a protocol change.
