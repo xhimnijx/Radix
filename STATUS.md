@@ -75,7 +75,7 @@ lattice work, and it is recorded rather than hidden.
 | **No one-time addressing** | One keypair is spendable once, so a wallet has four notes, not four thousand. `vault/One-Time Addressing.md` explains why the obvious construction fails on the norm bound | Research |
 | ~~Discrete Gaussian not implemented~~ | **Closed 2026-11-09.** A table-driven discrete Gaussian, one binary file that Python reads and Rust `include_bytes!`s, so the two cannot sample different distributions. Truncation tail 2^-49.5 | done |
 | **Ring not bound to the pool** | Sound today only because prover and verifier are one process | Cheap fix, changing the transcript in both languages |
-| **No peer-to-peer layer** | Two nodes are two universes; the "stagenet" is one server with clients | Months of work |
+| **No peer-to-peer layer** | ~~Two nodes are two universes~~ **A minimal layer exists** (`p2p.py`): hello, whole-chain sync, block push, 8 tests over real sockets. Still missing: discovery, gossip, authentication, and fork reconciliation — a fork is refused, not resolved | Progress, not done |
 | **No consensus** | Single miner, no difficulty adjustment, no fork choice | Months |
 | **No audit** | Nothing here has been reviewed as a system | Money + time |
 | **No estimator run** | `2^158` is a heuristic, not a number from `lattice-estimator`. **The blocker is mechanical, not intellectual**: the tool needs SageMath, and Sage does not run on Windows. `docs/ESTIMATOR.md` records the exact failures and the five-minute run on any Linux box | anyone with a Linux machine |

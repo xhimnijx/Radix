@@ -187,17 +187,23 @@ height rule lets an attacker mine a low-difficulty fork cheaply.
 
 ## 7. What this specification does NOT decide
 
+A first peer-to-peer layer now exists (`radix_testnet/p2p.py`): framed JSON over TCP, a
+hello carrying height and cumulative work, whole-chain sync from a peer that is ahead,
+and block push after mining. What it deliberately is not is listed below. It has no
+discovery, no gossip, trusts whoever it connects to, and **refuses a fork rather than
+reconciling one**, because the chain cannot undo an applied block.
+
 Every item here needs a peer-to-peer layer that does not exist. Writing parameters for
 them now would be fiction.
 
 | Item | Why it is blocked |
 |---|---|
-| Propagation delay, orphan rate | no network to measure |
+| Propagation delay, orphan rate | two nodes on localhost can exchange blocks; that is not a network to measure |
 | Whether 120 s survives measurement | depends on propagation |
 | Mempool policy, fee market | needs competing miners |
-| Peer discovery, sync, eclipse resistance | no p2p |
+| Peer discovery, eclipse resistance | a minimal request/response transport exists (`p2p.py`), but there is no discovery, gossip, authentication or encryption |
 | Difficulty bootstrap (§3.5) | needs a launch decision, not a measurement |
-| Consensus among *validating* nodes | our node validates; a network of them does not exist |
+| Consensus among *validating* nodes | nodes now exchange blocks and a lagging node adopts a longer chain, but a genuine fork is **refused, not reconciled** -- the chain has no undo journal |
 | Checkpointing / weak subjectivity | depends on the above |
 
 ---

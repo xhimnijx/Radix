@@ -57,7 +57,7 @@ def command_node(args: argparse.Namespace) -> int:
 
     # --data-dir is a top-level option, so it has to be honoured here or a systemd
     # unit would silently write to the default directory instead of the one it names.
-    node = Node(data_dir=args.data_dir) if args.data_dir else None
+    node = Node(data_dir=args.data_dir, peers=args.peer) if args.data_dir or args.peer else None
     if node is not None and node.wallet_created:
         print("NEW WALLET - write these words down, they are the only backup:")
         print(f"    {node.faucet.phrase}")
@@ -197,6 +197,13 @@ def build_parser() -> argparse.ArgumentParser:
     node = sub.add_parser("node", help="run the node and the GUI")
     node.add_argument("--host", default="127.0.0.1")
     node.add_argument("--port", type=int, default=8642)
+    node.add_argument(
+        "--peer",
+        action="append",
+        default=[],
+        metavar="HOST:PORT",
+        help="peer to sync from and push blocks to (repeatable)",
+    )
     node.set_defaults(func=command_node)
 
     status = sub.add_parser("status", help="chain status")

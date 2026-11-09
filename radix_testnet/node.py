@@ -45,6 +45,7 @@ class Node:
         data_dir: Path | None = None,
         persist: bool = True,
         config: dict | None = None,
+        peers: list[str] | None = None,
     ) -> None:
         self.parameters = P.parameters()
         self.data_dir = Path(data_dir) if data_dir is not None else store.default_data_dir()
@@ -74,6 +75,7 @@ class Node:
 
         # After the chain, not before: a corrupt chain file should report itself
         # rather than being masked by the wallet check.
+        self.peers: list[str] = list(peers or [])
         self.wallet_created = False
         if faucet is not None:
             self.faucet = faucet
@@ -139,6 +141,90 @@ class Node:
             # Windows has no POSIX mode bits; the directory permissions apply instead.
             pass
         return wallet, True
+
+    # ------------------------------------------------------------ peer to peer
+    def handle_p2p(self, message: dict) -> dict:
+        """Answer one peer message. The protocol lives in `p2p.py`; the decisions here.
+
+        A peer is trusted to propose a chain. It is not trusted to have a valid one:
+        every block goes through `Chain.append`, which checks the height, the link to
+        our tip and the proof of work before anything is applied.
+        """
+        from . import chain as C
+        from . import p2p
+
+        kind = message.get("type")
+
+        if kind == "hello":
+            return {
+                "type": "hello",
+                "height": self.chain.height,
+                "work": self.chain.cumulative_work(),
+                "genesis": self.chain.blocks[0].block_hash().hex(),
+            }
+
+        if kind == "getchain":
+            return {
+                "type": "chain",
+                "blocks": [block.to_wire() for block in self.chain.blocks],
+                "allocations": self.chain.allocations_wire(),
+            }
+
+        if kind == "block":
+            try:
+                block = C.Block.from_wire(message["block"])
+                self.chain.append(block)
+            except (C.ChainError, KeyError, TypeError, ValueError) as error:
+                self.log.event("block.rejected", reason=str(error))
+                return {"type": "error", "reason": str(error)}
+            self._persist()
+            self.log.event("block.accepted", height=self.chain.height,
+                     source="peer", hash=block.block_hash().hex()[:16])
+            return {"type": "ok", "height": self.chain.height}
+
+        raise p2p.PeerError(f"unknown message type {kind!r}")
+
+    def sync_from(self, peer_text: str) -> dict:
+        """Adopt a peer's chain if it has strictly more work than ours."""
+        from . import chain as C
+        from . import p2p
+
+        peer = p2p.Peer.parse(peer_text)
+        hello = peer.call({"type": "hello"})
+        remote_work = int(hello.get("work", 0))
+        local_work = self.chain.cumulative_work()
+        if remote_work <= local_work:
+            return {"adopted": False, "local_work": local_work, "remote_work": remote_work}
+
+        payload = peer.call({"type": "getchain"})
+        blocks = [C.Block.from_wire(item) for item in payload["blocks"]]
+        allocations = C.Chain.allocations_from_wire(payload["allocations"])
+        try:
+            rebuilt = C.Chain.rebuild(
+                self.parameters, self.chain.depth, allocations, blocks,
+                verify=self.chain.verify,
+            )
+        except (C.ChainError, KeyError, TypeError, ValueError) as error:
+            raise p2p.PeerError(f"the peer's chain does not validate: {error}") from None
+
+        self.chain = rebuilt
+        self._persist()
+        self.log.event("chain.adopted", height=self.chain.height, source=peer_text)
+        return {"adopted": True, "height": self.chain.height, "remote_work": remote_work}
+
+    def broadcast_block(self, block) -> dict:
+        """Best-effort push of a newly mined block to every configured peer."""
+        from . import p2p
+
+        results = {}
+        for peer_text in self.peers:
+            try:
+                results[peer_text] = p2p.Peer.parse(peer_text).call(
+                    {"type": "block", "block": block.to_wire()}
+                ).get("type")
+            except (p2p.PeerError, OSError) as error:
+                results[peer_text] = f"unreachable: {error}"
+        return results
 
     def _persist(self) -> None:
         if not self.persist:
@@ -308,8 +394,10 @@ class Node:
                 hash=block.block_hash().hex()[:16],
                 transactions=len(block.transactions),
             )
-            return {
-                "height": block.height,
+        # After the lock is released: a peer that is slow must not stall the node.
+        self.broadcast_block(block)
+        return {
+            "height": block.height,
                 "hash": block.block_hash().hex(),
                 "transactions": len(block.transactions),
             }

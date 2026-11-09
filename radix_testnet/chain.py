@@ -24,6 +24,9 @@ from radix_core.candidate_b.lattice.spend import Output
 from . import tagged as T
 
 GENESIS_PREVIOUS = b"\x00" * 32
+#: Fixed, so two nodes can agree on the genesis block. `int(time.time())` made every
+#: node's genesis unique, which made a shared chain impossible.
+GENESIS_TIME = 1_700_000_000
 POW_BITS = 10
 DECOYS = 1024
 HASH_BYTES = 32
@@ -63,6 +66,30 @@ class Block:
     def block_hash(self) -> bytes:
         return _hash(self.header())
 
+    def to_wire(self) -> dict:
+        return {
+            "height": self.height,
+            "previous": self.previous.hex(),
+            "anchor": self.anchor.hex(),
+            "transactions": list(self.transactions),
+            "nonce": self.nonce,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_wire(cls, payload: dict) -> "Block":
+        try:
+            return cls(
+                height=int(payload["height"]),
+                previous=bytes.fromhex(payload["previous"]),
+                anchor=bytes.fromhex(payload["anchor"]),
+                transactions=tuple(payload["transactions"]),
+                nonce=int(payload["nonce"]),
+                timestamp=int(payload["timestamp"]),
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise ChainError(f"malformed block: {error}") from None
+
     def meets_power(self) -> bool:
         leading = int.from_bytes(self.block_hash()[:2], "big")
         return leading >> (16 - POW_BITS) == 0
@@ -87,6 +114,8 @@ class Chain:
     mempool: dict[bytes, dict] = field(default_factory=dict)
     pool: list[tuple[Poly, ...]] = field(default_factory=list)
     allocations: dict[bytes, int] = field(default_factory=dict)
+    #: The genesis allocation, kept so a replica can be rebuilt from it.
+    genesis_allocations: list = field(default_factory=list)
 
     # ---------------------------------------------------------------- genesis
     def __post_init__(self) -> None:
@@ -124,10 +153,11 @@ class Chain:
             anchor=GENESIS_PREVIOUS,
             transactions=(),
             nonce=0,
-            timestamp=int(time.time()),
+            timestamp=GENESIS_TIME,
         )
         self.blocks.append(block)
         self.allocations[block.block_hash()] = sum(value for _key, value in allocations)
+        self.genesis_allocations = list(allocations)
 
     # ---------------------------------------------------------------- queries
     @property
@@ -210,6 +240,81 @@ class Chain:
         self._apply(block)
         self.mempool.clear()
         return block
+
+    def append(self, block: Block) -> None:
+        """Validate a block that came from somewhere else, then apply it.
+
+        This is the only entry point for foreign blocks, and it refuses anything that
+        is not the direct successor of our tip. A fork is reported as a fork rather
+        than silently applied -- the chain has no undo journal, so applying a block
+        from a competing branch would corrupt state irrecoverably.
+        """
+        if block.height != self.height + 1:
+            raise ChainError(
+                f"block height {block.height} does not follow our tip {self.height}"
+            )
+        if block.previous != self.anchor:
+            raise ChainError(
+                "block does not build on our tip; this is a fork, and fork "
+                "reconciliation is not implemented"
+            )
+        if not block.meets_power():
+            raise ChainError("block does not meet the proof-of-work target")
+        self._apply(block)
+
+    def allocations_wire(self) -> list:
+        """The genesis allocation, as hex, so a replica can rebuild from it."""
+        return [
+            [b"".join(ring.encode(poly, SMILE) for poly in key).hex(), value]
+            for key, value in self.genesis_allocations
+        ]
+
+    @staticmethod
+    def allocations_from_wire(payload: list) -> list:
+        """Decode the hex allocation list back to keys."""
+        chunk = SMILE.ring_degree * 4
+        out = []
+        for key_hex, value in payload:
+            blob = bytes.fromhex(key_hex)
+            if len(blob) % chunk:
+                raise ChainError("allocation key has the wrong length")
+            key = tuple(
+                ring.decode(blob[offset : offset + chunk], SMILE)
+                for offset in range(0, len(blob), chunk)
+            )
+            out.append((key, int(value)))
+        return out
+
+    def cumulative_work(self) -> int:
+        """Sum of difficulty over the chain.
+
+        Difficulty is 1 for every block today, so this equals the height. It is written
+        as a sum anyway, so that adding a real difficulty target does not require
+        rewriting every caller -- only this function.
+        """
+        return len(self.blocks)
+
+    @classmethod
+    def rebuild(
+        cls,
+        parameters: RS.Parameters,
+        depth: int,
+        allocations: list[tuple[tuple[Poly, ...], int]],
+        blocks: list[Block],
+        verify=None,
+    ) -> "Chain":
+        """Replay a whole chain from genesis, from another node's view.
+
+        A replica cannot reconstruct the genesis allocation from the blocks, because
+        blocks do not carry it; the caller passes the peer's allocation list. On a real
+        network that allocation would be fixed by the protocol rather than transmitted,
+        and this parameter is the honest marker of the shortcut.
+        """
+        fresh = cls(parameters=parameters, depth=depth, verify=verify)
+        fresh.genesis(allocations)
+        for block in blocks[1:]:
+            fresh.append(block)
+        return fresh
 
     def _apply(self, block: Block) -> None:
         for payload in block.transactions:
