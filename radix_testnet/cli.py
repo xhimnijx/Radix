@@ -53,9 +53,17 @@ def _print_banner() -> None:
 
 
 def command_node(args: argparse.Namespace) -> int:
-    from .node import serve
+    from .node import Node, serve
 
-    serve(host=args.host, port=args.port)
+    # --data-dir is a top-level option, so it has to be honoured here or a systemd
+    # unit would silently write to the default directory instead of the one it names.
+    node = Node(data_dir=args.data_dir) if args.data_dir else None
+    if node is not None and node.wallet_created:
+        print("NEW WALLET - write these words down, they are the only backup:")
+        print(f"    {node.faucet.phrase}")
+        print()
+        print(f"wallet fingerprint {node.faucet.fingerprint}")
+    serve(host=args.host, port=args.port, node=node)
     return 0
 
 

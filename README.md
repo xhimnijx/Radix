@@ -114,6 +114,7 @@ Root documents:
 - [`PERFORMANCE.md`](PERFORMANCE.md) — measured timings, not projections
 - [`REVIEW-FINDINGS.md`](REVIEW-FINDINGS.md) — what two independent reviewers found, retractions included
 - [`REVIEW-REQUEST.md`](REVIEW-REQUEST.md) — the brief for a third review
+- [`DEPLOY.md`](DEPLOY.md) — running a stagenet node on a second machine
 - [`TESTNET.md`](TESTNET.md) — how to run and build the app
 - [`PLAIN-ENGLISH.md`](PLAIN-ENGLISH.md) — the same story without jargon
 

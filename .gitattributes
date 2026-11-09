@@ -14,3 +14,7 @@
 *.dll  binary
 *.exe  binary
 *.rlib binary
+
+# Scripts and unit files must be LF even when committed from Windows
+*.sh text eol=lf
+*.service text eol=lf

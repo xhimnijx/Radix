@@ -1,0 +1,48 @@
+[Unit]
+Description=Radix testnet node (no value, no security claim)
+Documentation=https://github.com/xhimnijx/Radix/blob/main/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=radix
+Group=radix
+WorkingDirectory=/opt/radix
+
+# --data-dir is a top-level option, so it must come before the subcommand.
+ExecStart=/opt/radix/.venv/bin/python -m radix_testnet.cli \
+    --data-dir /var/lib/radix \
+    --backend python \
+    node --host 127.0.0.1 --port 8642
+
+# The node is a research prototype; restart it if it falls over, but do not
+# hammer it.
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+# Hardening. The node needs to write only its own data directory.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+StateDirectory=radix
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/radix
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=radix-node
+
+[Install]
+WantedBy=multi-user.target
