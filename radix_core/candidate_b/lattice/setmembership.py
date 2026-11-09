@@ -278,8 +278,14 @@ class Statement:
     def __post_init__(self) -> None:
         if not self.matrix:
             raise SetMembershipError("A must have at least one row")
-        if any(len(row) != SMILE.matrix_cols for row in self.matrix):
-            raise SetMembershipError("A must have ell columns")
+        # The width is taken from the matrix rather than from the default parameters:
+        # the noise-aware statement runs at ell = 17, and pinning this to
+        # SMILE.matrix_cols made any such statement impossible to construct.
+        width = len(self.matrix[0])
+        if width < 1:
+            raise SetMembershipError("A must have at least one column")
+        if any(len(row) != width for row in self.matrix):
+            raise SetMembershipError("every row of A must have the same width")
         if self.depth < 2:
             raise SetMembershipError("depth must be at least 2")
         if len(self.keys) != SLOTS**self.depth:

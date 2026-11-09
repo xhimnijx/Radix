@@ -113,3 +113,36 @@ def test_a_wrong_shape_is_refused():
         noisy.noisy_public_key(matrix, secret[:-1], noise)
     with pytest.raises(noisy.NoisyStatementError):
         noisy.noisy_public_key(matrix, secret, noise + (noise[0],))
+
+
+@pytest.mark.slow
+def test_a_statement_at_seventeen_columns_proves_and_verifies():
+    """C1 and C2: the noise-aware statement needs ell = 17, not 13.
+
+    `A_noise = [A | I_k]` has `ell + k = 17` columns, so the statement, keys, prover and
+    verifier must all run at that width. Two hardcoded checks made this impossible to
+    construct: `Parameters` and `Statement` both validated against `SMILE.matrix_cols`
+    rather than against the width of the matrix they were given. Both now derive the
+    width from their own rows.
+    """
+    from radix_core.candidate_b.lattice import setmembership as S
+    from radix_core.candidate_b.lattice.params import SmileParameters
+
+    wide = SmileParameters(matrix_cols=17)
+    rng = random.Random(17)
+    keys = S.setup(rng, 2, wide)
+    matrix = tuple(
+        tuple(ring.sample_uniform(rng) for _ in range(17)) for _ in range(wide.matrix_rows)
+    )
+    secret, public = S.keygen(rng, matrix, wide)
+    ring_keys = [
+        tuple(ring.sample_uniform(rng) for _ in range(wide.matrix_rows)) for _ in range(1024)
+    ]
+    ring_keys[17] = public
+    statement = S.Statement(matrix=matrix, keys=tuple(ring_keys), depth=2)
+
+    proof = S.prove(keys, statement, secret, 17, b"wide", random.Random(18), wide)
+
+    assert len(proof.response_prime) == 17
+    assert S.verify(keys, statement, proof, b"wide", wide) is True
+    assert S.verify(keys, statement, proof, b"other", wide) is False

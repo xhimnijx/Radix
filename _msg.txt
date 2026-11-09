@@ -1,31 +1,25 @@
-fix: the carry was dropping its top coefficient, and the alpha budget is two
+feat: ell = 17 works end to end, which the noise-aware statement requires
 
-C1's eighth-pass catch, and it was a real bug. The relation at coefficient 32 is
-left_32 + right_32 + f_31 - 4*f_32 = total_32 with total_32 = 0, which determines f_32 --
-so the carry vector is 33 coefficients while the amount stays 32 digits. The first version
-looped only over the digits and dropped the final carry, silently mis-handling any sum that
-reached the top position.
+C1 and C2 both said the same thing in different words: A_noise = [A | I_k] has ell + k = 17
+columns where the default is 13, so the statement, keys, prover and verifier must all run
+at that width. Two hardcoded checks made it impossible to construct anything at a width
+other than the default:
 
-The overflow case is now refused rather than carried, and that distinction matters: two
-amounts near 2^64 sum past 2^64, no 32-digit total represents that, and the relation has
-no exact solution. The carry absorbs intermediate carries, not a mint. My first test
-expected a carry to be reported; the correct expectation was a refusal.
+  Parameters.__post_init__ validated A's rows against SMILE.matrix_cols
+  Statement.__post_init__ did the same
 
-ALPHA BUDGET: both reviewers say two per amount, not three. The two packed bit-polynomials
-need INDEPENDENT alphas -- C2's reason is decisive: folding one into an existing alpha gives
-alpha(v^2 - v + b^2 - b) = 0, which a prover satisfies with v^2 - v = -(b^2 - b) != 0 and
-so breaks the ring selector. The digit and carry relations are linear and need no alpha at
-all; the carry's smallness is a norm check on the relaxed proof's z. The spare the old
-formula kept for a two-term binary carry is not needed in this design.
+Both now derive the width from the rows they are given, so a statement is self-consistent
+rather than pinned to a global default. That is the correct rule anyway: a Statement that
+validates its own shape should not be consulting a module constant.
 
-TRUNCATION FIGURE SETTLED. C2 suggested 2*Phi(-12) is about 2^-101.9 per coefficient and
-2^-95.9 aggregated, four bits above the paper's 2^-100. Computed exactly:
-erfc(12/sqrt(2)) = 3.5530e-33 = 2^-107.8 per coefficient, and sqrt(4224)*that = 2^-101.8
-aggregated. His 2^-101.9 would need Phi(-12) = 2^-102.9, a factor of thirty smaller than
-the true value. The convention is now named in SECURITY-NOTES.md: 2*Phi(-12) per
-coefficient, summed by the square-root bound.
+A full prove and verify at ell = 17 now completes: 22,784 bytes, z' with 17 components,
+accepted against the right message and rejected against a different one. The test is marked
+slow because it produces a real proof (140 s).
 
-Also recorded: C2's design rule beta = 7424*W exactly, so B0 gains about +2.6 bits per unit
-of W while A is untouched; the range layer is budgeted at 21,760 -> about 42 KB because W
-goes from 30 to roughly 50; and C1's and C2's point that the noise-aware statement needs
-ell = 17 wired through the statement rather than a flag.
+Also generated the Gaussian table for width 17, since z' is masked at sigma = 464*sqrt(17)
+and the sampler refuses widths it has no table for -- which is the behaviour that was
+designed in, and it caught this correctly rather than substituting a nearby distribution.
+
+This is a prerequisite, not the statement itself: the proof at ell = 17 proves the plain
+SMILE relation over a 17-column matrix. Wiring the [A | I_k] split into the witness and the
+tag rows [A' | 0] is the next step, and the extraction argument for it is C1's.

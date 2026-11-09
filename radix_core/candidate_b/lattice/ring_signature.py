@@ -52,9 +52,16 @@ class Parameters:
             raise RingSignatureError("parameter depth disagree")
         if not self.matrix:
             raise RingSignatureError("A must have at least one row")
+        # Derive the width from the rows rather than from the default parameters:
+        # a statement can be built at a different ell (the noise-aware statement needs
+        # ell = 17), and pinning it to SMILE.matrix_cols made every such statement
+        # impossible to construct.
+        width = len(self.matrix[0])
+        if width < 1:
+            raise RingSignatureError("A must have at least one column")
         for row in self.matrix + self.tag_matrix:
-            if len(row) != SMILE.matrix_cols:
-                raise RingSignatureError("every row of A must have ell columns")
+            if len(row) != width:
+                raise RingSignatureError("every row of A must have the same width")
         if self.keys.count != len(self.matrix) + len(self.tag_matrix):
             raise RingSignatureError("the key height must match A_ext")
 
