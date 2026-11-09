@@ -44,57 +44,49 @@ in `u128` with one reduction per residue took it to 20.1 us.
 
 ## Measured prove and verify times
 
-The profile of one Python proof is unambiguous, so the port followed it rather
-than the whole protocol: `_set_matrix` is **58%** of the time, `ring.dot` **35%**,
-and both are built from the ring multiplication already ported. Everything else --
-transcript hashing, mask sampling, the recursion glue -- is the remaining 7%.
+The Rust port now runs the real prover and the real verifier, so these are
+measurements, not projections. Depth 2 (ring 1024), `q = 4,294,966,337`, release
+build, eight proofs:
 
-`proof_rust/src/bin/prove_bench.rs` reproduces those two structures at their real
-sizes and times them, on the same machine and the same `q`:
-
-| workload | Rust, measured |
+| | measured |
 |---|---|
-| set matrix x2 (depth 2, 1024 members, K = 4) | **0.055 s** |
-| 240 dot calls (6,240 multiplications) | **0.101 s** |
-| **one prover attempt** | **0.156 s** |
-| **prove, at 2M^2 ~ 3 attempts** | **~0.47 s** |
-| **verify (one set matrix + 645 multiplications)** | **0.037 s** |
+| proof size | 32,512 bytes |
+| **prove** | **496 ms** |
+| **verify** | **110 ms** |
+| attempts per proof | 9.75 |
 
-Compare the Python profile for the same work: `_set_matrix` 38.0 s and `ring.dot`
-22.8 s out of 65.2 s for six attempts. The Rust numbers are measurements of those
-same operations, not projections from a per-operation cost -- the earlier model
-predicted 0.36 s for prove and 0.13 s for verify, and the direct measurement
-corrected verify downwards by 3.5x.
-
-One structural difference worth knowing: the Rust set matrix computes the slot
-residues of `c` once and multiplies slotwise, whereas the Python version
-multiplies in full and then decomposes again. That is the same mathematical work
-done once instead of twice, so the Rust figure is an efficient implementation of
-the same algorithm rather than a different one.
+The attempt count is not a defect. There are two rejection points: `z'` early,
+before the expensive part, and `z` at the very end. Each accepts with probability at
+least `1/(2M^2) = 1/3`, so about nine attempts in total is the expected cost, of
+which roughly three reach the set matrix. That is why the mean is 496 ms rather than
+150 ms.
 
 ### Against the B2 bar
 
 | phase | measured (desktop) | phone, at 3-5x | bar | verdict |
 |---|---|---|---|---|
-| prove | ~0.47 s | 1.4-2.4 s | <= 60 s | **passes comfortably** |
-| verify | 37 ms | 110-185 ms | <= 100 ms | **marginal** |
+| prove | 496 ms | 1.5-2.5 s | <= 60 s | **passes comfortably** |
+| verify | 110 ms | 330-550 ms | <= 100 ms | **fails on a phone** |
 
-Verify is no longer the failure the projection suggested -- it is 37 ms, not
-130 ms -- but it sits right on the line. On desktop it passes; on a phone it
-probably does not, and it certainly has no margin. That is still the phase to work
-on.
+Verify is the phase without margin, and this is now a measurement rather than a
+warning: 110 ms on the machine that produced it. Any phone multiplier makes it
+worse. The earlier projection of 130 ms was pessimistic; 110 ms is still over the
+line.
 
 The options, none measured:
 
 1. **Batch verification.** A node verifying many transactions amortises the set
-   matrix, which is most of the cost. Probably sufficient, and standard.
-2. **A faster multiplication.** 20.1 us is not close to optimal; Montgomery form
-   or fewer passes over the slot table would move everything.
-3. **Smaller ring.** Security parameter, so not free.
+   matrix, which dominates. This is the standard answer and is probably sufficient.
+2. **A faster multiplication.** 20.1 us is not close to optimal; Montgomery form or
+   fewer passes over the slot table would move everything proportionally.
+3. **Smaller ring.** A security parameter, so not free.
 
-The residual 7% (hashing and sampling) is not in the measurement above; at Python
-it is 4.4 s of 65.2 s, and a Keccak permutation in Rust is microseconds, so it
-does not change these conclusions.
+### What this replaces
+
+`PERFORMANCE.md` previously projected 0.36 s to prove and 0.13 s to verify from the
+dominant work scaled by a per-multiplication cost. The measured figures are 0.50 s
+and 0.11 s: the same order, both slightly off, and the sign of the verify error was
+not predictable. That is the argument for measuring.
 
 ## What this means for the original question
 

@@ -18,6 +18,24 @@ use crate::{add, glue_crt, l2_squared, mul_crt, scalar, slots, sub, zero, Poly, 
 
 const MAX_ATTEMPTS: usize = 64;
 
+/// How many attempts the last `prove` needed. Instrumentation for the benchmark;
+/// it is not part of the protocol and nothing reads it for correctness.
+pub struct Attempts;
+
+static ATTEMPTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+impl Attempts {
+    pub fn reset() {
+        ATTEMPTS.store(0, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn get() -> usize {
+        ATTEMPTS.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    fn bump() {
+        ATTEMPTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// xoshiro256++: a small deterministic generator. The Python prover uses Mersenne
 /// Twister; proofs do not need to match bit for bit, only to verify.
 pub struct Rng {
@@ -386,6 +404,7 @@ pub fn prove(
     rng: &mut Rng,
 ) -> Result<ProofWire, ProofError> {
     for _ in 0..MAX_ATTEMPTS {
+        Attempts::bump();
         if let Some(attempt) = prove_once(keys, statement, secret, index, message, rng)? {
             return Ok(attempt.proof);
         }
