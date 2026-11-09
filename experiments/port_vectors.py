@@ -1,4 +1,4 @@
-﻿"""Reference vectors for the Rust port.
+"""Reference vectors for the Rust port.
 
 Mirrors `proof_rust/src/sample.rs` exactly: same domain, same length-prefixed label,
 same little-endian bytes. If these two ever disagree, every cross-language vector

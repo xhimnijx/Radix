@@ -1,4 +1,4 @@
-﻿//! Emit a Rust proof for the Python verifier to check.
+//! Emit a Rust proof for the Python verifier to check.
 //!
 //! Writes `tests/fixtures/rust_proof.bin`: the proof bytes followed by the honest
 //! public key, laid out exactly like `python_proof.bin` so one Python script can

@@ -1,4 +1,4 @@
-﻿# -*- mode: python ; coding: utf-8 -*-
+# -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for the Radix testnet app.
 
 One file, no console on Windows would hide the banner, so the console stays: this

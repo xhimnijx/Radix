@@ -1,4 +1,4 @@
-﻿//! Timing and cross-language checksum for the lattice arithmetic.
+//! Timing and cross-language checksum for the lattice arithmetic.
 //!
 //! The checksum is computed from the same 64-bit LCG the Python reference uses,
 //! so `experiments/rust_crosscheck.py` can compute the identical value and confirm

@@ -1,4 +1,4 @@
-﻿//! End-to-end timing for prove and verify, in release mode.
+//! End-to-end timing for prove and verify, in release mode.
 //!
 //! Replaces the projection in PERFORMANCE.md with a measurement: the earlier figure
 //! was the dominant work scaled by a per-multiplication cost, which is a model, not

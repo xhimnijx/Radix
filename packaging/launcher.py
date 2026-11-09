@@ -1,4 +1,4 @@
-﻿"""Entry point for the packaged executable.
+"""Entry point for the packaged executable.
 
 PyInstaller runs its entry script as a top-level module, so relative imports fail
 there. This launcher imports the package absolutely; `python -m radix_testnet`

@@ -1,4 +1,4 @@
-﻿"""The node: an HTTP service over one in-memory chain, plus the browser GUI.
+"""The node: an HTTP service over one in-memory chain, plus the browser GUI.
 
 Single process, localhost only, no peer discovery and no fork choice. What it does
 is run the real verifier on every submitted transaction and refuse a reused tag.

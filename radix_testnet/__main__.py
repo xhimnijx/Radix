@@ -1,4 +1,4 @@
-﻿"""`python -m radix_testnet` starts the app; arguments fall through to the CLI."""
+"""`python -m radix_testnet` starts the app; arguments fall through to the CLI."""
 
 import sys
 
