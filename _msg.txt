@@ -1,23 +1,27 @@
-feat: the range statement, as one verifier
+docs: eighth-pass review request - the alpha layout, the k' re-pricing, and the extraction argument
 
-All the primitives existed separately -- base-4 digits, bit packing, slotwise binaryness,
-the carry relation, the relaxed bound. range.py assembles them into one object and one
-verifier, so the statement is defined rather than described and the proof that will
-replace `verify` has a specification to hit.
+Three asks, one of them blocking the next build step.
 
-Five things checked, and each is necessary: every bit is a bit (b(b-1)=0 slotwise);
-every digit is 2*b1+b0, which ties the committed bits to the committed digits; every digit
-is in {0,1,2,3}; the digit polynomials add up with an explicit carry; and the carry is
-small. Drop the third and a prover commits honest bits with dishonest digits. Drop the
-fourth and every amount is individually in range while the transaction still mints.
+Q-Q asks for the alpha-slot layout of the range statement. The statement is fixed and
+tested as a Python specification -- five checks, from slotwise binaryness through the
+base-4 carry -- and C2's budget of three alpha per amount is the right order. What is
+missing is where each constraint sits, and four specific sub-questions: whether the bit
+polynomials take new slots or fold into c-squared, whether the carry's alpha enters before
+or after the relaxed challenge R is derived, whether constraint 4 needs its own alpha at
+all given it is a linear relation, and whether a 33rd digit is needed for the carry out of
+the top position.
 
-`verify` takes the witness in the clear, so it is a specification rather than a proof --
-it exists so the proof's obligations are written down and tested before the alpha-slot
-layout is attempted. That is stated in the module docstring rather than implied.
+Q-R puts the k' trade back to C2 with both ends now visible. Reducing k' from 4 to 1 moved
+W from 33 to 30, B0's dimension from 4224 to 3840, and its estimate from 2^175 to 2^167.
+That coupling was not in his analysis and I did not see it when the change was made. The
+trade is eight bits of B0 against 2 KB and three fewer module equations per tagged proof.
 
-A verifier rejects malformed input rather than raising on it: an exception tells a caller
-something went wrong, a return value tells them the statement is false, and only the
-second is a verdict. Caught by a test that expected False and got a DigitError.
+Q-S asks C1 for the extraction argument for the noise-aware statement, with three specific
+questions: whether both p and e1 come out short, what I_k does to the M-SIS instance, and
+whether the tag's zero padding creates an exploitable kernel.
 
-9 tests, including that an unbalanced statement is refused even when every amount is
-individually in range.
+Also tells C2 his two conditions are met. He signed Theorem B.1' conditional on the mask
+sampler and the ring binding; the sampler is now one table at 12 sigma with a 2^-101.8
+aggregate, below the 2^-100 he and C1 wanted, and the ring digest binds the parameters and
+A as he asked. The one residual he named -- the float accept/reject boundary -- is still
+open and is named as such.
