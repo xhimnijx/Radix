@@ -156,7 +156,23 @@ Named rather than guessed:
 5. **The fee.** Visible or hidden? The paper's balance equation (p. 54) implies the fee
    enters as a known constant; not stated explicitly.
 
-## 8. Implementation order, if this is pursued
+## 8. What is already built
+
+`radix_testnet/amounts.py` implements step 3 of the order below, in its carry-free form:
+a commitment `C = G·a + B·r` over `R_q` that is additively homomorphic, with a balance
+check `sum(inputs) = sum(outputs) + fee` that verifies on commitments alone. Nine tests,
+including one that asserts the gap it leaves open.
+
+**What it is not.** Two limits, both tested:
+
+1. Amounts must be below `q` (about `2^32`), because the amount is one coefficient. The
+   paper's base-4 digits cover 64 bits precisely because they avoid that ceiling — and
+   they are also why it needs a carry proof.
+2. **No range proof**, so a negative amount is representable and indistinguishable. Until
+   the digit-membership proof exists, this makes balance checkable and does not make
+   value safe.
+
+## 9. Implementation order, if this is pursued
 
 1. **Obtain [25].** Nothing about balance can be built or verified without it.
 2. **Transcribe Figure 12** into a statement specification, with the matrix layouts
