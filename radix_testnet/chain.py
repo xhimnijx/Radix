@@ -78,8 +78,12 @@ class Chain:
     depth: int
     verify: object = None
     blocks: list[Block] = field(default_factory=list)
-    utxo: dict[bytes, Output] = field(default_factory=dict)
+    #: Every output ever created. The chain cannot remove a spent one: a ring
+    #: signature hides which output it spends, so pruning is impossible without
+    #: revealing the link. Double spends are prevented by tags, not by removal.
+    outputs: dict[bytes, Output] = field(default_factory=dict)
     spent_tags: set[bytes] = field(default_factory=set)
+    pending_tags: set[bytes] = field(default_factory=set)
     mempool: dict[bytes, dict] = field(default_factory=dict)
     pool: list[tuple[Poly, ...]] = field(default_factory=list)
     allocations: dict[bytes, int] = field(default_factory=dict)
@@ -97,14 +101,23 @@ class Chain:
                 for _ in range(DECOYS)
             ]
 
+    @property
+    def decoy_count(self) -> int:
+        """The deterministic decoys, which the store does not need to write out."""
+        return DECOYS
+
     def genesis(self, allocations: list[tuple[tuple[Poly, ...], int]]) -> None:
         """The first block: no transactions, one block hash to anchor against."""
         if self.blocks:
             raise ChainError("the chain already has a genesis block")
         for key, value in allocations:
             note = Output(key=key, value=value)
-            self.utxo[output_id(note)] = note
-            self.pool = [*self.pool, key]
+            # Identical outputs hash identically, so only the first survives. The
+            # pool must likewise not admit the same key twice: a ring of 1024
+            # *distinct* members is a soundness condition, not a preference.
+            self.outputs[output_id(note)] = note
+            if key not in self.pool:
+                self.pool = [*self.pool, key]
         block = Block(
             height=0,
             previous=GENESIS_PREVIOUS,
@@ -120,6 +133,11 @@ class Chain:
     @property
     def tip(self) -> Block:
         return self.blocks[-1]
+
+    @property
+    def rows(self) -> int:
+        """The height of the proved matrix: k, or k + k' when tags are folded in."""
+        return len(self.parameters.matrix) + self.parameters.tag_rows
 
     @property
     def anchor(self) -> bytes:
@@ -146,16 +164,19 @@ class Chain:
         payload = spend_to_wire(spend, indices)
         identifier = _hash(str(payload).encode())
         self.mempool[identifier] = payload
+        self.pending_tags.update(spend.tag_bytes())
         return identifier
 
     def _check_spend(self, spend: T.TaggedSpend, indices: tuple[tuple[int, ...], ...]) -> None:
+        # Tags first: a double spend is the more specific complaint, and a stale
+        # anchor would otherwise mask it on a spend that was already mined.
+        for tag in spend.tag_bytes():
+            if tag in self.spent_tags or tag in self.pending_tags:
+                raise ChainError("double spend: this tag has already been used")
         if spend.anchor != self.anchor:
             raise ChainError("the spend is anchored to a different block")
         if not spend.balanced:
             raise ChainError("the spend does not balance")
-        for tag in spend.tag_bytes():
-            if tag in self.spent_tags:
-                raise ChainError("double spend: this tag has already been used")
         for ring_ in indices:
             if len(set(ring_)) != DECOYS:
                 raise ChainError("a ring must be 1024 distinct keys")
@@ -192,15 +213,16 @@ class Chain:
 
     def _apply(self, block: Block) -> None:
         for payload in block.transactions:
-            spend, indices = spend_from_wire(payload, self.pool, self.depth)
+            spend, indices = spend_from_wire(payload, self.pool, self.depth, self.rows)
             for tag in spend.tag_bytes():
                 if tag in self.spent_tags:
                     raise ChainError("double spend: this tag has already been used")
             for note in spend.outputs:
-                self.utxo[output_id(note)] = note
+                self.outputs[output_id(note)] = note
                 self.pool = [*self.pool, note.key]
             for tag in spend.tag_bytes():
                 self.spent_tags.add(tag)
+                self.pending_tags.discard(tag)
         self.blocks.append(block)
 
 
@@ -248,7 +270,7 @@ def spend_to_wire(spend: T.TaggedSpend, indices: tuple[tuple[int, ...], ...]) ->
 
 
 def spend_from_wire(
-    payload: dict, pool: list, depth: int
+    payload: dict, pool: list, depth: int, rows: int
 ) -> tuple[T.TaggedSpend, tuple[tuple[int, ...], ...]]:
     sm = SMILE
     try:
@@ -262,7 +284,7 @@ def spend_from_wire(
             for note in payload["outputs"]
         )
         signatures = tuple(
-            _decode_signature(bytes.fromhex(blob), depth, sm.matrix_rows)
+            _decode_signature(bytes.fromhex(blob), depth, rows)
             for blob in payload["signatures"]
         )
         tags = tuple(

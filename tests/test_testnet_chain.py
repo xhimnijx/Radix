@@ -50,7 +50,7 @@ def _spend(chain, public, rng, value_in=1000, value_out=990, fee=10, tag=None):
 def test_genesis_creates_the_allocation_and_the_decoy_pool(built):
     _rng, _parameters, _secret, public, chain = built
     assert chain.height == 0
-    assert len(chain.utxo) == 1
+    assert len(chain.outputs) == 1
     assert len(chain.pool) == C.DECOYS + 1
     assert chain.pool[-1] == public
     assert chain.anchor == chain.tip.block_hash()
@@ -76,7 +76,7 @@ def test_submit_admits_a_valid_spend_and_mine_applies_it(built):
     assert block.meets_power()
     assert len(chain.mempool) == 0
     # the output is now spendable and its key joined the ring pool
-    assert len(chain.utxo) == 2
+    assert len(chain.outputs) == 2
     assert chain.pool[-1] == spend.outputs[0].key
 
 
@@ -124,8 +124,10 @@ def test_a_spend_anchored_to_another_block_is_refused(built):
     spend, indices = _spend(chain, public, rng)
     chain.submit(spend, indices)
     chain.mine()
+    # A fresh tag, so the tag check does not fire first: this is about the anchor.
+    stale, stale_indices = _spend(chain, public, rng, tag=ring.constant(2))
     with pytest.raises(C.ChainError, match="anchored"):
-        chain.submit(spend, indices)
+        chain.submit(stale, stale_indices)
 
 
 def test_mining_an_empty_mempool_is_refused(built):
