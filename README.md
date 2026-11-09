@@ -118,6 +118,7 @@ Root documents:
 - [`docs/ESTIMATOR.md`](docs/ESTIMATOR.md) — the outstanding security estimate, and what blocks it
 - [`docs/CONFIDENTIAL-TRANSACTIONS.md`](docs/CONFIDENTIAL-TRANSACTIONS.md) — hiding transaction amounts, in detail
 - [`docs/COMPRESSION.md`](docs/COMPRESSION.md) — what is left of the 4 KB, and why it stops there
+- [`docs/PAPER.md`](docs/PAPER.md) — an implementation-study draft, with the claims and the limitations
 - [`DEPLOY.md`](DEPLOY.md) — running a stagenet node on a second machine
 - [`TESTNET.md`](TESTNET.md) — how to run and build the app
 - [`PLAIN-ENGLISH.md`](PLAIN-ENGLISH.md) — the same story without jargon

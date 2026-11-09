@@ -1,18 +1,22 @@
-feat: multi-hop discovery, so a node is joinable from a network it has not met
+docs: an implementation-study draft, with its claims and limitations fixed first
 
-One hop turned "configure every peer" into "configure one". Two hops makes a node
-reachable from a network it has never spoken to directly, which is what a published seed
-node needs -- a newcomer configures the seed and finds the rest.
+docs/PAPER.md. The order is deliberate: claims, then limitations, then the prose. A paper
+whose scope is decided by what it manages to write ends up overclaiming; one whose claims
+are listed first cannot.
 
-`discover_all(depth=2)` walks the peer graph breadth-first, never adding a node twice and
-never adding itself, so a cycle among peers terminates: each hop only expands nodes that
-were not already known. Unreachable peers are logged and skipped rather than aborting the
-walk. Depth is bounded and defaults to 2; beyond that the graph is expensive for little
-gain at these sizes, and the docstring says so.
+Five claims, and nothing outside them: the protocol is implemented twice and each accepts
+the other's proofs; 21,760 bytes at ring size 1024; 475 ms to prove and 105.8 ms to verify;
+four reproducible defects; and a delta-model estimate of 2^158 and 2^167.
 
-Two tests: a three-node chain where C configures only A and still learns B, and a cycle
-deep enough that a naive walk would not terminate.
+Not claimed, and said so in the paper: any security level, because the estimate is a delta
+model rather than an estimator run, the restatement is signed by a reviewer but not proved
+here, and the implementation is unaudited.
 
-20 p2p tests. Network hardening now has authenticated transport, multi-hop discovery and
-the slow-start difficulty bootstrap; checkpoints-in-sync is the one piece left in that
-item, and it is the least valuable because the measured win was 1.1x.
+The defects table is the paper's heart, because it is the argument for the method. Four
+defects, none findable by reading, two of them found only because a second implementation
+disagreed with the first. The commitment arity is the best example: κ+λ+m+1 and
+κ+rows+2m+1 agree exactly when rows = 8, so a test suite built on one configuration cannot
+distinguish them.
+
+Sections are headings with the measured numbers filled in and TODOs where prose is missing.
+That is honest about what exists: a skeleton good enough to write into, not a paper.
