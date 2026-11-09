@@ -1,23 +1,17 @@
-fix: a chain adopted from a peer is now verified, not trusted
+feat: base-4 addition with an explicit carry, which is what balance needs
 
-The most serious gap I have found in the network layer, and it was not in the
-cryptography. `_apply` decoded a peer's transactions and checked their tags, but never
-verified a proof. A node adopting a chain from a stranger therefore accepted every spend
-in it on no cryptographic evidence -- the proof of work, the block links and the tags were
-checked, and the signatures were not. That is replication of whatever you are told, not
-validation, and on a mainnet it means any peer can hand you a chain of invalid spends.
+Reference [25] p. 4 gives the identity SMILE uses for balance and documents/CONFIDENTIAL-TRANSACTIONS.md section 5 stopped at. Implemented at r = 4:
 
-`_apply` gains verify_transactions, `append` and rebuild forward it, and rebuild DEFAULTS
-to True so a new sync path cannot reintroduce the gap by forgetting a flag. Locally mined
-blocks skip it, because they were validated at submission and re-checking them is waste.
-The measured cost of the safe default is about 105 ms per transaction with the Rust
-verifier, which is the price of not trusting a stranger.
+    a + b + f*(X - 4) = c
 
-Node.sync_from now passes verify_transactions=True explicitly, with the reason in a
-comment: this chain came from a stranger.
+over polynomials, not merely over Z_q, because the evaluation at X = 4 is what turns a digit polynomial back into its integer and a relation that only held at that point would say nothing.
 
-Three test-setup faults of mine on the way, each caught by running: the test chain's
-genesis was an arbitrary key rather than the protocol allocation, so every block looked
-like a fork; the mined timestamps were set in 2027 and the future rule rejected them; and
-one test was written in a way that could not distinguish the two paths it claimed to
-compare.
+Two findings, both now tested.
+
+The carry for adding TWO amounts is binary (at most 1, since a digit sum is at most 6). That is why a two-term addition needs a bit constraint rather than the relaxed proof -- and it means the relaxed proof is only needed once many inputs are summed, which is exactly the multi-input case SMILE has.
+
+The relation must be checked coefficient by coefficient. There is a test that perturbs the carry by (X - 4), which vanishes at X = 4 and leaves the evaluated identity intact: a check that only evaluated would accept it, and the coefficient-wise check rejects it.
+
+Also fixed a tautology I had written into that very test -- `assert ... is not True or True`, which is always true and asserted nothing. Replaced with the real assertion it was meant to be.
+
+7 tests. The carry is computed by long addition in base 4 so a caller cannot manufacture a relation that does not exist, and an inconsistent addition raises rather than returning a carry.
