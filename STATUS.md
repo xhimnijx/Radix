@@ -16,7 +16,8 @@ in `REVIEW-FINDINGS.md`. Summary:
 | `c` / `c'` unit checks | **missing**, now fixed in code with tests (`test_candidate_b_unit_checks.py`) |
 | Masking without rejection sampling | **soundness failure**: the response bound `2^20`, not `mu = 5`, is the security parameter; the core is roughly `2^50`, not `2^128` |
 | The linkable tag | first version **forgeable** (reproduced here without a key); rebuilt as a same-witness extension on C1's advice, `A_ext = [A; A']`, 33.5 KB, 6 tests. k' = 1 gives same-note linkability; distinct-note collision resistance needs k' = 4 and is **not** claimed |
-| Parameters | open. Two separate caps: the challenge-difference term gives ~**24-bit** soundness at this modulus (the binding one), and the `2^20` mask gives ~`2^50`. Both must be fixed; neither is a transcription issue |
+| Modulus | **migrated, 2026-11-09.** `q = 4,294,966,337`, `ord_256 = 4`, 32 irreducible quartics. The `c - c~` cap moves from ~2^-24 to ~2^-123 and the extracted `v` becomes a 32-entry binary vector, so both Q3' and Q6 are closed by the one change. Proof still verifies, 32,512 B, 23.8 s / 20.7 s |
+| Masks | open, and now the only independent blocker. Calibrated in `experiments/mask_calibration.py`: `s = 2^11.4`, `s' = 2^10.7`, `M = sqrt(3/2)`, ~3.7 bits of root-Hermite margin. Not yet implemented |
 | Theorem B.1 under the new modulus | **salvageable**: three edits to the statement, none to the argument (C2). `p` redefined over `F_{q^4}`, `c-bar` invertibility made an explicit hypothesis, and the slot-constant property noted as coming from the modulus. The induction gets shorter, not longer |
 
 The suite is 410 tests: 409 passing and one strict-xfail that guards the withdrawn tag construction. Nothing in this repository may claim 128-bit security
