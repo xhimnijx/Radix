@@ -115,6 +115,7 @@ Root documents:
 - [`REVIEW-FINDINGS.md`](REVIEW-FINDINGS.md) — what two independent reviewers found, retractions included
 - [`REVIEW-REQUEST.md`](REVIEW-REQUEST.md) — the brief for a third review
 - [`docs/CONSENSUS.md`](docs/CONSENSUS.md) — block time, difficulty, reward, fork choice
+- [`docs/ESTIMATOR.md`](docs/ESTIMATOR.md) — the outstanding security estimate, and what blocks it
 - [`DEPLOY.md`](DEPLOY.md) — running a stagenet node on a second machine
 - [`TESTNET.md`](TESTNET.md) — how to run and build the app
 - [`PLAIN-ENGLISH.md`](PLAIN-ENGLISH.md) — the same story without jargon

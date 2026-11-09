@@ -4,7 +4,7 @@ For C1 and C2. The fourth pass answered the blocker and changed the picture:
 
 | | fourth pass | now |
 |---|---|---|
-| Q-A | "the parameters are not priced" | **answered: ~2^157 (A) and ~2^174 (B0). Not short.** My dimensions were wrong; corrected below |
+| Q-A | "the parameters are not priced" | **answered: ~2^158 (A) and ~2^175 (B0). Not short.** My dimensions were wrong; corrected below |
 | Q-B | restate Theorem B.1 | answered: signable with four edits; C2 added the split-regime objection |
 | Q-C | discrete Gaussian | answered: required, and the decisive reason is portability |
 | Q-D | does the tag weaken M-SIS | answered: it strengthens it; `k' = 1` is sufficient |
@@ -20,16 +20,23 @@ width is `W = 33`, so `W*d = 4224`.
 
 | relation | n | `det^{1/n}` | target | delta | block | Core-SVP |
 |---|---|---|---|---|---|---|
-| `A`, untagged, k = 4 | 1664 | `2^9.85` | `2^17.56` | 1.003218 | 541 | **`2^157`** |
+| `A`, untagged, k = 4 | 1664 | `2^9.85` | `2^17.56` | 1.003218 | 541 | **`2^158`** |
 | `A`, tagged, k + k' = 8 | 1664 | `2^19.69` | `2^17.56` | < 1 | n/a | beyond the model |
-| `B_0`, W = 33 | 4224 | `2^9.70` | `2^27.90` | 1.002992 | 598 | **`2^174`** |
+| `B_0`, W = 33 | 4224 | `2^9.70` | `2^27.90` | 1.002992 | 598 | **`2^175`** |
 
-The binding relation is the untagged base at about `2^157`. The "3.6 bits of slack"
+The binding relation is the untagged base at about `2^158`. The "3.6 bits of slack"
 framing was backwards: targets *below* the reachable norms mean a stronger reduction
 is required, not a weaker one.
 
 **Nothing is being changed on the strength of these numbers**, because they are a
 delta-heuristic sanity check, not an estimator run.
+
+`experiments/estimate_sis.py --check` recomputes the table from the formulas and
+asserts it against these figures, so the arithmetic can be checked without trusting it.
+`docs/ESTIMATOR.md` records why `lattice-estimator` cannot run on the Windows machine
+(it needs SageMath) and gives the exact commands for a Linux box — **the estimator run
+no longer needs a cryptographer, only a machine with Sage.** If either of you has one
+spare, the arguments are printed by `--homework`.
 
 ---
 

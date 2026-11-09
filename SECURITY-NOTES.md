@@ -120,17 +120,17 @@ explicit `ValueError`.
   profile is measured.
 
 
-## What `2^157` means, and what it does not (2026-11-09)
+## What `2^158` means, and what it does not (2026-11-09)
 
-A delta-model sanity check of the two M-SIS instances puts them at roughly `2^157` (the
-untagged `A` relation at `k = 4`) and `2^174` (`B_0` at `W = 33`). Two things must not
+A delta-model sanity check of the two M-SIS instances puts them at roughly `2^158` (the
+untagged `A` relation at `k = 4`) and `2^175` (`B_0` at `W = 33`). Two things must not
 be inferred from that.
 
 **It is the cost of the assumption, not the security of the scheme.** The soundness
 argument extracts a witness from four transcripts by rewinding, in the random-oracle
 model. A forger's advantage crosses that reduction with a polynomial loss, so the
 scheme's bit-security is strictly less than the assumption's cost by an amount this
-project has not analysed. Quote it as "the M-SIS assumption is about 2^157", never as
+project has not analysed. Quote it as "the M-SIS assumption is about 2^158", never as
 "the scheme is 157-bit".
 
 **It is a heuristic, not an estimator run.** The numbers come from inverting the

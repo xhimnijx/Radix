@@ -10,7 +10,7 @@ We have a working mathematical proof that lets someone demonstrate *"I am allowe
 spend one of these 1,024 coins, and I will not tell you which one"*, on maths a quantum
 computer cannot break. It runs, it is tested, it is written twice in two languages that
 agree, and two independent cryptographers have now put a number on it: the hard problem
-underneath is worth about **2^157** operations — far beyond anything a classical or
+underneath is worth about **2^158** operations — far beyond anything a classical or
 quantum computer can do today.
 
 ## What changed since this page was first written
@@ -20,7 +20,7 @@ That is now out of date in three ways, and the corrections are more interesting 
 original text.
 
 **The parameters are priced, and they are fine.** Two cryptography reviewers, working
-independently, put the hard problem at roughly 2^157 and 2^174 operations. The earlier
+independently, put the hard problem at roughly 2^158 and 2^175 operations. The earlier
 worry that it might be far weaker came from a comparison that was backwards: the proof's
 tolerance sat *below* what an attacker could reach, which means the attack is harder than
 expected, not easier.

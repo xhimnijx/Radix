@@ -599,13 +599,13 @@ Recomputed with consistent conventions (`delta_b(n)` inverted for the target, Co
 
 | relation | n | `det^{1/n}` | target | delta | block | Core-SVP |
 |---|---|---|---|---|---|---|
-| `A`, untagged, k = 4 | 1664 | `2^9.85` | `2^17.56` | 1.003218 | 541 | **`2^157`** |
+| `A`, untagged, k = 4 | 1664 | `2^9.85` | `2^17.56` | 1.003218 | 541 | **`2^158`** |
 | `A`, tagged, k + k' = 8 | 1664 | `2^19.69` | `2^17.56` | < 1 | n/a | beyond the model |
-| `B_0`, W = 33 | 4224 | `2^9.70` | `2^27.90` | 1.002992 | 598 | **`2^174`** |
+| `B_0`, W = 33 | 4224 | `2^9.70` | `2^27.90` | 1.002992 | 598 | **`2^175`** |
 | `B_0`, at the wrong 2944 | 2944 | `2^13.91` | `2^27.90` | 1.003299 | 523 | `2^152` |
 
 **Both clear 128 bits with 25-47 bits to spare.** The binding relation is the untagged
-base `A` at `k = 4`, at about `2^157`.
+base `A` at `k = 4`, at about `2^158`.
 
 ### The framing error was mine as well
 
@@ -625,9 +625,9 @@ size are not the levers.
 
 **Two things that must not be overclaimed:**
 
-1. `2^157` is the cost of the **assumption**, not the bit-security of the scheme. The
+1. `2^158` is the cost of the **assumption**, not the bit-security of the scheme. The
    extractor is a four-transcript rewinding argument, so a forger's advantage crosses
-   the reduction with a polynomial loss. Quote it as "the assumption is ~2^157".
+   the reduction with a polynomial loss. Quote it as "the assumption is ~2^158".
 2. At `ord_256(q) = 4` the module-LWE hardness proofs in the literature, which are
    stated for `q = 1 mod 2n`, do not apply: the modulus size and the lattice are
    unchanged (the coefficient embedding of `A` depends only on `log q`), but we hold a

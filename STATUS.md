@@ -1,7 +1,7 @@
 # Status — 2026-11-09
 
 **One line:** the proof is finished, verified in two languages, and priced at about
-**2^157** by a delta-model check that both reviewers agree is above 128 bits. What is
+**2^158** by a delta-model check that both reviewers agree is above 128 bits. What is
 missing is no longer the cryptography of a single spend — it is the transaction model
 (amounts are visible), one-time addressing, and a network that has more than one node.
 
@@ -13,7 +13,7 @@ The previous status said "no complete transaction proof exists". That is no long
 
 | Item | Then | Now |
 |---|---|---|
-| **Security pricing** | `2^50`, unpriced | **~`2^157` (A) and ~`2^174` (B₀)** by the delta model; both reviewers concur it clears 128. A real estimator run is still outstanding |
+| **Security pricing** | `2^50`, unpriced | **~`2^158` (A) and ~`2^175` (B₀)** by the delta model; both reviewers concur it clears 128. A real estimator run is still outstanding |
 | **Rust port** | arithmetic layer only | **complete**, 70 tests, and it accepts Python proofs while Python accepts Rust proofs |
 | **Prover cost** | projected | **measured**: 475 ms to prove, 105.8 ms to verify, 9.75 attempts, 32,512 B untagged |
 | **Node verification** | 20–40 s (Python) | **0.44 s** through Rust — 91× on the tagged spend, the path a node actually uses |
@@ -29,8 +29,8 @@ A delta-model sanity check of the two M-SIS instances:
 
 | relation | n | target | Core-SVP |
 |---|---|---|---|
-| `A`, untagged, k = 4 | 1664 | `2^17.56` | **`2^157`** |
-| `B₀`, W = 33 | 4224 | `2^27.90` | **`2^174`** |
+| `A`, untagged, k = 4 | 1664 | `2^17.56` | **`2^158`** |
+| `B₀`, W = 33 | 4224 | `2^27.90` | **`2^175`** |
 | `A_ext`, tagged, k + k′ = 8 | 1664 | `2^17.56` | beyond the model (stronger) |
 
 Two things this does **not** mean, both recorded in `SECURITY-NOTES.md`:
@@ -78,7 +78,7 @@ lattice work, and it is recorded rather than hidden.
 | **No peer-to-peer layer** | Two nodes are two universes; the "stagenet" is one server with clients | Months of work |
 | **No consensus** | Single miner, no difficulty adjustment, no fork choice | Months |
 | **No audit** | Nothing here has been reviewed as a system | Money + time |
-| **No estimator run** | `2^157` is a heuristic, not a number from `lattice-estimator` | C1/C2 |
+| **No estimator run** | `2^158` is a heuristic, not a number from `lattice-estimator`. **The blocker is mechanical, not intellectual**: the tool needs SageMath, and Sage does not run on Windows. `docs/ESTIMATOR.md` records the exact failures and the five-minute run on any Linux box | anyone with a Linux machine |
 
 ## The launch gate
 
