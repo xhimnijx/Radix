@@ -79,7 +79,20 @@ def mul_naive(left: Poly, right: Poly, parameters: SmileParameters | None = None
     return tuple(value % q for value in out)
 
 
+#: Ring multiplications performed since the counter was last reset. Instrumentation
+#: only: it exists so the cost model in PERFORMANCE.md is built on counts that were
+#: measured rather than estimated.
+MUL_COUNT = 0
+
+
+def reset_mul_count() -> None:
+    global MUL_COUNT
+    MUL_COUNT = 0
+
+
 def mul(left: Poly, right: Poly, parameters: SmileParameters | None = None) -> Poly:
+    global MUL_COUNT
+    MUL_COUNT += 1
     """Negacyclic product: X^d == -1.
 
     Three paths, all equality-tested against each other: the NTT when a 256th root
