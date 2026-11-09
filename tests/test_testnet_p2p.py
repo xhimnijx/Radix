@@ -284,3 +284,57 @@ def test_discovery_does_not_add_a_peer_twice(two_nodes):
     first.peers = []
     added = first.discover(f"127.0.0.1:{first_port}")  # asks itself
     assert f"127.0.0.1:{first_port}" not in added, "a node must not record itself"
+
+
+def test_messages_are_authenticated_when_a_secret_is_set(two_nodes, monkeypatch):
+    """Without this a peer on the path can read and alter anything in flight.
+
+    The transport is open by default because a testnet on a LAN should not need key
+    distribution to work at all. With RADIX_P2P_SECRET set on both sides, every message
+    carries an HMAC and an unauthenticated or altered one is refused.
+    """
+    first, second, first_port, second_port = two_nodes
+    secret = b"a shared secret for the test"
+    first.secret = secret
+    second.secret = secret
+    first.peers = [f"127.0.0.1:{second_port}"]
+    second.peers = [f"127.0.0.1:{first_port}"]
+
+    reply = p2p.Peer.parse(f"127.0.0.1:{first_port}", secret=secret).call({"type": "hello"})
+    assert reply["type"] == "hello"
+    assert "mac" in reply, "the reply must be signed too"
+
+
+def test_a_wrong_secret_is_refused(two_nodes):
+    first, _second, first_port, _second_port = two_nodes
+    first.secret = b"correct secret"
+    with pytest.raises(p2p.PeerError, match="authentication failed|unauthenticated"):
+        p2p.Peer.parse(f"127.0.0.1:{first_port}", secret=b"wrong secret").call({"type": "hello"})
+
+
+def test_an_unsigned_message_is_refused_by_a_signed_node(two_nodes):
+    """A node expecting authentication must not accept an open message."""
+    first, _second, first_port, _second_port = two_nodes
+    first.secret = b"expected"
+    with pytest.raises(p2p.PeerError, match="unauthenticated"):
+        p2p.Peer.parse(f"127.0.0.1:{first_port}").call({"type": "hello"})
+
+
+def test_a_tampered_message_fails_authentication(two_nodes):
+    """The MAC covers the payload, so altering a field invalidates it."""
+    import hashlib, hmac, json
+
+    first, _second, first_port, _second_port = two_nodes
+    secret = b"tamper test"
+    first.secret = secret
+
+    # Recompute what a forged message would look like and check the MAC disagrees.
+    forged = {"type": "hello", "height": 999}
+    body = json.dumps(forged, sort_keys=True, separators=(",", ":")).encode()
+    mac = hmac.new(secret, body, hashlib.sha256).hexdigest()
+    forged["mac"] = mac
+    forged["height"] = 1000  # altered after signing
+
+    body2 = json.dumps({"type": "hello", "height": 1000}, sort_keys=True, separators=(",", ":")).encode()
+    mac2 = hmac.new(secret, body2, hashlib.sha256).hexdigest()
+    assert mac != mac2

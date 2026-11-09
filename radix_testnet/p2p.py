@@ -26,6 +26,8 @@ rejected rather than resolved.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import socket
 import struct
@@ -40,14 +42,30 @@ class PeerError(RuntimeError):
     """A peer was unreachable, or sent something this node will not accept."""
 
 
-def send(connection: socket.socket, message: dict) -> None:
-    payload = json.dumps(message, separators=(",", ":")).encode("utf-8")
+def _mac(secret: bytes, message: dict) -> str:
+    """HMAC over the canonical message, with the `mac` field excluded."""
+    body = {key: value for key, value in message.items() if key != "mac"}
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hmac.new(secret, canonical, hashlib.sha256).hexdigest()
+
+
+def send(connection: socket.socket, message: dict, secret: bytes | None = None) -> None:
+    """Frame and send. With a secret, the message is authenticated.
+
+    Without one this is an open testnet channel: anything on the path can read or alter
+    a message, and the receiver has no way to tell. That is stated in the module
+    docstring rather than left to be inferred from the absence of a flag.
+    """
+    outgoing = dict(message)
+    if secret is not None:
+        outgoing["mac"] = _mac(secret, message)
+    payload = json.dumps(outgoing, separators=(",", ":")).encode("utf-8")
     if len(payload) > MAX_MESSAGE:
         raise PeerError(f"message too large: {len(payload)} bytes")
     connection.sendall(HEADER.pack(len(payload)) + payload)
 
 
-def receive(connection: socket.socket) -> dict:
+def receive(connection: socket.socket, secret: bytes | None = None) -> dict:
     header = _read_exactly(connection, HEADER.size)
     (length,) = HEADER.unpack(header)
     if length > MAX_MESSAGE:
@@ -59,6 +77,14 @@ def receive(connection: socket.socket) -> dict:
         raise PeerError(f"peer sent malformed JSON: {error}") from None
     if not isinstance(message, dict) or "type" not in message:
         raise PeerError("peer sent a message with no type")
+
+    if secret is not None:
+        claimed = message.get("mac")
+        if not isinstance(claimed, str):
+            raise PeerError("peer sent an unauthenticated message")
+        # compare_digest, so a wrong MAC cannot be discovered byte by byte.
+        if not hmac.compare_digest(claimed, _mac(secret, message)):
+            raise PeerError("message authentication failed")
     return message
 
 
@@ -81,13 +107,15 @@ class Peer:
     host: str
     port: int
     timeout: float = 30.0
+    secret: bytes | None = None
 
     @classmethod
-    def parse(cls, text: str, timeout: float = 30.0) -> "Peer":
+    def parse(cls, text: str, timeout: float = 30.0,
+              secret: bytes | None = None) -> "Peer":
         host, _, port = text.rpartition(":")
         if not host or not port.isdigit():
             raise PeerError(f"a peer must look like host:port, not {text!r}")
-        return cls(host=host, port=int(port), timeout=timeout)
+        return cls(host=host, port=int(port), timeout=timeout, secret=secret)
 
     def connect(self) -> socket.socket:
         try:
@@ -104,8 +132,8 @@ class Peer:
         type on every reply would eventually forget.
         """
         with self.connect() as connection:
-            send(connection, message)
-            reply = receive(connection)
+            send(connection, message, self.secret)
+            reply = receive(connection, self.secret)
         if reply.get("type") == "error":
             raise PeerError(reply.get("reason", "the peer reported an error"))
         return reply
@@ -160,16 +188,23 @@ class Server:
             ).start()
 
     def _handle(self, connection: socket.socket) -> None:
+        secret = getattr(self.node, "secret", None)
         with connection:
             connection.settimeout(120.0)
             try:
-                message = receive(connection)
-                reply = self.node.handle_p2p(message)
+                message = receive(connection, secret)
             except PeerError as error:
                 reply = {"type": "error", "reason": str(error)}
             except Exception as error:  # noqa: BLE001 - a peer must not kill the server
                 reply = {"type": "error", "reason": f"{type(error).__name__}: {error}"}
+            else:
+                try:
+                    reply = self.node.handle_p2p(message)
+                except PeerError as error:
+                    reply = {"type": "error", "reason": str(error)}
+                except Exception as error:  # noqa: BLE001
+                    reply = {"type": "error", "reason": f"{type(error).__name__}: {error}"}
             try:
-                send(connection, reply)
+                send(connection, reply, secret)
             except OSError:
                 pass

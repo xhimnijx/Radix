@@ -77,6 +77,12 @@ class Node:
         # After the chain, not before: a corrupt chain file should report itself
         # rather than being masked by the wallet check.
         self.peers: list[str] = list(peers or [])
+        #: Shared secret for p2p authentication, from the environment. Without it the
+        #: transport is open: a peer on the path can read and alter messages and the
+        #: receiver cannot tell. Set RADIX_P2P_SECRET on every node that should talk
+        #: to the others, and they will refuse unauthenticated peers.
+        secret_text = os.environ.get("RADIX_P2P_SECRET", "")
+        self.secret: bytes | None = secret_text.encode("utf-8") if secret_text else None
         #: Transaction keys already seen, so relay does not loop. Keyed by a hash of
         #: the wire payload rather than by the id `chain.submit` returns, because the
         #: loop has to be broken BEFORE submitting: a second submission of the same
@@ -229,7 +235,7 @@ class Node:
         """
         from . import p2p
 
-        reply = p2p.Peer.parse(peer_text).call({"type": "getpeers"})
+        reply = p2p.Peer.parse(peer_text, secret=self.secret).call({"type": "getpeers"})
         heard = [str(entry) for entry in reply.get("peers", []) if entry]
         added = []
         for candidate in heard:
@@ -246,7 +252,7 @@ class Node:
         from . import chain as C
         from . import p2p
 
-        peer = p2p.Peer.parse(peer_text)
+        peer = p2p.Peer.parse(peer_text, secret=self.secret)
         hello = peer.call({"type": "hello"})
         # A peer on a different genesis is on a different network, whatever its work.
         # The allocation is part of the chain, so adopting without this check would
@@ -300,7 +306,7 @@ class Node:
         results = {}
         for peer_text in self.peers:
             try:
-                results[peer_text] = p2p.Peer.parse(peer_text).call(
+                results[peer_text] = p2p.Peer.parse(peer_text, secret=self.secret).call(
                     {"type": "block", "block": block.to_wire()}
                 ).get("type")
             except (p2p.PeerError, OSError) as error:
