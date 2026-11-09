@@ -50,7 +50,8 @@ the same class of mistake as the arity defect the Rust port found, and it is rec
 
 - **Set-membership proof** (SMILE Figs. 7–9) over `R_q = Z_q[X]/(X^128+1)` with
   `q = 4,294,966,337`, `ord_256(q) = 4`, 32 irreducible quartic slots.
-- **Gaussian masks** with `Rej1` and the ℓ₂ verifier bound; calibrated, not guessed.
+- **Gaussian masks** with `Rej1` and the ℓ₂ verifier bound; calibrated, not guessed,
+  and drawn from a **discrete** Gaussian whose table both implementations share.
 - **Same-witness tag**: `T = A'·s` proved inside the main relation.
 - **Rust prover and verifier**: every layer with a known-answer value from Python;
   cross-language acceptance in both directions.
@@ -72,7 +73,7 @@ lattice work, and it is recorded rather than hidden.
 |---|---|---|
 | **Amounts are visible and unproven** | The largest functional gap between this and a privacy currency | Design + range proofs, needs a cryptographer |
 | **No one-time addressing** | One keypair is spendable once, so a wallet has four notes, not four thousand. `vault/One-Time Addressing.md` explains why the obvious construction fails on the norm bound | Research |
-| **Discrete Gaussian not implemented** | Continuous-then-rounded; the rejection argument cannot be invoked until it is a real sampler | C1/C2's answer, then ~a day |
+| ~~Discrete Gaussian not implemented~~ | **Closed 2026-11-09.** A table-driven discrete Gaussian, one binary file that Python reads and Rust `include_bytes!`s, so the two cannot sample different distributions. Truncation tail 2^-49.5 | done |
 | **Ring not bound to the pool** | Sound today only because prover and verifier are one process | Cheap fix, changing the transcript in both languages |
 | **No peer-to-peer layer** | Two nodes are two universes; the "stagenet" is one server with clients | Months of work |
 | **No consensus** | Single miner, no difficulty adjustment, no fork choice | Months |

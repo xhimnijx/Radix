@@ -137,17 +137,17 @@ def mask_std(width: int) -> float:
 
 
 def _gaussian(rng: random.Random, width: int, p: SmileParameters) -> tuple[Poly, ...]:
-    """A mask of `width` polynomials with per-coefficient standard deviation s.
+    """A mask of `width` polynomials, per-coefficient standard deviation `s`.
 
-    A *continuous* Gaussian, rounded to integers. The paper's Lemma A.6 is stated
-    for a discrete Gaussian; rounding differs by O(1/s) in statistical distance,
-    which at s ~ 2^11 is negligible but is *not* the same object. A discrete
-    sampler is required before any security claim, and this docstring says so
-    rather than letting the difference pass silently.
+    The coefficients come from a **discrete** Gaussian read out of a table, which is
+    the object Lemma A.6 is stated for. The table is shared byte for byte with the Rust
+    implementation, so the two cannot sample different distributions -- the defect that
+    made the previous rounding sampler unportable as well as imprecise.
     """
-    sigma = mask_std(width)
+    from . import gaussian as gauss
+
     return tuple(
-        tuple(round(rng.gauss(0.0, sigma)) % p.modulus for _ in range(p.ring_degree))
+        tuple(gauss.sample(rng, width) % p.modulus for _ in range(p.ring_degree))
         for _ in range(width)
     )
 

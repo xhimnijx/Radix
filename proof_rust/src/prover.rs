@@ -62,7 +62,7 @@ impl Rng {
         Rng { state }
     }
 
-    fn next_u64(&mut self) -> u64 {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         let result = self.state[0]
             .wrapping_add(self.state[3])
             .rotate_left(23)
@@ -89,13 +89,12 @@ impl Rng {
         (value.rem_euclid(Q as i64)) as u64
     }
 
-    /// A rounded continuous Gaussian, matching the Python prover's caveat.
-    fn gaussian(&mut self, sigma: f64) -> u64 {
-        let u1 = self.next_f64().max(1e-12);
-        let u2 = self.next_f64();
-        let magnitude = (-2.0 * u1.ln()).sqrt();
-        let value = magnitude * (2.0 * std::f64::consts::PI * u2).cos() * sigma;
-        ((value.round() as i64).rem_euclid(Q as i64)) as u64
+    /// A sample from the shared discrete-Gaussian table.
+    ///
+    /// `width` selects the table; the distribution is the one Python reads from the
+    /// same file, so the two implementations cannot drift.
+    fn gaussian(&mut self, width: usize) -> u64 {
+        crate::gaussian::sample(self, width)
     }
 }
 
@@ -173,14 +172,14 @@ fn prove_once(
     let mask: Vec<Poly> = (0..width).map(|_| {
         let mut poly = [0u64; D];
         for value in poly.iter_mut() {
-            *value = rng.gaussian(sigma_main);
+            *value = rng.gaussian(width);
         }
         poly
     }).collect();
     let mask_prime: Vec<Poly> = (0..MATRIX_COLS).map(|_| {
         let mut poly = [0u64; D];
         for value in poly.iter_mut() {
-            *value = rng.gaussian(sigma_prime);
+            *value = rng.gaussian(MATRIX_COLS);
         }
         poly
     }).collect();
@@ -440,14 +439,25 @@ mod tests {
     }
 
     #[test]
-    fn gaussian_samples_are_centred() {
+    fn gaussian_samples_are_centred_with_the_right_width() {
+        // A sampler with the wrong sigma would still be centred, so check both. The
+        // tolerance on the mean is four standard errors; the one on the deviation is
+        // about three.
         let mut rng = Rng::new(9);
-        let mut total = 0.0;
         let count = 4000;
-        for _ in 0..count {
-            total += crate::centered(rng.gaussian(100.0)) as f64;
-        }
-        let mean = total / count as f64;
-        assert!(mean.abs() < 15.0, "mean was {mean}");
+        let sigma = crate::gaussian::sigma(33);
+        let samples: Vec<f64> = (0..count)
+            .map(|_| crate::centered(rng.gaussian(33)) as f64)
+            .collect();
+        let mean = samples.iter().sum::<f64>() / count as f64;
+        let variance = samples.iter().map(|x| x * x).sum::<f64>() / count as f64;
+        let deviation = variance.sqrt();
+
+        let standard_error = sigma / (count as f64).sqrt();
+        assert!(mean.abs() < 4.0 * standard_error, "mean was {mean}");
+        assert!(
+            (deviation - sigma).abs() < 0.05 * sigma,
+            "deviation was {deviation}, expected about {sigma}"
+        );
     }
 }

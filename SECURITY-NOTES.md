@@ -156,3 +156,33 @@ worth recording:
 
 If a published result covers this modulus class, cite it and this paragraph can go. If
 not, it stays.
+
+
+## The discrete Gaussian is now a real sampler (2026-11-09)
+
+The previous sampler rounded a continuous Gaussian. C1 and C2 both held that Lemma A.6
+could not be invoked until that changed, and C2 supplied the decisive reason: a
+rejection argument compares the sampled distribution to a fixed one, and if Python and
+Rust each round a float Gaussian, `libm` disagreement makes them *different*
+distributions — so the analysis applies to neither while the cross-language tests appear
+to pass.
+
+Both now sample from a **cumulative distribution table stored in one binary file**.
+Python reads it at runtime; Rust `include_bytes!`s the same file. There is one
+distribution, so drift is impossible rather than merely tested.
+
+- Tables: `radix_core/candidate_b/lattice/tables/gaussian_w{33,29,13}.bin` (83, 78, 52 KB).
+- Widths are `W = 25 + rows` for the masks and 13 for `z'`; the sampler **fails loudly**
+  on any other width rather than substituting a nearby distribution.
+- Entries are 32-bit cumulative values, so the sampling itself is integer-only.
+- Truncation at 8 sigma leaves a tail of **2^-49.5**, far below the ~2^-16.8
+  statistical distance that motivated the change.
+
+**The mask parameters did not move.** `experiments/mask_calibration.py` reproduces
+`T = 1700`, `s = 2665.5`, `beta = 244,992` and `T' = 1072`, `s' = 1673`, `beta' = 96,512`
+exactly as before, because the calibration measures response norms at a fixed width and
+the sampler changes the *shape* of the mask, not its standard deviation.
+
+A test compares `from_uniform(width, uniform, sign)` across both languages over 420
+points — the boundaries, the centre, and 128 spread values. It is exact, not
+statistical, because the mapping is a pure function of integers in both.

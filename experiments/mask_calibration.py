@@ -101,6 +101,13 @@ def main() -> int:
         margin = reachable_bits - math.log2(target)
         print(f"{name:>6}  {t99:>6.0f}  {s:>11.0f}  {beta:>10.0f}  {target:>9.1f}  "
               f"2^{reachable_bits:<8.1f}  {margin:>5.1f} bits")
+    print()
+    print("Note on two nearby numbers: this script's recommendation is s = 1.57 T,")
+    print("rounded for display. The CODE uses mask_std = 464*sqrt(W), which for")
+    print(f"W = 33 is {__import__('math').sqrt(33) * 464:.1f} and gives beta = 244,992, not")
+    print("the 245,386 printed above. They agree to 0.17%; quote the code's value,")
+    print("because that is the bound the verifier enforces.")
+    print()
     print("reachable norms are C1's root-Hermite values at delta = 1.0042;")
     print("a lattice estimator must confirm them before any security claim.")
 
