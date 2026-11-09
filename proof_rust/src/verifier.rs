@@ -88,6 +88,14 @@ fn verify_inner(
     }
 
     trace.push("bounds");
+    // The paper also requires an infinity-norm check on z, and the compact encoding
+    // depends on it: a coefficient above 12*sigma would not fit in 16 bits.
+    let limit = (12.0 * crate::statement::mask_std(width)) as u64;
+    for poly in &proof.response {
+        if poly.iter().any(|value| crate::centered(*value) <= -(limit as i64) || crate::centered(*value) >= limit as i64) {
+            return Ok(false);
+        }
+    }
     // l2 bounds, as the paper states them.
     let bound = response_bound(width);
     if proof.response.iter().map(|p| l2_squared(p) as f64).sum::<f64>() > bound {

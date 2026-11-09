@@ -47,6 +47,33 @@ pub fn decode_poly(bytes: &[u8], offset: usize) -> Result<[u64; D], DecodeError>
     Ok(out)
 }
 
+/// Two bytes per coefficient, centred. The verifier bounds `z` by `12 * sigma`,
+/// which the caller must have checked, so a coefficient fits a signed 16-bit value.
+pub fn encode_bounded_poly(poly: &[u64; D]) -> Vec<u8> {
+    let half = crate::Q / 2;
+    let mut out = Vec::with_capacity(D * 2);
+    for value in poly {
+        let centred = if *value > half {
+            *value as i64 - crate::Q as i64
+        } else {
+            *value as i64
+        };
+        out.extend_from_slice(&(centred as i16).to_le_bytes());
+    }
+    out
+}
+
+/// Inverse of `encode_bounded_poly`, reducing back into `[0, q)`.
+pub fn decode_bounded_poly(bytes: &[u8], offset: usize) -> Result<[u64; D], DecodeError> {
+    let mut out = [0u64; D];
+    for (index, slot) in out.iter_mut().enumerate() {
+        let start = offset + index * 2;
+        let raw = i16::from_le_bytes([bytes[start], bytes[start + 1]]);
+        *slot = (raw as i64).rem_euclid(crate::Q as i64) as u64;
+    }
+    Ok(out)
+}
+
 pub fn encode_challenge(challenge: &[i64; D]) -> Vec<u8> {
     challenge.iter().map(|value| (*value + 1) as u8).collect()
 }
@@ -82,7 +109,9 @@ impl ProofWire {
     /// The exact byte length for a statement with `commitment_count` commitment
     /// polynomials and a `width`-component response.
     pub fn expected_len(commitment_count: usize, response_prime_count: usize, width: usize) -> usize {
-        (commitment_count + 2 + response_prime_count + width) * POLY_BYTES + 2 * CHALLENGE_BYTES
+        (commitment_count + 2 + response_prime_count) * POLY_BYTES
+            + width * D * 2
+            + 2 * CHALLENGE_BYTES
     }
 
     pub fn decode(
@@ -111,7 +140,11 @@ impl ProofWire {
         let h = take(1)?[0];
         let omega = take(1)?[0];
         let response_prime = take(response_prime_count)?;
-        let response = take(width)?;
+        let mut response = Vec::with_capacity(width);
+        for _ in 0..width {
+            response.push(decode_bounded_poly(bytes, cursor)?);
+            cursor += D * 2;
+        }
         let challenge = decode_challenge(bytes, cursor)?;
         cursor += CHALLENGE_BYTES;
         let challenge_prime = decode_challenge(bytes, cursor)?;
@@ -141,7 +174,7 @@ impl ProofWire {
             out.extend_from_slice(&encode_poly(poly));
         }
         for poly in &self.response {
-            out.extend_from_slice(&encode_poly(poly));
+            out.extend_from_slice(&encode_bounded_poly(poly));
         }
         out.extend_from_slice(&encode_challenge(&self.challenge));
         out.extend_from_slice(&encode_challenge(&self.challenge_prime));

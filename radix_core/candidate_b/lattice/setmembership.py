@@ -296,6 +296,40 @@ def keygen(
     return secret, tuple(ring.dot(row, secret, sm) for row in matrix)
 
 
+#: Coefficients of `z` above this are rejected by the verifier, so they fit in 16 bits.
+BOUND_MULTIPLIER = 12
+
+
+def response_bound_infinity(width: int) -> int:
+    """The infinity-norm bound on `z`: the paper's `12 * sigma`."""
+    return int(BOUND_MULTIPLIER * mask_std(width))
+
+
+def encode_bounded(vector: tuple[Poly, ...]) -> bytes:
+    """Two bytes per coefficient, centred. `q - a` is negative `a`."""
+    half = SMILE.modulus // 2
+    out = bytearray()
+    for poly in vector:
+        for value in poly:
+            centred = value - SMILE.modulus if value > half else value
+            out += int(centred).to_bytes(2, "little", signed=True)
+    return bytes(out)
+
+
+def decode_bounded(data: bytes, count: int) -> tuple[Poly, ...]:
+    """Inverse of `encode_bounded`, reducing back into [0, q)."""
+    polys = []
+    cursor = 0
+    for _ in range(count):
+        poly = []
+        for _ in range(SMILE.ring_degree):
+            value = int.from_bytes(data[cursor : cursor + 2], "little", signed=True)
+            cursor += 2
+            poly.append(value % SMILE.modulus)
+        polys.append(tuple(poly))
+    return tuple(polys)
+
+
 @dataclass(frozen=True)
 class Proof:
     commitment: tuple[Poly, ...]
@@ -308,14 +342,20 @@ class Proof:
     tag_proof: "tagmod.TagProof | None" = None
 
     def encode(self) -> bytes:
-        """Challenges are ternary, so they are stored as one byte per coefficient."""
+        """Challenges are ternary (one byte each); `z` is bounded (two bytes each).
+
+        The response `z` is the only large vector whose coefficients are provably
+        small: the verifier rejects any coefficient above `12*sigma`, which for
+        `sigma = 2665.5` is 31,986 and fits a signed 16-bit integer. Storing it as a
+        residue modulo `q` costs four bytes for no added information.
+        """
         body = b"".join(
             ring.encode(poly)
             for poly in self.commitment
             + (self.h, self.omega)
             + self.response_prime
-            + self.response
         )
+        body += encode_bounded(self.response)
         body += bytes(coefficient + 1 for coefficient in self.challenge)
         body += bytes(coefficient + 1 for coefficient in self.challenge_prime)
         if self.tag_proof is not None:
@@ -687,6 +727,12 @@ def verify(
         # l2 bounds, as the paper states them: beta = s sqrt(2Wd) and
         # beta' = s' sqrt(2 ell d). The old check was l-infinity, which let the
         # response bound rather than the secret bound act as the security parameter.
+        # The paper also requires an infinity-norm check on z, which the compact
+        # encoding depends on: a coefficient above 12*sigma would not fit in 16 bits.
+        limit = response_bound_infinity(width)
+        for poly in proof.response:
+            if any(min(value, sm.modulus - value) > limit for value in poly):
+                return False
         if _l2_squared(proof.response, sm) > _response_bound(width, sm):
             return False
         if _l2_squared(proof.response_prime, sm) > _response_bound(sm.matrix_cols, sm):

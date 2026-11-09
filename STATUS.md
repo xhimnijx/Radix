@@ -15,7 +15,7 @@ The previous status said "no complete transaction proof exists". That is no long
 |---|---|---|
 | **Security pricing** | `2^50`, unpriced | **~`2^158` (A) and ~`2^175` (B₀)** by the delta model; both reviewers concur it clears 128. A real estimator run is still outstanding |
 | **Rust port** | arithmetic layer only | **complete**, 70 tests, and it accepts Python proofs while Python accepts Rust proofs |
-| **Prover cost** | projected | **measured**: 475 ms to prove, 105.8 ms to verify, 9.75 attempts, 32,512 B untagged |
+| **Prover cost** | projected | **measured**: 475 ms to prove, 105.8 ms to verify, 9.75 attempts, **25,088 B untagged** after compressing `z` |
 | **Node verification** | 20–40 s (Python) | **0.44 s** through Rust — 91× on the tagged spend, the path a node actually uses |
 | **Batch verification** | assumed to help | **measured**: it cannot; proofs share nothing but the statement. Parallelism gives **4.22× on 8 cores** |
 | **Wallet** | hardcoded seed constant | **BIP-39 phrase**, versioned derivation, refuses a corrupt or missing phrase |

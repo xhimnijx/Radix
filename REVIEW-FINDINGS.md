@@ -786,3 +786,44 @@ which is the placement both suggested in prose. If a reviewer wants it elsewhere
 a one-line move on each side — but the ordering requirement is now recorded: **any
 change to this must be made in both implementations at once**, or the cross-language
 tests start comparing different protocols.
+
+
+# Compression, step one, 2026-11-09: `z` is now bounded and packed
+
+The paper's ring signature is 17.27 KB for ring size 1024; ours was 32,512 B. The first
+step toward closing that gap does not touch the protocol at all.
+
+## What changed
+
+`z` is the only large vector whose coefficients are provably small: the verifier rejects
+any coefficient above `12 * sigma`, which for `sigma = 2665.5` is 31,986 and fits a
+signed 16-bit integer. It was being written as a 32-bit residue modulo `q`, which spends
+four bytes to carry a value that needs two.
+
+- **The infinity-norm check is now explicit in both verifiers.** The paper requires it
+  and this implementation did not do it. Adding it is a tightening, not a change of
+  meaning: a proof whose `z` exceeds the bound was already outside the distribution the
+  soundness argument covers.
+- `Proof.encode` writes `z` as signed 16-bit centred values; the decoders in
+  `radix_testnet/codec.py` and `proof_rust/src/codec.rs` read them back and reduce into
+  `[0, q)`.
+
+## Measured
+
+| | before | after |
+|---|---|---|
+| untagged proof | 32,512 B | **25,088 B** (‑22.8%) |
+| tagged proof | 36,608 B | **28,160 B** |
+| tagged total with tag | 38,656 B | **30,208 B** |
+
+Verified rather than assumed: the reduced proof still verifies; it round-trips through
+the decoder with an identical `response` vector; both cross-language fixtures were
+regenerated and each implementation accepts the other's proof at the new size; the Rust
+suite is 70 green and the Python fast suite 447.
+
+**What this is not.** It is not the paper's entropy coding. A Gaussian of standard
+deviation `sigma` costs about `log2(sigma * sqrt(2*pi*e))` bits per coefficient, roughly
+13.4 bits here, and 16 bits is what a fixed-width field gives. It is also not the two
+larger wins the paper describes: compressed public keys (`t0` rounded modulo `2^D`) and
+Bai-Galbraith compression of the MLWE error. Those change the shape of the statement and
+are the next steps, not this one.

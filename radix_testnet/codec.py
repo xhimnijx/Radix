@@ -44,7 +44,12 @@ def decode_proof(
     # shape -- it happened to work only because the harness only used tagged ones.
     commitment_count = p.challenge_dim + rows + 2 * depth + 1
     width = S.masking_width(depth, p, rows)
-    expected = (commitment_count + 2 + p.matrix_cols + width) * poly_bytes + 2 * p.ring_degree
+    # z is two bytes per coefficient, everything else four.
+    expected = (
+        (commitment_count + 2 + p.matrix_cols) * poly_bytes
+        + width * p.ring_degree * 2
+        + 2 * p.ring_degree
+    )
     if len(data) != expected:
         raise CodecError(f"proof must be {expected} bytes for this statement, got {len(data)}")
 
@@ -62,7 +67,8 @@ def decode_proof(
     h = take(1)[0]
     omega = take(1)[0]
     response_prime = take(p.matrix_cols)
-    response = take(width)
+    response = S.decode_bounded(data[cursor : cursor + width * p.ring_degree * 2], width)
+    cursor += width * p.ring_degree * 2
     challenge = tuple(value - 1 for value in data[cursor : cursor + p.ring_degree])
     cursor += p.ring_degree
     challenge_prime = tuple(value - 1 for value in data[cursor : cursor + p.ring_degree])
