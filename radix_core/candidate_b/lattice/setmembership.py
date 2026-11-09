@@ -437,6 +437,14 @@ def ring_digest(statement: "Statement", p: SmileParameters) -> bytes:
     breaks -- the same discipline the discrete Gaussian will need.
     """
     tx = transcript.Transcript(b"radix/ring/v1")
+    # The parameters and the proved matrix go in FIRST. Without them a proof could be
+    # replayed against a different parameter set or a different A, which is exactly the
+    # class of substitution the digest exists to prevent (C2, seventh pass).
+    tx.absorb(b"modulus", int(p.modulus).to_bytes(8, "little"))
+    tx.absorb(b"degree", int(p.ring_degree).to_bytes(4, "little"))
+    tx.absorb(b"depth", int(statement.depth).to_bytes(4, "little"))
+    for row in statement.matrix:
+        tx.absorb(b"A", b"".join(ring.encode(poly, p) for poly in row))
     for key in statement.keys:
         tx.absorb(b"pk", b"".join(ring.encode(poly, p) for poly in key))
     return tx.challenge(b"ring", 32)

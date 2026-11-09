@@ -71,6 +71,6 @@ def test_the_truncation_is_negligible():
     for width in (33, 29, 13):
         sigma = G.sigma(width)
         cut = G.max_magnitude(width)
-        assert cut == int(math.ceil(8.0 * sigma))
+        assert cut == int(math.ceil(12.0 * sigma))
         tail = math.erfc(cut / (sigma * math.sqrt(2.0)))
-        assert tail < 2 ** -40, f"width {width} tail is 2^{math.log2(tail):.1f}"
+        assert tail < 2 ** -100, f"width {width} tail is 2^{math.log2(tail):.1f}"

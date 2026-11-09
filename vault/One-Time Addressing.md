@@ -103,7 +103,7 @@ not know `k`. That is exactly the property my broken version lacked.
 
 ## The obstruction, stated precisely
 
-**`p` is probably not short, and SMILE needs a short secret.**
+**`p` is not short as written, and SMILE needs a short secret.**
 
 The tag is `A'·s` and the proof requires `‖s‖∞ ≤ μ = 5`. The stealth secret is
 `p = k + XOF(S)`, where `k` is Kyber's CBD-sampled short secret but `XOF(S)` is a **hash

@@ -1,25 +1,31 @@
-feat: transaction relay, so a spend submitted to one node reaches the others
+feat: 12-sigma truncation, ring digest binds the parameters, and C1/C2's corrections recorded
 
-Only blocks propagated before this. A transaction lived in the mempool of whichever node
-received it, so peers disagreed about what was pending and only that one node could mine
-it. For a network of independent nodes that is not a network.
+Both reviewers answered the seventh pass and converged. Three things changed in the code.
 
-A 'tx' message now carries the wire payload. On receipt the node checks a seen-set keyed
-by a hash of the payload, submits through the same path the HTTP endpoint uses, and
-relays onward. Both submission routes -- submit_raw for the raw endpoint and send for the
-wallet/GUI path -- add the key and relay after the spend is safely in their own mempool,
-so a slow or dead peer cannot turn a successful send into a failure.
+TRUNCATION. C1 and C2 both caught that an 8-sigma tail of 2^-49.5 per coefficient is not
+a 128-bit claim, and C2 computed the aggregate: sqrt(4224) * 2^-49.5 is about 2^-43.5,
+which cannot inherit the paper's 2^-100 HVZK clause. Tables are now generated at 12 sigma:
+tail 2^-107.8 per coefficient, about 2^-101.8 over a response, which is below the paper's
+bound. The tables grew from ~300 KB to ~440 KB total, which is the entire cost.
 
-The seen-set is keyed by the PAYLOAD hash rather than by the id chain.submit returns,
-because the loop has to be broken before submitting: a second submission of the same
-transaction is an error, and one error reply per relay hop would flood the logs of a
-two-node network.
+RING DIGEST. The ring digest now absorbs the modulus, the ring degree, the depth and the
+proved matrix A before the keys, in both languages. Without them a proof could be
+replayed against a different parameter set or a different A, which is precisely the
+substitution the digest exists to prevent. Both cross-language fixtures were regenerated
+and each implementation still accepts the other's proof at 21,760 bytes.
 
-Tested end to end, not just at the plumbing. A real tagged spend built by Node.send --
-the same path the GUI uses -- submitted to node A appears in node B's mempool. That test
-costs 174 seconds because it produces a real proof, so it is marked slow; four fast tests
-cover the routing, the no-payload case, the seen-set and the key canonicalisation.
+The 2x slack. C2 found the thing my tests did not probe: the relaxed range proof's lemma
+guarantees a bound of 2B, not B, because the slack is on the maximum. The new test records
+what this implementation actually does -- its verifier bound is calibrated at the maximum
+of Rf over an honest f, so a vector doubled is rejected, which is the safe direction --
+and asserts the supply arithmetic the factor of two feeds into. A 64-bit amount does not
+fit one coefficient of q ~ 2^32, which is why the base-4 encoding exists.
 
-Two of my own errors, both from assuming rather than checking: spend_to_wire is a module
-function rather than a Chain method, and a recipient is the 2,735-character address, not
-the short form.
+Recorded rather than implemented, because both are new protocol pieces: the stealth public
+key is P = A*p + e1, NOT A*p, so it is not a SMILE key at all and needs a noise-aware
+[A | I_k] statement; and the sender-computable tag needs a public T_K = A'*k in the
+meta-address. C2 also showed that a uniform XOF(S) does not merely break the norm, it
+breaks decryption.
+
+Two of my own errors on the way: a test asserting that our bound would accept a 2x
+inflation, which it should not, and an arithmetic assertion that was simply false.

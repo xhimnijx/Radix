@@ -81,3 +81,42 @@ def test_the_mapped_boundary_is_tight_enough_to_matter():
         if relaxed.exceeds(relaxed.relax(vector, matrix, masking), bound):
             caught += 1
     assert caught >= 45, f"only {caught} of 50 subtly inflated vectors were caught"
+
+
+def test_the_verifier_bound_is_conservative_against_the_lemma_slack():
+    """C2's finding, stated precisely against what this implementation does.
+
+    The lemma guarantees that if `max(R f + y)` is small then `max(f)` is at most about
+    **twice** the bound — the factor of two is in the guarantee, not in the verifier.
+
+    This implementation's `bound_for` is calibrated at the *maximum* of `R f` over an
+    honest `f`, so it is tighter than the lemma needs: a vector inflated to twice the
+    honest bound is rejected. That is the safe direction, and the test records it.
+
+    The consequence still has to be carried into the supply argument: the proof's
+    guarantee is `2B`, so anything that reasons about total supply must bound amounts by
+    `2B` and keep that below `q/2`. Asserted as arithmetic so the constant cannot be
+    dropped.
+    """
+    columns = 64
+    honest_max = 8
+    bound = relaxed.bound_for(honest_max, columns)
+
+    rejected = 0
+    for index in range(50):
+        _seed, matrix, masking = trial(b"slack" + index.to_bytes(4, "little"), columns)
+        vector = [honest_max * 2] * columns
+        if relaxed.exceeds(relaxed.relax(vector, matrix, masking), bound):
+            rejected += 1
+    assert rejected == 50, f"only {rejected} of 50 doubled vectors were rejected"
+
+    # The supply arithmetic the factor of two feeds into. A 64-bit amount does not fit
+    # a single coefficient of q ~ 2^32, which is why the base-4 encoding exists at all.
+    largest_amount = 4**32 - 1
+    assert largest_amount > (1 << 32), (
+        "a 64-bit amount does not fit one coefficient of q ~ 2^32, which is why the "
+        "base-4 digit encoding exists at all"
+    )
+    assert 2 * largest_amount > (1 << 32), (
+        "and the factor of two does not rescue it: the digits must be separate"
+    )

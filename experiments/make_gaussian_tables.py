@@ -14,7 +14,7 @@ ratio of consecutive terms is `exp(-(2k+1) / (2 sigma^2))` and the sum is stable
 through `P(|X| <= k) = erf(k / sigma sqrt 2)` would lose most of its precision in the
 tail, because the answer is within 1e-16 of 1.
 
-Truncation: the table covers `|x| <= 8 sigma`. For sigma ~ 2.7e3 that leaves a tail of
+Truncation: the table covers `|x| <= 12 sigma`. For sigma ~ 2.7e3 that leaves a tail of
 about 2^-49, which is far below the ~2^-16.8 statistical distance that motivated the
 whole exercise. The number is asserted at the end rather than assumed.
 
@@ -36,7 +36,7 @@ import struct
 MAGIC = b"RDXGAUSS"
 VERSION = 1
 SCALE = 1 << 32
-TAIL_IN_SIGMAS = 8.0
+TAIL_IN_SIGMAS = 12.0
 
 #: Widths the protocol and its tests actually use. W = 25 + rows, plus MATRIX_COLS
 #: for the z' mask: rows = 8 gives 33 (tagged, production), rows = 4 gives 29 (the

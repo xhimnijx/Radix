@@ -93,6 +93,15 @@ pub fn draw_ternary(transcript: &mut Transcript, label: &[u8]) -> [i64; D] {
 /// verification breaks. Zero proof bytes: it only moves the challenge.
 pub fn ring_digest(statement: &Statement) -> Vec<u8> {
     let mut transcript = Transcript::new(b"radix/ring/v1");
+    // Must match `setmembership.ring_digest` byte for byte. The parameters and the
+    // proved matrix come first, so a proof cannot be replayed under different
+    // parameters or against a different A.
+    transcript.absorb(b"modulus", &(crate::Q as u64).to_le_bytes());
+    transcript.absorb(b"degree", &(D as u32).to_le_bytes());
+    transcript.absorb(b"depth", &(statement.depth as u32).to_le_bytes());
+    for row in &statement.matrix {
+        transcript.absorb(b"A", &encode_vector(row));
+    }
     for key in &statement.keys {
         transcript.absorb(b"pk", &encode_vector(key));
     }
