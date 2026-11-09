@@ -10,6 +10,7 @@
 //! residues fits in `u64` and the CRT accumulation uses `u128`.
 
 pub mod sample;
+pub mod proof;
 pub mod statement;
 pub mod recursion;
 pub mod tensor;

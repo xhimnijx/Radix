@@ -23,7 +23,7 @@ afternoon and a week.
 | 4 | BDLOP | `bdlop.py` | **commitment digest matches Python**; homomorphism and opening tests | **done** |
 | 5 | Quadratic, tensor | `quadratic.py`, `tensor.py` | **coefficient and expected-value digests match**; flat index 2083 | **done** |
 | 6 | Recursion | `recursion.py` | **pairing digest matches**; shapes, linearity and constant-vector rejection | **done** |
-| 7 | Prove/verify | `setmembership.py` | cross-language verification | **in progress**: keys, statement, draw, head done |
+| 7 | Prove/verify | `setmembership.py` | cross-language verification | **in progress**: keys, statement, draw, head, paper_to_slot, e1, b_transpose, gamma_elements, index_vectors, final_x done |
 | 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | pending |
 | 9 | Timing | -- | end-to-end prove and verify, replacing the projection | pending |
 | 10 | Seam | `radix_testnet/prover.py` | `--backend rust` produces proofs the Python verifier accepts | pending |
@@ -53,7 +53,7 @@ label length is prefixed so `"ab"`+`"c"` cannot collide with `"a"`+`"bc"`.
 
 ## Current state
 
-51 Rust tests pass. Every layer below the proof itself has at least one value
+57 Rust tests pass. Every layer below the proof itself has at least one value
 produced by the Python reference, and the proof's own scaffolding now does too:
 `masking_width`, `draw` and `draw_ternary` match. What remains of layer 7 is the
 verifier's body (the slot mapping, the descent, `F` and the final equation) and
