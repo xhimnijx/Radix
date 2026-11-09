@@ -1,39 +1,36 @@
-feat: block rewards, treasury slice and coinbase maturity
+feat: checkpoints, with the break-even point measured rather than assumed
 
-Mining paid nothing before this. A block settled the mempool and the miner received no
-output at all, so the chain had no security budget and no reason for anyone to mine.
+Chain.rebuild replays from genesis. Measured on this machine: an empty block costs about
+1 ms, and a transaction adds 2.7 ms because its proof must be decoded from the wire
+format. At ten transactions per 120-second block that is 27 ms per block, or 3.9 hours
+to replay one year of chain -- and replay does not verify the proofs, which cost 105 ms
+each.
 
-emission(height) decays linearly from 20 units to a 0.6-unit tail over 525,600 blocks
-(two years at 120 seconds) and then pays the tail forever -- a fixed cap would let the
-security budget decay to zero, which is why the tail exists. 10% of every reward goes to
-a treasury recorded per height, and the rest to the block's coinbase recipient, which the
-block now names in its header.
+radix_testnet/checkpoint.py snapshots the state at a tip and restores it without
+replaying history: outputs, the coin pool, spent tags, the treasury, immature coinbase
+outputs, and the tip block itself, because `height` is derived from the chain's length
+and the anchor is the tip's hash. The 1024 decoys are NOT stored: they are derived from
+a fixed seed, so storing them would be 2 MB of bytes every node can regenerate.
 
-Maturity is enforced STRUCTURALLY rather than by a check: an immature coinbase key is not
-in the ring pool, and a ring can only reference the pool. That matters because a ring
-signature hides which member is real, so checking one output's age is impossible --
-making every member eligible is what makes the rule sound.
+THE MEASUREMENT IS NOT THE ONE I EXPECTED, and it is recorded honestly. Restoring a
+200-block chain takes 197 ms against 214 ms to replay it: 1.1x, not an order of
+magnitude. Almost all of the restore cost is regenerating the decoy pool. Break-even is
+therefore about 73 transactions skipped -- seven blocks at ten transactions each -- and on
+a chain of empty blocks a checkpoint is marginally SLOWER than replaying.
 
-TWO REAL FINDINGS, not test bugs:
+Two consequences worth stating rather than discovering later. Checkpoints only pay for
+chains that carry transactions, and the fixed cost could be cut by caching or serialising
+the decoy pool.
 
-1. The LWMA indices were off by one whenever the window was 1 -- the first adjustment on
-   a two-block chain. Every solve time came out negative, clamped to one second, so the
-   target tightened by the maximum factor on every block and the chain became unmineable
-   within about twenty. It survived the synthetic tests because they only called
-   next_target once the window was two or more, where the arithmetic happened to be
-   right. There is now a regression test for the two-block case specifically.
+The module says plainly that a checkpoint is a TRUST ANCHOR and not a consensus rule: a
+node that restores from one accepts what it describes without re-deriving it, which is
+why it saves work and why a bad checkpoint is unrecoverable.
 
-2. A block reward to a reused key COLLAPSES. Output identity is the hash of (key,
-   value), so two rewards paid to one key with the same value are one output; and since
-   the tag is a function of the secret, that key is spendable exactly once anyway. A
-   miner reusing one key accumulates one reward, not n. This is the one-time addressing
-   limitation showing up in the reward path, and there is a test that asserts it rather
-   than a comment that apologises for it. Every other reward test rotates keys.
+Also: the first version stored only the state and not the tip block, so a restored chain
+reported height 0 and could not accept the next block. The snapshot now carries the tip,
+and the block list is padded to it -- absent history rather than fake transactions.
 
-Also fixed: the test fixture used the same key for the genesis allocation and the miner,
-so "the miner's key is not in the pool yet" was trivially false; and key_for cycled with
-period 13, so the height-1 reward key reappeared at height 92.
+6 tests, including a full state round trip, JSON transport, a digest that moves when the
+state moves, and refusal of a tampered tip.
 
-The wire format changed again: the block header now carries the coinbase recipient.
-
-66 tests across the five affected testnet suites.
+66 earlier tests still pass.
