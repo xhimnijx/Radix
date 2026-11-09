@@ -41,6 +41,12 @@ pub fn masking_width(depth: usize, rows: usize) -> Result<usize, ProofError> {
     Ok(CHALLENGE_DIM + MASKING_DIM + rows + 2 * depth + 1)
 }
 
+/// The masking width `s = 464 * sqrt(W)`, calibrated by
+/// `experiments/mask_calibration.py` so that `M = sqrt(3/2)`.
+pub fn mask_std(width: usize) -> f64 {
+    464.0 * (width as f64).sqrt()
+}
+
 /// A full-width polynomial drawn from the transcript.
 pub fn draw(transcript: &mut Transcript, label: &[u8]) -> Poly {
     let raw = transcript.challenge(label, 4 * D);

@@ -104,6 +104,28 @@ fn glue_crt_of(vector: Vec<Quartic>) -> Poly {
     glue_crt(&residues)
 }
 
+/// `P`: row `(component, slot)`, column `j` is the slots of `-c' pk_j`.
+///
+/// This is the largest single computation in the verifier: `rows * 32` by `l^m`
+/// quartic entries. The order matters -- component-major, then slot -- because the
+/// paper indexes `t` by `(component, slot)` pairs and the descent relies on it.
+pub fn set_matrix(c_prime: &Poly, statement: &crate::statement::Statement) -> Vec<Vec<Quartic>> {
+    let rows = statement.matrix.len();
+    let columns = statement.keys.len();
+    let mut out = vec![vec![[0u64; 4]; columns]; rows * SLOTS];
+    for (column, key) in statement.keys.iter().enumerate() {
+        for component in 0..rows {
+            let product = crate::mul_crt(c_prime, &key[component]);
+            let negated = crate::sub(&crate::zero(), &product);
+            let residues = slots(&negated);
+            for slot in 0..SLOTS {
+                out[component * SLOTS + slot][column] = residues[slot];
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +176,38 @@ mod tests {
             }
         }
         assert_eq!(digest(&bytes), "a79a2ab27b9ef1549ec9974b674e5dad");
+    }
+
+    #[test]
+    fn the_set_matrix_matches_the_python_reference() {
+        // python: shape 128 x 1024, digest == 7fdce86f489050132eb684d39faa5239
+        use crate::statement::Statement;
+        let rows = 4usize;
+        let cols = 13usize;
+        let matrix: Vec<Vec<Poly>> = (0..rows)
+            .map(|row| (0..cols).map(|col| uniform_from(b"A", (row * cols + col) as u32)).collect())
+            .collect();
+        let keys: Vec<Vec<Poly>> = (0..1024)
+            .map(|key| {
+                (0..rows)
+                    .map(|component| uniform_from(b"pk", (key * rows + component) as u32))
+                    .collect()
+            })
+            .collect();
+        let statement = Statement::new(matrix, keys, 2).unwrap();
+        let c_prime = uniform_from(b"c-prime", 0);
+        let matrix_out = set_matrix(&c_prime, &statement);
+        assert_eq!(matrix_out.len(), rows * SLOTS);
+        assert_eq!(matrix_out[0].len(), 1024);
+        let mut bytes = Vec::new();
+        for row in &matrix_out {
+            for entry in row {
+                for value in entry {
+                    bytes.extend_from_slice(&(*value as u32).to_le_bytes());
+                }
+            }
+        }
+        assert_eq!(digest(&bytes), "7fdce86f489050132eb684d39faa5239");
     }
 
     #[test]

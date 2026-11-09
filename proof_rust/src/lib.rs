@@ -10,6 +10,7 @@
 //! residues fits in `u64` and the CRT accumulation uses `u128`.
 
 pub mod sample;
+pub mod verifier;
 pub mod proof;
 pub mod statement;
 pub mod recursion;
@@ -115,6 +116,20 @@ pub fn sub(left: &Poly, right: &Poly) -> Poly {
 }
 
 /// The O(d^2) reference implementation: correct by construction.
+/// Map a ternary challenge (-1/0/1) to its ring representation.
+pub fn lift_challenge(challenge: &[i64; D]) -> Poly {
+    let mut out = [0u64; D];
+    for (index, value) in challenge.iter().enumerate() {
+        out[index] = match *value {
+            -1 => Q - 1,
+            0 => 0,
+            1 => 1,
+            other => (other as i128).rem_euclid(Q as i128) as u64,
+        };
+    }
+    out
+}
+
 pub fn scalar(value: u64, poly: &Poly) -> Poly {
     let mut out = [0u64; D];
     for index in 0..D {

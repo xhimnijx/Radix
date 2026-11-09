@@ -24,7 +24,7 @@ afternoon and a week.
 | 5 | Quadratic, tensor | `quadratic.py`, `tensor.py` | **coefficient and expected-value digests match**; flat index 2083 | **done** |
 | 6 | Recursion | `recursion.py` | **pairing digest matches**; shapes, linearity and constant-vector rejection | **done** |
 | 7 | Prove/verify | `setmembership.py` | cross-language verification | **in progress**: keys, statement, draw, head, paper_to_slot, e1, b_transpose, gamma_elements, index_vectors, final_x done |
-| 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | pending |
+| 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | **Python proof currently REJECTED by Rust verify** |
 | 9 | Timing | -- | end-to-end prove and verify, replacing the projection | pending |
 | 10 | Seam | `radix_testnet/prover.py` | `--backend rust` produces proofs the Python verifier accepts | pending |
 
@@ -61,6 +61,22 @@ then the prover. The BDLOP commitment digest matches the Python reference byte f
 which is the first check of real cryptographic structure rather than of hashing or
 encoding -- it exercises the sampling convention, the CRT multiplication and the
 commitment layout together.
+
+## Open failure, 2026-11-09
+
+`tests/python_proof.rs` feeds a real Python proof (32,512 bytes, produced by
+`experiments/produce_python_proof.py`) to the Rust verifier. **It is rejected.**
+
+That is the test doing its job, and it means the port is not yet faithful. The
+verifier is written end to end, so the failure is in one of the stages between the
+head and the final comparison -- most likely the transcript absorb order, the
+`paper_to_slot` map at this depth, or the `f`/`total` indexing. Every stage below
+the verifier has a matching digest, so the search space is the control flow, not
+the algebra.
+
+Next step is to instrument `verify` to report the first failing stage, then compare
+the intermediate values (`w`, `c'`, `f[1]`, `total`, `inner`, `lhs`) against the
+reference. Guessing has been tried; it is cheaper to measure.
 
 ## Rules
 
