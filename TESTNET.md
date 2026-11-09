@@ -89,8 +89,8 @@ cd proof_rust
 cargo build --release --bin prove_request
 ```
 
-and select it with `python -m radix_testnet.cli --backend rust ...`, or by setting
-`RADIX_PROVE_BIN` to the binary. If the binary is missing, `--backend rust` **refuses**
+and select it with `python -m radix_testnet.cli --backend rust (the default) ...`, or by setting
+`RADIX_PROVE_BIN` to the binary. If the binary is missing, `--backend rust (the default)` **refuses**
 rather than silently falling back to Python — a demo that claims the fast path and
 quietly uses the slow one is worse than no demo.
 

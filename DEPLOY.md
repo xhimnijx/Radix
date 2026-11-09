@@ -162,7 +162,7 @@ the phrase would need to keep deriving the old wallet. That is what the `v1` tag
 ```bash
 sudo apt-get install -y cargo
 cd /opt/radix/proof_rust && sudo cargo build --release --bin prove_request --bin verify_request
-sudo systemctl edit radix-node.service    # change --backend python to --backend rust
+sudo systemctl edit radix-node.service    # --backend rust is already the default in the unit
 ```
 
 Proving goes from ~2 minutes to under a second, and **verification — which is what a
@@ -170,8 +170,9 @@ node actually does — from 40.3 s to 0.44 s per tagged spend** (91x, measured; 
 work plus a subprocess per input).
 
 Both binaries are needed: `prove_request` for sending, `verify_request` for checking
-transactions. If either is missing the backend refuses rather than silently falling
-back to Python.
+transactions. If either is missing the node **refuses to start** and prints the two
+commands above, rather than silently falling back to the slow reference implementation.
+Pass `--backend python` deliberately if that is what you want.
 
 ## Resources
 

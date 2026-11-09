@@ -70,9 +70,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"radix-testnet {__version__}")
     parser.add_argument(
         "--backend",
-        default="python",
+        default="rust",
         choices=["python", "rust"],
-        help="which prover to use; rust needs prove_request built",
+        help="which prover to use (default: rust, the ported implementation); python is the slow reference oracle",
     )
     args = parser.parse_args(argv)
 

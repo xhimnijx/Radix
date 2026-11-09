@@ -51,17 +51,29 @@ def set_backend(name: str) -> ProverBackend:
 
         if not rust_backend.available():
             raise ProverUnavailable(
-                "the rust prover is not built. Run: cargo build --release --bin "
-                "prove_request (in proof_rust), or set RADIX_PROVE_BIN."
+                "the rust prover is not built, and it is the default. Build it with:\n"
+                "    cd proof_rust && cargo build --release --bin prove_request "
+                "--bin verify_request\n"
+                "or start with --backend python to use the slow reference "
+                "implementation instead."
             )
     BACKEND = backend
     return backend
 
 
 def prove_spend(*args, **kwargs) -> SP.Spend:
-    """Build a spend. The only prover entry point the testnet uses."""
+    """Build an *untagged* spend.
+
+    The testnet uses `prove_tagged`; this entry point predates the tag and is kept
+    because the archived Candidate-A path and the spend tests still call it. With the
+    Rust backend it refuses rather than pretending: the port implements the tagged
+    protocol, not this one.
+    """
     if BACKEND is ProverBackend.RUST:
-        raise ProverUnavailable("the rust prover is not implemented")
+        raise ProverUnavailable(
+            "the Rust port implements the tagged protocol; use prove_tagged, or "
+            "--backend python for an untagged spend"
+        )
     return SP.build_spend(*args, **kwargs)
 
 

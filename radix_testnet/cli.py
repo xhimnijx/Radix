@@ -187,9 +187,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--data-dir", default=None, help="where the chain and wallet live")
     parser.add_argument(
         "--backend",
-        default="python",
+        default="rust",
         choices=["python", "rust"],
-        help="which prover to use; rust needs prove_request built",
+        help="which prover to use (default: rust, the ported implementation); python is the slow reference oracle",
     )
     parser.add_argument("--version", action="version", version=f"radix-testnet {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
