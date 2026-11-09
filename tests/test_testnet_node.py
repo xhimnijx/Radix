@@ -88,7 +88,7 @@ def test_status_reports_the_chain_and_the_faucet(served):
     assert status["faucet"]["balance"] == 4000
     assert status["backend"] == "python"
     assert status["parameters"]["ring"] == 1024
-    assert status["parameters"]["tag_rows"] == 4
+    assert status["parameters"]["tag_rows"] == 1
 
 
 def test_the_wallet_page_carries_the_disclaimers_and_every_view(served):

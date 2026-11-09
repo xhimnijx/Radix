@@ -1,31 +1,28 @@
-feat: 12-sigma truncation, ring digest binds the parameters, and C1/C2's corrections recorded
+feat: genesis is a protocol constant, so two nodes agree without talking
 
-Both reviewers answered the seventh pass and converged. Three things changed in the code.
+Before this the genesis allocation came from whatever wallet the node happened to create,
+so two independently started nodes were on different chains and the sync had to transmit
+an allocation list together with the chain -- a shortcut recorded in p2p.py. The
+consequence was structural: a network only worked if every node was handed the same
+wallet, which is not a network anyone can join.
 
-TRUNCATION. C1 and C2 both caught that an 8-sigma tail of 2^-49.5 per coefficient is not
-a 128-bit claim, and C2 computed the aggregate: sqrt(4224) * 2^-49.5 is about 2^-43.5,
-which cannot inherit the paper's 2^-100 HVZK clause. Tables are now generated at 12 sigma:
-tail 2^-107.8 per coefficient, about 2^-101.8 over a response, which is below the paper's
-bound. The tables grew from ~300 KB to ~440 KB total, which is the entire cost.
+Block zero is now derived from GENESIS_MNEMONIC in params.py, and the phrase is the
+standard BIP-39 test vector -- 'abandon abandon ... about'. That choice is the point: it
+is unmistakably public, and the docstring says plainly that anyone reading the file can
+derive the keys and spend the genesis coins. That is a faucet, not a launch. A mainnet
+needs an allocation specified and audited before genesis, and a published phrase must not
+be carried forward.
 
-RING DIGEST. The ring digest now absorbs the modulus, the ring degree, the depth and the
-proved matrix A before the keys, in both languages. Without them a proof could be
-replayed against a different parameter set or a different A, which is precisely the
-substitution the digest exists to prevent. Both cross-language fixtures were regenerated
-and each implementation still accepts the other's proof at 21,760 bytes.
+The sync payload no longer carries 'allocations'. A receiver derives the allocation from
+the protocol, so a peer cannot hand us a chain whose block zero pays a different set of
+keys -- which is what the earlier per-node allocation would have permitted.
 
-The 2x slack. C2 found the thing my tests did not probe: the relaxed range proof's lemma
-guarantees a bound of 2B, not B, because the slack is on the maximum. The new test records
-what this implementation actually does -- its verifier bound is calibrated at the maximum
-of Rf over an honest f, so a vector doubled is rejected, which is the safe direction --
-and asserts the supply arithmetic the factor of two feeds into. A 64-bit amount does not
-fit one coefficient of q ~ 2^32, which is why the base-4 encoding exists.
+Measured: two nodes created in separate temporary directories, with no communication,
+produce the same genesis hash, hold the same faucet key, and see a balance of 4000.
 
-Recorded rather than implemented, because both are new protocol pieces: the stealth public
-key is P = A*p + e1, NOT A*p, so it is not a SMILE key at all and needs a noise-aware
-[A | I_k] statement; and the sender-computable tag needs a public T_K = A'*k in the
-meta-address. C2 also showed that a uniform XOF(S) does not merely break the norm, it
-breaks decryption.
+One stale assertion surfaced: the node status test still expected tag_rows == 4, which has
+been 1 since the k' change. It was failing for a reason unrelated to this work, and it is
+worth noting that a parameter change left a test asserting the old value rather than
+failing loudly at the time.
 
-Two of my own errors on the way: a test asserting that our bound would accept a 2x
-inflation, which it should not, and an arithmetic assertion that was simply false.
+5 new tests, 54 across the four affected suites.

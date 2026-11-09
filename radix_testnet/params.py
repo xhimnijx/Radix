@@ -31,4 +31,39 @@ def parameters(seed: bytes = PARAMETER_SEED, depth: int = DEPTH, tag_rows: int =
 
 
 def faucet_seed(seed: bytes = FAUCET_SEED) -> bytes:
+    """The seed every node derives its genesis allocation from.
+
+    PUBLIC ON PURPOSE, and this is the honest statement of what that means: anyone who
+    reads this file can derive the keys and spend the genesis coins. That is a faucet,
+    not a launch. A mainnet needs an allocation specified and audited before genesis --
+    a published seed is a testnet convenience, not a shortcut to be carried forward.
+    """
     return seed
+
+
+#: The famous BIP-39 test vector, and that is the point: it is unmistakably public.
+#: Anyone reading this file can derive the keys and spend the genesis coins. That is a
+#: faucet, not a launch. A mainnet needs an allocation specified and audited before
+#: genesis; a published phrase is a testnet convenience and must not be carried forward.
+GENESIS_MNEMONIC = (
+    "abandon abandon abandon abandon abandon abandon abandon abandon "
+    "abandon abandon abandon about"
+)
+
+
+def genesis_wallet(parameters=None):
+    """The wallet whose first account receives the genesis allocation."""
+    from .wallet import Wallet
+
+    return Wallet.from_mnemonic(GENESIS_MNEMONIC, parameters or globals()["parameters"]())
+
+
+def genesis_allocations(parameters=None):
+    """The genesis allocation, derived rather than transmitted.
+
+    Every node computes this identically from the constant seed, so two nodes that have
+    never spoken still agree on block zero. The sync no longer carries an allocation
+    list, which was the testnet shortcut recorded in `p2p.py`.
+    """
+    wallet = genesis_wallet(parameters)
+    return [(wallet.accounts[0].public, GENESIS_VALUE * GENESIS_NOTES)]

@@ -88,11 +88,11 @@ class Node:
         else:
             self.faucet, self.wallet_created = self._load_or_create_wallet()
         if not self.chain.blocks:
-            # One note holding the whole faucet balance: identical outputs would
-            # collapse into a single UTXO and silently shrink the supply.
-            self.chain.genesis(
-                [(self.faucet.accounts[0].public, P.GENESIS_VALUE * P.GENESIS_NOTES)]
-            )
+            # The allocation is a protocol constant, not a property of this node's
+            # wallet, so two independently started nodes agree on block zero. One note
+            # holding the whole balance: identical outputs would collapse into a single
+            # UTXO and silently shrink the supply.
+            self.chain.genesis(P.genesis_allocations(self.parameters))
         self.faucet.scan(self.chain)
         self.lock = threading.Lock()
         self.addressbook = store.load_address_book(self.data_dir)
@@ -116,7 +116,10 @@ class Node:
         """
         params = self.parameters
         if not self.persist:
-            return Wallet.generate(params), True
+            # Default to the protocol's genesis wallet, not a random one: a random
+            # wallet gives every node a different allocation, therefore a different
+            # genesis, therefore a different chain.
+            return P.genesis_wallet(params), True
 
         path = self.data_dir / WALLET_FILE
         if path.exists():
@@ -138,7 +141,10 @@ class Node:
                 "Restore the phrase or remove the chain deliberately."
             )
 
-        wallet = Wallet.generate(params)
+        # The protocol's genesis wallet, not a random one: a random wallet gives
+        # every node a different allocation and therefore a different chain, which
+        # is exactly what the genesis constant exists to prevent.
+        wallet = P.genesis_wallet(params)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         path.write_bytes((wallet.phrase + "\n").encode("utf-8"))
         try:
@@ -174,7 +180,6 @@ class Node:
             return {
                 "type": "chain",
                 "blocks": [block.to_wire() for block in self.chain.blocks],
-                "allocations": self.chain.allocations_wire(),
             }
 
         if kind == "tx":
@@ -240,7 +245,9 @@ class Node:
 
         payload = peer.call({"type": "getchain"})
         blocks = [C.Block.from_wire(item) for item in payload["blocks"]]
-        allocations = C.Chain.allocations_from_wire(payload["allocations"])
+        # Derived, not received. A peer no longer supplies the allocation, so it cannot
+        # hand us a chain whose block zero pays a different set of keys.
+        allocations = P.genesis_allocations(self.parameters)
         try:
             rebuilt = C.Chain.rebuild(
                 self.parameters, self.chain.depth, allocations, blocks,
