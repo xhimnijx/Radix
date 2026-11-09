@@ -1,17 +1,23 @@
-feat: base-4 addition with an explicit carry, which is what balance needs
+feat: the range statement, as one verifier
 
-Reference [25] p. 4 gives the identity SMILE uses for balance and documents/CONFIDENTIAL-TRANSACTIONS.md section 5 stopped at. Implemented at r = 4:
+All the primitives existed separately -- base-4 digits, bit packing, slotwise binaryness,
+the carry relation, the relaxed bound. range.py assembles them into one object and one
+verifier, so the statement is defined rather than described and the proof that will
+replace `verify` has a specification to hit.
 
-    a + b + f*(X - 4) = c
+Five things checked, and each is necessary: every bit is a bit (b(b-1)=0 slotwise);
+every digit is 2*b1+b0, which ties the committed bits to the committed digits; every digit
+is in {0,1,2,3}; the digit polynomials add up with an explicit carry; and the carry is
+small. Drop the third and a prover commits honest bits with dishonest digits. Drop the
+fourth and every amount is individually in range while the transaction still mints.
 
-over polynomials, not merely over Z_q, because the evaluation at X = 4 is what turns a digit polynomial back into its integer and a relation that only held at that point would say nothing.
+`verify` takes the witness in the clear, so it is a specification rather than a proof --
+it exists so the proof's obligations are written down and tested before the alpha-slot
+layout is attempted. That is stated in the module docstring rather than implied.
 
-Two findings, both now tested.
+A verifier rejects malformed input rather than raising on it: an exception tells a caller
+something went wrong, a return value tells them the statement is false, and only the
+second is a verdict. Caught by a test that expected False and got a DigitError.
 
-The carry for adding TWO amounts is binary (at most 1, since a digit sum is at most 6). That is why a two-term addition needs a bit constraint rather than the relaxed proof -- and it means the relaxed proof is only needed once many inputs are summed, which is exactly the multi-input case SMILE has.
-
-The relation must be checked coefficient by coefficient. There is a test that perturbs the carry by (X - 4), which vanishes at X = 4 and leaves the evaluated identity intact: a check that only evaluated would accept it, and the coefficient-wise check rejects it.
-
-Also fixed a tautology I had written into that very test -- `assert ... is not True or True`, which is always true and asserted nothing. Replaced with the real assertion it was meant to be.
-
-7 tests. The carry is computed by long addition in base 4 so a caller cannot manufacture a relation that does not exist, and an inconsistent addition raises rather than returning a carry.
+9 tests, including that an unbalanced statement is refused even when every amount is
+individually in range.
