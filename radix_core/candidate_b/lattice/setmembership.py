@@ -39,6 +39,7 @@ Deviations, stated because they matter:
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 
@@ -46,8 +47,15 @@ from . import ntt, recursion as R, ring, subring, tag as tagmod, transcript
 from .params import SMILE, SmileParameters
 from .ring import Poly
 
+# Rejection-sampling parameters. Calibrated in experiments/mask_calibration.py:
+# T(W) = 296*sqrt(W) is the measured 99th percentile of ||c r||_2, and
+# s = T / sqrt(2 ln M) with M = sqrt(3/2) gives MASK_STD_FACTOR = 1.567*296.
+MASK_M = math.sqrt(1.5)
+MASK_STD_FACTOR = 464.0
+MAX_ATTEMPTS = 64
+
+#: Kept for the older uniform-mask callers; the main proof no longer uses it.
 MASK_BOUND = 1 << 20
-MAX_RESPONSE_NORM = MASK_BOUND + 8192
 PROOF_TAG = b"radix/b/setmembership/v1"
 SLOTS = SMILE.subring_dimension
 
@@ -119,6 +127,64 @@ def _gamma_elements(gamma: tuple[Poly, ...], p: SmileParameters) -> tuple[tuple[
         out.extend(subring.slots(poly, p))
     return tuple(out)
 
+
+
+def mask_std(width: int) -> float:
+    """Per-coefficient mask width for a vector of `width` components."""
+    if type(width) is not int or width < 1:
+        raise SetMembershipError("width must be a positive integer")
+    return MASK_STD_FACTOR * math.sqrt(width)
+
+
+def _gaussian(rng: random.Random, width: int, p: SmileParameters) -> tuple[Poly, ...]:
+    """A mask of `width` polynomials with per-coefficient standard deviation s.
+
+    A *continuous* Gaussian, rounded to integers. The paper's Lemma A.6 is stated
+    for a discrete Gaussian; rounding differs by O(1/s) in statistical distance,
+    which at s ~ 2^11 is negligible but is *not* the same object. A discrete
+    sampler is required before any security claim, and this docstring says so
+    rather than letting the difference pass silently.
+    """
+    sigma = mask_std(width)
+    return tuple(
+        tuple(round(rng.gauss(0.0, sigma)) % p.modulus for _ in range(p.ring_degree))
+        for _ in range(width)
+    )
+
+
+def _response_bound(width: int, p: SmileParameters) -> int:
+    """beta^2 = s^2 * 2 * width * d, the l2 bound the verifier checks."""
+    sigma = mask_std(width)
+    return sigma * sigma * 2 * width * p.ring_degree
+
+
+def _l2_squared(vector: tuple[Poly, ...], p: SmileParameters) -> int:
+    return sum(ring.l2_squared(poly, p) for poly in vector)
+
+
+def _inner(left: tuple[Poly, ...], right: tuple[Poly, ...], p: SmileParameters) -> int:
+    total = 0
+    for a, b in zip(left, right):
+        total += sum(
+            ring.centered(x, p) * ring.centered(y, p) for x, y in zip(a, b)
+        )
+    return total
+
+
+def _reject(
+    response: tuple[Poly, ...],
+    product: tuple[Poly, ...],
+    sigma: float,
+    rng: random.Random,
+    p: SmileParameters,
+) -> bool:
+    """The paper's Rej1 (Fig. 10): bimodal, so the mask can be 11x narrower."""
+    inner = _inner(response, product, p)
+    if inner < 0:
+        return True
+    norm_sq = _l2_squared(product, p)
+    exponent = (-2 * inner + norm_sq) / (2 * sigma * sigma) - math.log(MASK_M)
+    return rng.random() > math.exp(min(0.0, exponent))
 
 
 def _is_unit(poly: Poly, p: SmileParameters) -> bool:
@@ -342,7 +408,31 @@ def prove(
     parameters: SmileParameters | None = None,
     tag_keys: "tagmod.TagKeys | None" = None,
 ) -> Proof:
-    """Fig. 7 with the Fig. 8 recursion, Fig. 9's checks, and an optional B3 tag."""
+    """Fig. 7 with rejection sampling; retries until a mask is accepted.
+
+    Expected 2M^2 ~ 3 attempts. A full attempt is rebuilt each time because the
+    mask is fresh, so a rejection costs a whole proof.
+    """
+    for _attempt in range(MAX_ATTEMPTS):
+        result = _prove_once(
+            keys, statement, secret, index, message, rng, parameters, tag_keys
+        )
+        if result is not None:
+            return result
+    raise SetMembershipError("rejection sampling did not accept a proof")
+
+
+def _prove_once(
+    keys: Keys,
+    statement: Statement,
+    secret: tuple[Poly, ...],
+    index: int,
+    message: bytes,
+    rng: random.Random,
+    parameters: SmileParameters | None = None,
+    tag_keys: "tagmod.TagKeys | None" = None,
+) -> "Proof | None":
+    """One attempt. Returns None when rejection sampling rejects."""
     sm = _p(parameters)
     depth = keys.depth
     if depth != statement.depth:
@@ -355,14 +445,8 @@ def prove(
     width = masking_width(depth, sm, rows)
 
     randomness = ring.sample_vector(rng, width, small=True, parameters=sm)
-    mask = tuple(
-        tuple(rng.randint(-MASK_BOUND, MASK_BOUND) % sm.modulus for _ in range(sm.ring_degree))
-        for _ in range(width)
-    )
-    mask_prime = tuple(
-        tuple(rng.randint(-MASK_BOUND, MASK_BOUND) % sm.modulus for _ in range(sm.ring_degree))
-        for _ in range(sm.matrix_cols)
-    )
+    mask = _gaussian(rng, width, sm)
+    mask_prime = _gaussian(rng, sm.matrix_cols, sm)
 
     w = tuple(ring.dot(row, mask, sm) for row in keys.rows0)
     w_prime = tuple(ring.dot(row, mask_prime, sm) for row in statement.matrix)
@@ -391,10 +475,13 @@ def prove(
     tx = _head(message, w, tuple(commitment), sm)
     c_prime = _draw_ternary(tx, b"c-prime", sm)
     if not _is_unit(c_prime, sm):
-        raise SetMembershipError("c' is not a unit of R_q; re-run with fresh randomness")
+        return None
+    product_prime = tuple(ring.mul(c_prime, secret[i], sm) for i in range(sm.matrix_cols))
     response_prime = tuple(
-        ring.add(mask_prime[i], ring.mul(c_prime, secret[i], sm), sm) for i in range(sm.matrix_cols)
+        ring.add(mask_prime[i], product_prime[i], sm) for i in range(sm.matrix_cols)
     )
+    if _reject(response_prime, product_prime, mask_std(sm.matrix_cols), rng, sm):
+        return None
     tx.absorb(b"z-prime", b"".join(ring.encode(poly, sm) for poly in response_prime))
 
     set_matrix = _set_matrix(c_prime, statement, sm)
@@ -512,12 +599,11 @@ def prove(
     tx.absorb(b"omega", ring.encode(omega, sm))
     challenge = _draw_ternary(tx, b"c", sm)
     if not _is_unit(challenge, sm):
-        raise SetMembershipError("c is not a unit of R_q; re-run with fresh randomness")
-    response = tuple(
-        ring.add(mask[i], ring.mul(challenge, randomness[i], sm), sm) for i in range(width)
-    )
-    if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in response):
-        raise SetMembershipError("masking bound produced an oversized response")
+        return None
+    product = tuple(ring.mul(challenge, randomness[i], sm) for i in range(width))
+    response = tuple(ring.add(mask[i], product[i], sm) for i in range(width))
+    if _reject(response, product, mask_std(width), rng, sm):
+        return None
     tag_proof = None
     if tag_keys is not None:
         tag_proof = tagmod.prove_tag(
@@ -562,9 +648,12 @@ def verify(
             return False
         if len(proof.response_prime) != sm.matrix_cols or len(proof.response) != width:
             return False
-        if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in proof.response):
+        # l2 bounds, as the paper states them: beta = s sqrt(2Wd) and
+        # beta' = s' sqrt(2 ell d). The old check was l-infinity, which let the
+        # response bound rather than the secret bound act as the security parameter.
+        if _l2_squared(proof.response, sm) > _response_bound(width, sm):
             return False
-        if any(ring.norm_inf(poly) > MAX_RESPONSE_NORM for poly in proof.response_prime):
+        if _l2_squared(proof.response_prime, sm) > _response_bound(sm.matrix_cols, sm):
             return False
         # The line-13 argument divides by c^2 and the tag argument by c', so both
         # must be units. Without this check a non-unit challenge leaves a
