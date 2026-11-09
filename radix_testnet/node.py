@@ -77,6 +77,8 @@ class Node:
         # After the chain, not before: a corrupt chain file should report itself
         # rather than being masked by the wallet check.
         self.peers: list[str] = list(peers or [])
+        #: This node's own p2p address, so discovery never adds itself.
+        self.address: str = ""
         #: Shared secret for p2p authentication, from the environment. Without it the
         #: transport is open: a peer on the path can read and alter messages and the
         #: receiver cannot tell. Set RADIX_P2P_SECRET on every node that should talk
@@ -245,6 +247,38 @@ class Node:
             added.append(candidate)
         if added:
             self.log.event("peers.discovered", from_peer=peer_text, added=len(added))
+        return added
+
+    def discover_all(self, depth: int = 2) -> list[str]:
+        """Walk the peer graph out to `depth` hops, adding anyone new.
+
+        One hop turns "configure every peer" into "configure one". Two hops makes a node
+        joinable from a network it has never spoken to directly, which is what a
+        published seed node needs. Beyond two the graph becomes expensive for little
+        gain at these sizes, so the depth is bounded and defaults to 2.
+
+        A node is never added twice and a node never adds itself, so a cycle among peers
+        terminates: each hop only expands nodes that were not already known.
+        """
+        from . import p2p
+
+        frontier = list(self.peers)
+        added: list[str] = []
+        for _hop in range(max(1, depth)):
+            next_frontier: list[str] = []
+            for peer_text in frontier:
+                if peer_text == self.address:
+                    continue
+                try:
+                    found = self.discover(peer_text)
+                except (p2p.PeerError, OSError) as error:
+                    self.log.event("peers.unreachable", peer=peer_text, reason=str(error))
+                    continue
+                added.extend(found)
+                next_frontier.extend(found)
+            frontier = next_frontier
+            if not frontier:
+                break
         return added
 
     def sync_from(self, peer_text: str) -> dict:

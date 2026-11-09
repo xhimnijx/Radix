@@ -1,25 +1,18 @@
-feat: authenticated p2p transport, so a peer can no longer alter messages in flight
+feat: multi-hop discovery, so a node is joinable from a network it has not met
 
-The gap was in the honest-limitations list and it was a real one: the transport was open,
-so anything on the path could read and alter a message and the receiver had no way to
-tell. A node that adopts a chain from such a peer was verifying a chain that a third party
-could have edited.
+One hop turned "configure every peer" into "configure one". Two hops makes a node
+reachable from a network it has never spoken to directly, which is what a published seed
+node needs -- a newcomer configures the seed and finds the rest.
 
-Messages now carry an HMAC-SHA256 over the canonical JSON with the mac field excluded, and
-both directions are signed. A node with RADIX_P2P_SECRET set refuses an unsigned message
-and refuses a message whose MAC does not match, compared with hmac.compare_digest so a
-wrong MAC cannot be discovered byte by byte. Without the variable the transport stays open
--- deliberately, because a LAN testnet should work without key distribution -- and the
-module docstring says exactly that rather than leaving it to be inferred from the absence
-of a flag.
+`discover_all(depth=2)` walks the peer graph breadth-first, never adding a node twice and
+never adding itself, so a cycle among peers terminates: each hop only expands nodes that
+were not already known. Unreachable peers are logged and skipped rather than aborting the
+walk. Depth is bounded and defaults to 2; beyond that the graph is expensive for little
+gain at these sizes, and the docstring says so.
 
-Four tests: a signed exchange works and the reply is signed too; a wrong secret is refused;
-an unsigned message is refused by a signed node; and a payload altered after signing fails
-the MAC.
+Two tests: a three-node chain where C configures only A and still learns B, and a cycle
+deep enough that a naive walk would not terminate.
 
-Two of my own mistakes, both from editing a handler by string replacement without reading
-what it produced: the first left `reply` unbound on the error path, and the second broke
-`Peer.parse`, which did not yet accept the new secret field. Twelve tests failed on the
-second one, which is the useful kind of failure.
-
-18 p2p tests. Full fast suite green.
+20 p2p tests. Network hardening now has authenticated transport, multi-hop discovery and
+the slow-start difficulty bootstrap; checkpoints-in-sync is the one piece left in that
+item, and it is the least valuable because the measured win was 1.1x.

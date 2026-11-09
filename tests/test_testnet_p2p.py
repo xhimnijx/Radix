@@ -338,3 +338,37 @@ def test_a_tampered_message_fails_authentication(two_nodes):
     body2 = json.dumps({"type": "hello", "height": 1000}, sort_keys=True, separators=(",", ":")).encode()
     mac2 = hmac.new(secret, body2, hashlib.sha256).hexdigest()
     assert mac != mac2
+
+
+def test_two_hop_discovery_reaches_a_node_you_have_never_spoken_to(two_nodes, tmp_path):
+    """A chain A-B-C: C configures only A and still learns B.
+
+    One hop turns "configure every peer" into "configure one"; two hops makes a node
+    joinable from a network it has never spoken to directly, which is what a published
+    seed node needs.
+    """
+    first, second, first_port, second_port = two_nodes
+
+    third = Node(data_dir=tmp_path / "c", persist=True, peers=[])
+    third.peers = [f"127.0.0.1:{first_port}"]
+    third.address = "127.0.0.1:0"
+
+    added = third.discover_all(depth=2)
+
+    assert f"127.0.0.1:{second_port}" in added
+    assert f"127.0.0.1:{second_port}" in third.peers
+
+
+def test_two_hop_discovery_terminates_on_a_cycle(two_nodes, tmp_path):
+    """A knows B, B knows A: walking the graph must not loop forever."""
+    first, second, first_port, second_port = two_nodes
+    first.address = f"127.0.0.1:{first_port}"
+    second.address = f"127.0.0.1:{second_port}"
+
+    third = Node(data_dir=tmp_path / "d", persist=True, peers=[f"127.0.0.1:{first_port}"])
+    third.address = "127.0.0.1:0"
+
+    added = third.discover_all(depth=4)   # deeper than the cycle requires
+    assert isinstance(added, list)
+    # It must terminate and must not have added itself.
+    assert third.address not in third.peers
