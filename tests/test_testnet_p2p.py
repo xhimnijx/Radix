@@ -17,6 +17,7 @@ import pytest
 from radix_testnet import p2p
 from radix_testnet.chain import Block, ChainError
 from radix_testnet.node import Node
+from radix_testnet import params as P
 
 
 def _mine_empty(node, timestamp=None):
@@ -38,9 +39,21 @@ def _mine_empty(node, timestamp=None):
 
 @pytest.fixture
 def two_nodes(tmp_path):
-    """Two independent nodes, each with its own wallet, each listening."""
-    first = Node(data_dir=tmp_path / "a", persist=True, peers=[])
-    second = Node(data_dir=tmp_path / "b", persist=True, peers=[])
+    """Two nodes on the SAME network, which means the same genesis allocation.
+
+    They share a wallet because the genesis allocation is derived from it: two nodes
+    with independent wallets have different allocations, therefore different genesis
+    blocks, and the sync check correctly refuses to merge them. That is not a test
+    artefact, it is the point of the check -- a real network fixes the allocation in the
+    protocol so that it is not per-node.
+    """
+    from radix_testnet import mnemonic as M
+    from radix_testnet.wallet import Wallet
+
+    phrase = M.new_phrase(128)
+    shared = Wallet.from_mnemonic(phrase, P.parameters())
+    first = Node(data_dir=tmp_path / "a", persist=True, peers=[], faucet=shared)
+    second = Node(data_dir=tmp_path / "b", persist=True, peers=[], faucet=shared)
     first_server = p2p.Server(first, port=0)
     second_server = p2p.Server(second, port=0)
     first_port = first_server.start()
@@ -137,3 +150,29 @@ def test_a_malformed_message_does_not_kill_the_server(two_nodes):
 def test_an_unreachable_peer_is_an_error_not_a_hang():
     with pytest.raises(p2p.PeerError, match="cannot reach"):
         p2p.Peer.parse("127.0.0.1:1", timeout=1.0).call({"type": "hello"})
+
+
+def test_a_peer_on_a_different_genesis_is_refused(two_nodes):
+    """The allocation is part of the chain, so a different genesis is a different network.
+
+    Without this check a node that trusted a peer would adopt their chain and silently
+    leave its own -- and the handshake was already carrying the hash that makes the
+    check possible.
+    """
+    first, second, first_port, _second_port = two_nodes
+    for _ in range(3):
+        _mine_empty(first)
+
+    # Give the second node a chain it cannot share: a different genesis allocation.
+    from radix_testnet.chain import Chain
+
+    other = Chain(parameters=second.parameters, depth=2)
+    key = tuple(tuple([i % 5] * 128) for i in range(4))
+    other.genesis([(key, 999)])
+    second.chain = other
+    assert second.chain.blocks[0].block_hash() != first.chain.blocks[0].block_hash()
+
+    with pytest.raises(p2p.PeerError, match="different chain"):
+        second.sync_from(f"127.0.0.1:{first_port}")
+
+    assert second.chain.blocks[0].block_hash() == other.blocks[0].block_hash()

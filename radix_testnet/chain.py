@@ -136,7 +136,13 @@ class Chain:
         return DECOYS
 
     def genesis(self, allocations: list[tuple[tuple[Poly, ...], int]]) -> None:
-        """The first block: no transactions, one block hash to anchor against."""
+        """The first block: no transactions, one block hash to anchor against.
+
+        The block's `anchor` field commits to the allocation. Without that, the genesis
+        hash depends only on the height, the fixed timestamp and the link value -- so
+        two chains whose initial ownership differs completely would share a genesis
+        hash, and the network identifier would not determine who owns what at height 0.
+        """
         if self.blocks:
             raise ChainError("the chain already has a genesis block")
         for key, value in allocations:
@@ -147,10 +153,24 @@ class Chain:
             self.outputs[output_id(note)] = note
             if key not in self.pool:
                 self.pool = [*self.pool, key]
+        # Canonical order, so the digest does not depend on how the caller listed them.
+        canonical = sorted(
+            (
+                b"".join(ring.encode(poly, SMILE) for poly in key),
+                int(value),
+            )
+            for key, value in allocations
+        )
+        digest = _hash(
+            b"radix/genesis/v1"
+            + b"".join(
+                key_bytes + int(value).to_bytes(8, "little") for key_bytes, value in canonical
+            )
+        )
         block = Block(
             height=0,
             previous=GENESIS_PREVIOUS,
-            anchor=GENESIS_PREVIOUS,
+            anchor=digest,
             transactions=(),
             nonce=0,
             timestamp=GENESIS_TIME,

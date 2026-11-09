@@ -191,6 +191,13 @@ class Node:
 
         peer = p2p.Peer.parse(peer_text)
         hello = peer.call({"type": "hello"})
+        # A peer on a different genesis is on a different network, whatever its work.
+        # The allocation is part of the chain, so adopting without this check would
+        # silently migrate this node to somebody else's chain.
+        if hello.get("genesis") != self.chain.blocks[0].block_hash().hex():
+            raise p2p.PeerError(
+                "that peer is on a different chain: its genesis does not match ours"
+            )
         remote_work = int(hello.get("work", 0))
         local_work = self.chain.cumulative_work()
         if remote_work <= local_work:

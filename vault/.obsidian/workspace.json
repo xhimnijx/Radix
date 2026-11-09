@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Modular Arithmetic and the Ring R_q.md",
+                "file": "The Problem.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Modular Arithmetic and the Ring R_q"
+              "title": "The Problem"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Modular Arithmetic and the Ring R_q.md",
+                "file": "The Problem.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Modular Arithmetic and the Ring R_q.md",
+                "file": "The Problem.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Modular Arithmetic and the Ring R_q.md",
+                "file": "The Problem.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,6 +190,7 @@
   },
   "active": "d079fa8af3855b5a",
   "lastOpenFiles": [
+    "Modular Arithmetic and the Ring R_q.md",
     "Amount Confidentiality.md",
     "The Problem.md",
     "Start Here.md"
