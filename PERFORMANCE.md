@@ -42,31 +42,59 @@ times *slower* than the naive convolution, because `mul_mod` did a `u128`
 division; Barrett reduction took it to 34.2 us, and accumulating each slot residue
 in `u128` with one reduction per residue took it to 20.1 us.
 
-## Projected prove and verify times
+## Measured prove and verify times
 
-Scaling the measured counts by the measured Rust per-multiplication cost, and
-dividing by the coverage fractions above:
+The profile of one Python proof is unambiguous, so the port followed it rather
+than the whole protocol: `_set_matrix` is **58%** of the time, `ring.dot` **35%**,
+and both are built from the ring multiplication already ported. Everything else --
+transcript hashing, mask sampling, the recursion glue -- is the remaining 7%.
 
-| phase | multiplications | Rust model | the B2 bar |
-|---|---|---|---|
-| prove | 14,450 | **~0.36 s** | <= 60 s on phone-class |
-| verify | 4,741 | **~0.13 s** | <= 100 ms |
+`proof_rust/src/bin/prove_bench.rs` reproduces those two structures at their real
+sizes and times them, on the same machine and the same `q`:
 
-**Prove clears its bar by two orders of magnitude. Verify does not.**
+| workload | Rust, measured |
+|---|---|
+| set matrix x2 (depth 2, 1024 members, K = 4) | **0.055 s** |
+| 240 dot calls (6,240 multiplications) | **0.101 s** |
+| **one prover attempt** | **0.156 s** |
+| **prove, at 2M^2 ~ 3 attempts** | **~0.47 s** |
+| **verify (one set matrix + 645 multiplications)** | **0.037 s** |
 
-That is the finding, and it should be stated plainly rather than smoothed over. A
-phone-class device is plausibly 3-5x slower than the machine these numbers come
-from, which puts verification at 0.4-0.65 s against a 100 ms target. Either the
-target moves, or verification needs work.
+Compare the Python profile for the same work: `_set_matrix` 38.0 s and `ring.dot`
+22.8 s out of 65.2 s for six attempts. The Rust numbers are measurements of those
+same operations, not projections from a per-operation cost -- the earlier model
+predicted 0.36 s for prove and 0.13 s for verify, and the direct measurement
+corrected verify downwards by 3.5x.
+
+One structural difference worth knowing: the Rust set matrix computes the slot
+residues of `c` once and multiplies slotwise, whereas the Python version
+multiplies in full and then decomposes again. That is the same mathematical work
+done once instead of twice, so the Rust figure is an efficient implementation of
+the same algorithm rather than a different one.
+
+### Against the B2 bar
+
+| phase | measured (desktop) | phone, at 3-5x | bar | verdict |
+|---|---|---|---|---|
+| prove | ~0.47 s | 1.4-2.4 s | <= 60 s | **passes comfortably** |
+| verify | 37 ms | 110-185 ms | <= 100 ms | **marginal** |
+
+Verify is no longer the failure the projection suggested -- it is 37 ms, not
+130 ms -- but it sits right on the line. On desktop it passes; on a phone it
+probably does not, and it certainly has no margin. That is still the phase to work
+on.
 
 The options, none measured:
 
-1. **Batch verification.** A node verifying many transactions amortises the setup
-   and the fixed matrices. This is the standard answer and is probably enough.
-2. **A faster multiplication.** 20 us is not close to optimal; Montgomery form,
-   fewer passes over the slot table, or a proper NTT-style algorithm at the new
-   modulus would all move it. Halving it moves verify to ~65 ms on desktop.
-3. **Smaller ring.** Ring size is a security parameter, so this is not free.
+1. **Batch verification.** A node verifying many transactions amortises the set
+   matrix, which is most of the cost. Probably sufficient, and standard.
+2. **A faster multiplication.** 20.1 us is not close to optimal; Montgomery form
+   or fewer passes over the slot table would move everything.
+3. **Smaller ring.** Security parameter, so not free.
+
+The residual 7% (hashing and sampling) is not in the measurement above; at Python
+it is 4.4 s of 65.2 s, and a Keccak permutation in Rust is microseconds, so it
+does not change these conclusions.
 
 ## What this means for the original question
 

@@ -18,7 +18,8 @@ Candidate-A track is archived in `archive/` and is not part of this review.
 | Slot-constancy | open hole; `v` a 128-coordinate idempotent | **closed by the same change**; `v` is a 32-entry binary vector |
 | Masks | uniform `2^20`, l-infinity verifier bound | **Gaussian `s = 464 sqrt(W)`**, `Rej1`, **l2** bound `beta = s sqrt(2Wd)` |
 | Tag | forgeable; withdrawn | same-witness extension `A_ext = [A; A']`, `k' = 4`, 38,656 B |
-| Proof | 32,512 B, ~21 s / 20 s | 32,512 B, **~2 min** (rejection) / 21 s |
+| Proof | 32,512 B, ~21 s / 20 s | 32,512 B, **~2 min** (rejection) / 21 s in Python |
+| Prover cost in Rust | unknown | **measured ~0.47 s to prove, 37 ms to verify** (`PERFORMANCE.md`) |
 
 The modulus migration is arithmetic-only: `slot`, `slots`, `g`, `pairing`,
 `quartic_multiply` and the whole recursion layer are untouched, and the CRT path
@@ -75,6 +76,15 @@ insurance, not necessity. C1 recommended 4. It costs 1 KB.
 The `e_1` double count in Fig. 9 line 12 / eq. (27) and the sum index in eq. (24)
 should be checked against the later ePrint revisions (up to 2022-05-20) before the
 paper is recorded as wrong.
+
+## Performance
+
+`PERFORMANCE.md`. The arithmetic layer is ported to Rust (`proof_rust`) and
+cross-checked against Python bit for bit by
+`experiments/rust_crosscheck.py`. Measured on the same machine: one prover attempt
+0.156 s (set matrix and dot products, which are 93% of the Python profile), so
+~0.47 s per proof at the expected three attempts; verification 37 ms. Verify is
+the phase without margin: it passes 100 ms on desktop and probably not on a phone.
 
 ## What a reviewer should check first
 
