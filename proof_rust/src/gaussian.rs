@@ -11,6 +11,7 @@
 use std::sync::OnceLock;
 
 const TABLE_W33: &[u8] = include_bytes!("../../radix_core/candidate_b/lattice/tables/gaussian_w33.bin");
+const TABLE_W30: &[u8] = include_bytes!("../../radix_core/candidate_b/lattice/tables/gaussian_w30.bin");
 const TABLE_W29: &[u8] = include_bytes!("../../radix_core/candidate_b/lattice/tables/gaussian_w29.bin");
 const TABLE_W13: &[u8] = include_bytes!("../../radix_core/candidate_b/lattice/tables/gaussian_w13.bin");
 
@@ -58,6 +59,10 @@ fn table(width: usize) -> &'static Table {
         33 => {
             static CACHE: OnceLock<Table> = OnceLock::new();
             CACHE.get_or_init(|| parse(TABLE_W33))
+        }
+        30 => {
+            static CACHE: OnceLock<Table> = OnceLock::new();
+            CACHE.get_or_init(|| parse(TABLE_W30))
         }
         29 => {
             static CACHE: OnceLock<Table> = OnceLock::new();
@@ -115,7 +120,7 @@ mod tests {
 
     #[test]
     fn the_table_loads_and_is_monotone() {
-        for width in [33, 29, 13] {
+        for width in [33, 30, 29, 13] {
             let data = table(width);
             assert!(data.cumulative.len() > 1000);
             assert!(data.sigma > 1000.0);

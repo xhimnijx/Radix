@@ -115,8 +115,17 @@ This is the part that is easy to get wrong, and it is **not** a simple sum.
    use an "approximate shortness proof" for the carry vector, described as having
    "negligible additional cost" (p. 54).
 
-> [!warning] The one thing this paper does not contain
-> **Reference [25] is where the addition proof lives, and it is not in this repository.**
+> [!note] Reference [25], identified by both reviewers (2026-11-09)
+> **Lyubashevsky, Nguyen, Seiler. "Practical Lattice-Based Zero-Knowledge Proofs for
+> Integer Relations." CCS 2020, pp. 1051-1070. ePrint 2020/1183.** The same three
+> authors as SMILE, so it is the direct predecessor. C1 adds the structural answer:
+> the carry is simply more message rows in the existing `B'0`, so it needs **the same
+> rejection step**, not a second protocol -- but `B'0` must be regenerated with the
+> carry rows, which is a parameter change rather than an algebraic incompatibility.
+> The exact rejection algorithm and constants still need the paper in hand.
+
+> [!warning] What this paper does not contain
+> **The addition proof lives in [25], and it is not in this repository.**
 > The balance mechanism cannot be implemented from `2021-564.pdf` alone: the carry
 > vector's shortness argument, the exact constraint system, and the rejection
 > behaviour are all in [25]. This is the first thing to obtain. Everything else below can

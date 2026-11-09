@@ -14,7 +14,13 @@ from radix_core.candidate_b.lattice import ring_signature as RS
 PARAMETER_SEED = b"radix-testnet-params-v1"
 FAUCET_SEED = b"radix-testnet-faucet-v1"
 DEPTH = 2
-TAG_ROWS = 4  # k' = 4 for the distinct-note property, per REVIEW-FINDINGS.md
+#: k' = 1. C2's third review priced both options: the tag's own collision instance is
+#: 2^213 at k' = 1, 85 bits over target, while k' = 4 puts the target below
+#: det^(1/n) and pays for a margin that is already there. Fewer rows also means fewer
+#: module equations in s on top of pk = A s, which helps hiding. C1's original
+#: recommendation of 4 was on collision grounds; C2's estimate shows 1 already clears
+#: them.
+TAG_ROWS = 1
 GENESIS_NOTES = 4
 GENESIS_VALUE = 1000
 

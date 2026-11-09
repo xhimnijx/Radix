@@ -61,8 +61,24 @@ preimage. To keep `s_out` short, `shift` must be a *small* scalar — and a smal
 is guessable when it is public, which collapses the privacy: an observer can try the
 few thousand possible shifts and link outputs.
 
-**Conclusion: this is the natural construction and it does not work.** Anyone who
-proposes it should be shown this paragraph.
+**Conclusion: this is the natural construction and it does not work.**
+
+> [!danger] The public-shift repair is a deanonymisation (C1, 2026-11-09)
+> My proposed repair -- carry the shift `H` as a public scalar -- fails outright. If
+> `H` is public, anyone computes `pk_out - H*P_view = P_spend` and
+> `T - H*T_view = T_spend`, which identifies the spend key and its tag image and
+> collapses the anonymity set to one. If `H` is secret the verifier cannot shift the
+> ring, and the proof must establish `pk_out = A*s_spend + H*A*s_view` with both
+> secrets short and `H` a witness -- a **multi-witness relation**, not a parameter
+> change: the commitment width roughly doubles, the set matrix becomes `[A, H*A]`,
+> and the extraction and tag binding must be re-derived.
+
+**A published family does exist.** C1 identifies *Post-Quantum Stealth Address
+Protocols* (Mikic, Srbakoski, Praska), ePrint 2025/112 -- LWE, Ring-LWE and
+Module-LWE variants, the last using Kyber as a KEM. It is a preprint, not peer
+reviewed, and it must be checked against SMILE's `A*s`, tag and `||s||inf <= 5`.
+The critical property to verify is that the sender must not learn the one-time spend
+secret; a naive KEM-to-seed construction fails exactly there.
 
 ### Option B — a pre-generated pool of one-time keys (works; ugly)
 

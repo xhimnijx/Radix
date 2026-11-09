@@ -830,3 +830,71 @@ deviation `sigma` costs about `log2(sigma * sqrt(2*pi*e))` bits per coefficient,
 larger wins the paper describes: compressed public keys (`t0` rounded modulo `2^D`) and
 Bai-Galbraith compression of the MLWE error. Those change the shape of the statement and
 are the next steps, not this one.
+
+
+# Sixth pass, 2026-11-09: [25] identified, the theorem signed, k' settled
+
+Both reviewers answered. Three results change the code or the plan.
+
+## Reference [25] is identified
+
+**Lyubashevsky, Nguyen, Seiler. "Practical Lattice-Based Zero-Knowledge Proofs for
+Integer Relations." CCS 2020, pp. 1051-1070. ePrint 2020/1183.** The same authors as
+SMILE, so it is the direct predecessor and where the addition proof, the carry vector and
+the approximate-shortness argument live.
+
+C1's structural answer: the carry is **more message rows in the existing `B'0`**, so it
+shares the rejection step rather than needing a second protocol — but `B'0` must be
+regenerated with those rows, which is a parameter change. The exact rejection algorithm
+and constants still need the paper.
+
+## One-time addressing: my proposed repair is a deanonymisation
+
+I had suggested carrying the shift `H` as a public scalar. C1 showed it fails: with `H`
+public, anyone computes `pk_out - H*P_view = P_spend`, recovering the spend key and its
+tag image and collapsing the anonymity set to one. The secret-shift version requires a
+multi-witness relation — both secrets short, `H` as a witness, set matrix `[A, H*A]` — a
+research milestone rather than a parameter change.
+
+A published family does exist: ePrint 2025/112, *Post-Quantum Stealth Address Protocols*
+(Mikic, Srbakoski, Praska), LWE/Ring-LWE/Module-LWE with Kyber as the KEM. Preprint, not
+peer reviewed, and the property to check first is that the sender must not learn the
+one-time spend secret.
+
+## Theorem B.1' is signed, with one new lemma
+
+C2 wrote it out in full under four edits (E1 `p` over `F_{q^4}`; E2 `c-bar`
+invertibility as an explicit clause; E3 typing the conclusion as `v_i in {0,1}^l`; E4 the
+uniformity step restricted to the field regime) and signed it as a correct rendering of
+Appendix B. The one genuinely new piece of mathematics is a lemma: `p_Delta <= q^-4
+(1+o(1))` for the centred difference of two ternary draws.
+
+C2 signs the theorem but **not** a security claim, because two things sit outside it: the
+mask sampler and the ring binding. **Both were closed after that answer was written** —
+the discrete Gaussian now comes from one table shared by both languages, and the ring
+digest is bound into the transcript. That is worth telling them.
+
+C2 also quantified the estimate instead of running it: A is 2^143-2^173 and B0 is
+2^160-2^190, both clearing 128 at the pessimistic end, with the band set by beta' and
+sensitivity of about 15 bits per half-bit of target. And a correction worth keeping: M is
+a dial, not an uncertainty — the measured 9.75 attempts imply an effective M of about
+3.1, well above the sqrt(1.5) in the code, so the claim should read "2^158 at
+M = sqrt(1.5)" with M recorded alongside the number.
+
+## k' = 1, implemented
+
+C2 gave three reasons: the collision instance is 2^213 at k' = 1 (85 bits over target);
+k' = 4 puts the target below det^(1/n), paying for margin already held; and fewer rows
+means fewer module equations in `s` on top of `pk = A s`, which *helps* hiding. The
+implementation now uses 1.
+
+| | k' = 4 | k' = 1 |
+|---|---|---|
+| Tagged proof | 24,832 B | **22,528 B** |
+| Tag | 2,048 B | **512 B** |
+| Total | 26,880 B | **23,040 B** |
+
+That exposed `tagged_size_bytes`, which still returned the old 38,656: it counted four
+bytes per response coefficient after they had been compressed to two, and it ignored the
+row count the caller actually uses. It now matches the measured sizes exactly at both
+k' values.

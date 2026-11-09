@@ -1,0 +1,34 @@
+feat: k' = 1, as C2 priced it, and a size formula that had gone stale
+
+C2 gave three reasons and they hold. The tag's own collision instance is 2^213 at k'=1,
+85 bits over target; k'=4 puts the target below det^(1/n), buying margin that is already
+there; and fewer rows means fewer module equations in s on top of pk = A s, which HELPS
+hiding rather than hurting it. So the original recommendation of 4 was paying for
+something the estimate says we already have.
+
+Measured after the change:
+
+  tagged proof  24,832 -> 22,528 B
+  tag            2,048 ->    512 B
+  total         26,880 -> 23,040 B
+
+The width moved from 25+8 to 25+5, so the discrete Gaussian had no table for width 30 and
+refused to sample -- which is the behaviour that was designed in, and it worked. A table
+was generated and registered in both languages.
+
+THE CHANGE EXPOSED A STALE FORMULA. tagged_size_bytes still returned 38,656 for a proof
+that had become 23,040: it counted four bytes per response coefficient after they were
+compressed to two, and it ignored the row count the caller actually uses. It now matches
+the measured sizes exactly at both k' values. A test that asserted a hardcoded range had
+been hiding this -- it was edited once for the compression and would have been edited
+again here, so it now asserts the relationship instead.
+
+One more self-inflicted bug: my first replacement inserted the new function ABOVE the old
+one, and Python takes the last definition, so the stale code kept winning. The duplicate
+is gone.
+
+Also recorded from the reviewers: reference [25] is identified (Lyubashevsky, Nguyen,
+Seiler, CCS 2020, ePrint 2020/1183), Theorem B.1' is signed with one new lemma, and C1
+showed that my proposed public-shift repair for one-time addressing is a deanonymisation
+-- anyone can compute pk_out - H*P_view and recover the spend key. That paragraph is now
+in the note as a warning rather than as a proposal.

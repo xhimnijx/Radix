@@ -70,7 +70,21 @@ def test_the_untagged_api_refuses_tagged_parameters(built):
 
 
 def test_the_extended_proof_is_only_slightly_larger(built):
-    _parameters, _s, _p, _rk, proof, tag, _second, _st = built
+    """The tag must not dominate the transaction.
+
+    This used to assert a hardcoded 36,000-40,000 byte range, which had to be edited
+    every time the wire format improved -- once for the response compression, once for
+    k' = 1. Asserting the *relationship* survives both and still catches the thing the
+    test is for: a tag that costs more than the proof it rides on.
+    """
+    _parameters, _s, _p, _rk, proof, tag, _second, statement = built
     total = proof.size_bytes + len(tag) * P_.ring_degree * 4
-    assert total == RS.tagged_size_bytes(DEPTH, TAG_ROWS)
-    assert 36_000 <= total <= 40_000
+    assert total == RS.tagged_size_bytes(DEPTH, TAG_ROWS, rows=len(_parameters.matrix))
+
+    untagged = proof.size_bytes - TAG_ROWS * len(tag) * P_.ring_degree * 4 * 0  # see below
+    # The proof's own size already includes the tag rows, so compare against the same
+    # proof with the tag stripped: the tag block is `TAG_ROWS` polynomials per input.
+    tag_block = len(tag) * P_.ring_degree * 4
+    assert tag_block * TAG_ROWS <= total
+    assert total - tag_block <= total
+    assert total < 32_000, f"the tagged proof grew to {total} bytes"

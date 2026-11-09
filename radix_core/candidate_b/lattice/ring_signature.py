@@ -228,17 +228,101 @@ def verify_tagged(
     return S.verify(parameters.keys, statement, signature, message, sm)
 
 
-def tagged_size_bytes(depth: int, tag_rows: int = 1) -> int:
-    """Wire size with the tag folded in: the proof plus the k' tag polynomials."""
-    width = S.masking_width(depth, None, SMILE.matrix_rows + tag_rows)
-    elements = (
-        SMILE.challenge_dim
-        + (SMILE.matrix_rows + tag_rows)
-        + 2 * depth
-        + 1
-        + 2
-        + SMILE.matrix_cols
-        + width
-        + tag_rows  # the tag itself travels with the signature
+def tagged_size_bytes(depth: int, tag_rows: int = 1, rows: int | None = None) -> int:
+    """Wire size with the tag folded in: the proof plus the k' tag polynomials.
+
+    Layout per `setmembership.Proof.encode`: commitments, h and omega at four bytes per
+    coefficient; both responses at two, because they are bounded by 12 sigma and packed
+    as signed 16-bit values; challenges at one byte each. The previous version counted
+    four bytes for the responses and had not been updated when they were compressed, so
+    it reported 38,656 for a proof that had become 23,040.
+    """
+    p = SMILE
+    matrix_rows = p.matrix_rows if rows is None else rows
+    width = S.masking_width(depth, p, matrix_rows + tag_rows)
+    poly_bytes = p.ring_degree * 4
+    pack_bytes = p.ring_degree * 2
+
+    four_byte_elements = p.challenge_dim + matrix_rows + tag_rows + 2 * depth + 1 + 2
+    return (
+        four_byte_elements * poly_bytes
+        + p.matrix_cols * pack_bytes
+        + width * pack_bytes
+        + 2 * p.ring_degree
+        + tag_rows * poly_bytes
     )
-    return elements * SMILE.ring_degree * 4 + 2 * SMILE.ring_degree
+
+
+def tag_of(
+    parameters: Parameters,
+    secret: tuple[Poly, ...],
+    params: SmileParameters | None = None,
+) -> tuple[Poly, ...]:
+    """T = A' s: one polynomial per tag row."""
+    sm = SMILE if params is None else params
+    if not parameters.tag_rows:
+        raise RingSignatureError("these parameters have no tag rows")
+    if len(secret) != sm.matrix_cols:
+        raise RingSignatureError("the secret must have ell components")
+    return tuple(ring.dot(row, secret, sm) for row in parameters.tag_matrix)
+
+
+def sign_tagged(
+    parameters: Parameters,
+    secret: tuple[Poly, ...],
+    public: tuple[Poly, ...],
+    ring_keys: tuple[tuple[Poly, ...], ...],
+    message: bytes,
+    rng: random.Random,
+    params: SmileParameters | None = None,
+) -> tuple[S.Proof, tuple[Poly, ...]]:
+    """Sign over the extended ring {(pk_j, T)}, where every member shares T.
+
+    One witness, one proof. The tag rows are part of the proved relation, so a
+    forger cannot choose T independently of the secret it opened.
+    """
+    sm = SMILE if params is None else params
+    if not parameters.tag_rows:
+        raise RingSignatureError("these parameters have no tag rows")
+    if len(ring_keys) != parameters.ring_size:
+        raise RingSignatureError("the ring must have l^m public keys")
+    tag = tag_of(parameters, secret, sm)
+    try:
+        index = tuple(key + tag for key in ring_keys).index(public + tag)
+    except ValueError:
+        raise RingSignatureError("the public key is not in the ring") from None
+    statement = S.Statement(
+        matrix=parameters.extended,
+        keys=tuple(key + tag for key in ring_keys),
+        depth=parameters.depth,
+    )
+    proof = S.prove(parameters.keys, statement, secret, index, message, rng, sm)
+    return proof, tag
+
+
+def verify_tagged(
+    parameters: Parameters,
+    ring_keys: tuple[tuple[Poly, ...], ...],
+    tag: tuple[Poly, ...],
+    message: bytes,
+    signature: S.Proof,
+    params: SmileParameters | None = None,
+) -> bool:
+    """Check the proof against the extended ring built from the published tag."""
+    sm = SMILE if params is None else params
+    try:
+        if not parameters.tag_rows or len(tag) != parameters.tag_rows:
+            return False
+        if len(ring_keys) != parameters.ring_size:
+            return False
+        statement = S.Statement(
+            matrix=parameters.extended,
+            keys=tuple(key + tag for key in ring_keys),
+            depth=parameters.depth,
+        )
+    except (TypeError, ValueError):
+        return False
+    return S.verify(parameters.keys, statement, signature, message, sm)
+
+
+

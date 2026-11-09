@@ -42,7 +42,7 @@ TAIL_IN_SIGMAS = 8.0
 #: for the z' mask: rows = 8 gives 33 (tagged, production), rows = 4 gives 29 (the
 #: untagged test rig), and 13 is z'. The sampler fails loudly on any other width
 #: rather than silently substituting a different distribution.
-WIDTHS = (33, 29, 13)
+WIDTHS = (33, 30, 29, 13)
 
 
 def sigma_for(width: int) -> float:
