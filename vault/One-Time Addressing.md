@@ -73,12 +73,54 @@ few thousand possible shifts and link outputs.
 > change: the commitment width roughly doubles, the set matrix becomes `[A, H*A]`,
 > and the extraction and tag binding must be re-derived.
 
-**A published family does exist.** C1 identifies *Post-Quantum Stealth Address
-Protocols* (Mikic, Srbakoski, Praska), ePrint 2025/112 -- LWE, Ring-LWE and
-Module-LWE variants, the last using Kyber as a KEM. It is a preprint, not peer
-reviewed, and it must be checked against SMILE's `A*s`, tag and `||s||inf <= 5`.
-The critical property to verify is that the sender must not learn the one-time spend
-secret; a naive KEM-to-seed construction fails exactly there.
+**A published family does exist, and it solves the derivation problem.**
+*Post-Quantum Stealth Address Protocols* (Mikic, Srbakoski, Praska), ePrint 2025/112,
+`studies/2025-112.pdf`. The Module-LWE variant, §5.3 p. 16, works like this:
+
+1. The recipient registers **two** Kyber public keys: a spend key `K = (tK, ρK)` and a
+   view key `V = (tV, ρV)`.
+2. The sender runs `(R, S) = Kyber.CCA.Encaps(V)` — encapsulation to the **view** key —
+   and publishes `R` plus a view tag.
+3. The sender computes the stealth public key without ever learning its secret:
+
+   ```
+   P = XOF(ρK)·XOF(S) + Decompress_q(tK, dt)
+   ```
+
+4. The recipient decapsulates `S = Kyber.CCA.Decaps(v, zv, V, R)` and derives
+
+   ```
+   p = k + XOF(S)
+   ```
+
+   and `P = A·p + e1` holds, with `e1 = Decompress_q(tK) − XOF(ρK)·k` computable by the
+   recipient alone.
+
+**This is the fix to the construction above.** The shift is `XOF(S)`, derived from a KEM
+shared secret that only the sender and the recipient know — not a public scalar. The
+sender knows `S` and can compute `P`, but cannot compute `p = k + XOF(S)` because it does
+not know `k`. That is exactly the property my broken version lacked.
+
+## The obstruction, stated precisely
+
+**`p` is probably not short, and SMILE needs a short secret.**
+
+The tag is `A'·s` and the proof requires `‖s‖∞ ≤ μ = 5`. The stealth secret is
+`p = k + XOF(S)`, where `k` is Kyber's CBD-sampled short secret but `XOF(S)` is a **hash
+output** — uniform modulo `q` as written. A uniform `p` is a perfectly good MLWE secret
+for a KEM (uniform-secret LWE is the standard assumption), but it is not a secret SMILE
+can prove knowledge of as a short lattice vector.
+
+The paper does not state that `XOF(S)` is sampled from a short distribution. If it were —
+say CBD with the same `η` as Kyber — then `p` would be short and the construction would
+drop into SMILE's `A·s` and tag format almost unchanged. That is the single question to
+settle, and it is a question for C1 and C2 together with the paper's security proof,
+because changing `XOF(S)` to be short changes what the protocol's analysis assumes.
+
+**What this means for the plan.** Derivation is solved; compatibility is not. The route is
+either (a) confirm `XOF(S)` is short, (b) re-derive the protocol with a short `XOF(S)`, or
+(c) keep a uniform `p` and give up SMILE's short-secret proof for stealth outputs. Option
+(c) is a different signature scheme, not a modification.
 
 ### Option B — a pre-generated pool of one-time keys (works; ugly)
 

@@ -1,33 +1,28 @@
-feat: the carry proof, resolved from [25] and measured at our parameters
+docs: the stealth address protocol, read, and the one obstruction it leaves
 
-The user added both papers to studies/. [25] is 2020-1183.
+ePrint 2025/112 section 5.3, p. 16. The Module-LWE SAP solves the derivation problem my
+earlier proposal got wrong.
 
-THE ANSWER IS BETTER THAN THE PLAN. SMILE's vague reference to "an approximate shortness
-proof" is the relaxed range proof on p. 5 of [25], and it needs no bit-decomposition of
-the carry at all. One observation carries it:
+The recipient registers two Kyber keys, spend K = (tK, rhoK) and view V = (tV, rhoV). The
+sender encapsulates to the VIEW key to get (R, S), then computes
 
-  for f in Z^k and masking y in Z^n, over random R in {0,1}^{n x k}, the probability
-  that max(R f + y mod q) >= half of max(f) is at least 1 - 2^-n.
+    P = XOF(rhoK)*XOF(S) + Decompress(tK, dt)
 
-So if R f + y is small, f was small. The prover sends z = R f + y, rejection-samples to
-hide f, and proves z = R f + y with a linear argument. The verifier checks one norm
-bound. That is one masked opening, not k binary proofs -- the "negligible additional
-cost" SMILE refers to.
+and the recipient derives p = k + XOF(S), with A*p + e1 = P. The sender knows S and can
+compute P, but cannot compute p because it does not know k. That is precisely the
+property the public-shift version lacked: the shift is XOF(S), a KEM shared secret, not a
+public scalar.
 
-Also from p. 4: for ADDITION the carry IS binary, and the relation is a + b + f(X-2) = c
-with M the (k+1)xk matrix of -2 on the diagonal and 1 below. The carry only stops being
-binary when summing MANY integers, which is exactly the multi-input case.
+THE OBSTRUCTION IS AT THE NORM. The tag is A'*s and the proof needs ||s||inf <= 5. The
+stealth secret is p = k + XOF(S), where k is Kyber's short CBD secret but XOF(S) is a hash
+output -- uniform mod q as written. A uniform p is a fine MLWE secret for a KEM, but SMILE
+cannot prove knowledge of it as a short lattice vector. The paper does not state that
+XOF(S) is short. If it were sampled from a short distribution, the construction would drop
+into SMILE almost unchanged; if not, using it means giving up the short-secret proof for
+stealth outputs, which is a different signature scheme rather than a modification.
 
-radix_core/candidate_b/lattice/relaxed.py implements the observation, derives R from a
-seed rather than transmitting it, and measures it. Five tests: with 64 columns, 128 rows
-and a mask of width 64, an honest carry peaks at about 417 against a bound of 576, a
-coefficient inflated 40x is caught 50 times out of 50, and an honest carry is rejected 0
-times out of 50.
+That is now the single question on one-time addressing, and it is a question about the
+paper's security proof as much as its text, so it goes to C1 and C2 together.
 
-The first version used a UNIFORM mask, which makes z uniform and rejects every honest
-proof -- 200 of 200 flagged. The mask must be bounded for the check to mean anything,
-which is the same reason lattice signatures reject rather than sample. That mistake is
-recorded in the module docstring.
-
-docs/CONFIDENTIAL-TRANSACTIONS.md no longer warns that the carry proof cannot be built; it
-cites the resolved technique, the addition relation, and the measurements.
+Derivation solved, compatibility open. That is a much better position than a week ago,
+when the construction did not work at all.

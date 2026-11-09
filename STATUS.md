@@ -305,5 +305,4 @@ the critical path. `docs/CONFIDENTIAL-TRANSACTIONS.md` is therefore not a later 
    (CCS 2020, p. 5): if `Rf + y` is small then `f` was small, so the carry needs one
    masked opening and a norm check, not a bit-decomposition. Measured at our parameters:
    honest carry rejected 0/50, inflated caught 50/50.
-3. **One-time addressing** -- now a launch dependency, not a later upgrade, because
-   rewards cannot accumulate to a reused key.
+3. ~~**One-time addressing**~~ -- **derivation solved, compatibility open.** ePrint 2025/112 section 5.3 derives a stealth key as `P = XOF(rhoK)*XOF(S) + Decompress(tK)` with the secret `p = k + XOF(S)`, where `S` is a KEM shared secret. The sender can compute `P` but not `p`, which fixes the deanonymisation in the earlier proposal. The open question is whether `XOF(S)` is short: if it is uniform, `p` is uniform and SMILE cannot prove knowledge of it as a short vector.
