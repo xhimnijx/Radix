@@ -23,9 +23,9 @@ afternoon and a week.
 | 4 | BDLOP | `bdlop.py` | **commitment digest matches Python**; homomorphism and opening tests | **done** |
 | 5 | Quadratic, tensor | `quadratic.py`, `tensor.py` | **coefficient and expected-value digests match**; flat index 2083 | **done** |
 | 6 | Recursion | `recursion.py` | **pairing digest matches**; shapes, linearity and constant-vector rejection | **done** |
-| 7 | Prove/verify | `setmembership.py` | cross-language verification | **verifier done and accepted by Python's proof**; prover pending |
-| 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | **Python -> Rust: PASSES**; Rust -> Python pending the prover |
-| 9 | Timing | -- | end-to-end prove and verify, replacing the projection | pending |
+| 7 | Prove/verify | `setmembership.py` | cross-language verification | **both done**; Rust proofs verify in Rust and in Python |
+| 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | **both directions PASS** |
+| 9 | Timing | -- | end-to-end prove and verify, replacing the projection | next |
 | 10 | Seam | `radix_testnet/prover.py` | `--backend rust` produces proofs the Python verifier accepts | pending |
 
 ## Deliberate differences from Python
@@ -87,6 +87,33 @@ and the final equation are all confirmed against the reference.
 
 `verify_traced` stays in the crate. It cost twenty lines and turned a blind
 debugging session into one run; the next disagreement will need it too.
+
+## The prover, and one more silent bug
+
+The prover is a direct translation of `_prove_once`, including both rejection points
+and the rebuild-from-scratch behaviour on rejection. The Rust verifier rejected the
+first Rust proofs, and the stage trace named the last line: `h`'s first four
+coefficients must be zero.
+
+The cause was a genuine misreading. Python builds `g` with its first `d/l`
+**coefficients** zero; the port zeroed the first `d/l` **slots** and lifted the
+result. Those are different polynomials, and every other stage of the proof still
+passed -- the commitments, both challenges and the whole descent were consistent,
+because they do not constrain `g`. Only lines 14-15 catch it, which is exactly the
+check that exists for this purpose.
+
+## Cross-language results
+
+| direction | result |
+|---|---|
+| Python proof -> Rust verifier | passes |
+| Rust proof -> Python verifier | passes |
+| Rust proof, different message | rejected by both |
+| tampered response | rejected |
+
+`experiments/produce_python_proof.py` and `proof_rust/src/bin/emit_proof.rs` write
+fixtures; `experiments/verify_rust_proof.py` checks the Rust one against the Python
+reference.
 
 ## Rules
 

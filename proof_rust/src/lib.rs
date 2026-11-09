@@ -10,6 +10,7 @@
 //! residues fits in `u64` and the CRT accumulation uses `u128`.
 
 pub mod sample;
+pub mod prover;
 pub mod verifier;
 pub mod proof;
 pub mod statement;
@@ -127,6 +128,13 @@ pub fn lift_challenge(challenge: &[i64; D]) -> Poly {
             other => (other as i128).rem_euclid(Q as i128) as u64,
         };
     }
+    out
+}
+
+/// The polynomial with a single non-zero coefficient at degree zero.
+pub fn constant_poly(value: u64) -> Poly {
+    let mut out = [0u64; D];
+    out[0] = value % Q;
     out
 }
 
