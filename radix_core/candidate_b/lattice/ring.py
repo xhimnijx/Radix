@@ -112,8 +112,13 @@ def norm_inf(value: Poly) -> int:
 
 
 def l2_squared(value: Poly, parameters: SmileParameters | None = None) -> int:
+    """Exact squared Euclidean norm over the signed representatives.
+
+    Deliberately *not* reduced modulo q: the reviewers' beta and beta' are l2
+    bounds, and a residue is meaningless for comparing against one.
+    """
     p = _params(parameters)
-    return sum(centered(a) ** 2 for a in value) % p.modulus
+    return sum(centered(a, p) ** 2 for a in value)
 
 
 def centered(coefficient: int, parameters: SmileParameters | None = None) -> int:

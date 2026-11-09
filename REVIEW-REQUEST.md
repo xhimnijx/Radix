@@ -95,7 +95,9 @@ CPython at that ring size.
 
 ### Q1. Is the line-13 check's decomposition right? *(the load-bearing one)*
 
-`setmembership.py` line 599 and the check at the end of `verify`.
+In `setmembership.py`, the block commented `# line 12, with the e_1 term at
+order c^2` and the final `lhs != proof.omega` comparison in `verify`. Cited by
+content rather than line number: they have moved twice already.
 
 Our claim: in `α₀(Σ F_j − c·f_{k+2m} − c²h) + Σ α_i(f_i² + c·f_i) + f_{k+2m+1} = ω`,
 the `c⁰` coefficient is pinned by `ω` (committed before `c` exists), the `c¹`
@@ -111,7 +113,8 @@ everything downstream is void.
 
 ### Q2. Is our `e_1` placement defensible?
 
-`setmembership.py` line 25 (deviation 2) and line 599.
+Deviation 2 in the `setmembership.py` module docstring, and the block commented
+`# line 12, with the e_1 term at order c^2` in `verify`.
 
 Fig. 9 line 12 puts `−e_1·Σγ` at order `c`. Fig. 7's `y_m` carries it in the `c²`
 coefficient. Both cannot hold. Because only the `c²` coefficient is checked, we

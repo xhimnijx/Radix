@@ -367,3 +367,92 @@ two answers conflict on scope. It needs adjudication before anyone plans around 
 
 If it holds, two of the three open items collapse into one decision, and the only
 independent work left is the masking.
+
+# Second review, 2026-11-09: convergence
+
+Both reviewers re-read the brief and answered the live questions. **C1 is right and
+C2 says so explicitly.** The adjudication that was open at the end of the first
+round resolves in favour of the modulus change, and it closes two holes at once.
+
+## C2's retraction, in their words
+
+> My statement was "no modulus rescues it, because `r_i = (zeta^{2i+1})^4` is an
+> explicit fourth power for every valid `q`". That premise silently assumes a
+> 256th root of unity exists in `Z_q` -- i.e. `256 | q - 1` -- which is exactly
+> the condition for the split regime.
+
+The criterion is `ord_256(q)`, the multiplicative order of `q` modulo 256, because
+`X^128 + 1 = Phi_256` and its irreducible factors over `F_q` all have degree
+`ord_256(q)`. `experiments/slot_constancy_probe.py` verifies the classification on
+one prime per row:
+
+| `v2(q-1)` | `q` | `ord_256` | factors | `M_q` | idempotents/slot | slot-constancy |
+|---|---|---|---|---|---|---|
+| 9 | 4,294,962,689 (prototype) | 1 | 128 linears | `Z_q^128` | 16 | **fails** |
+| 7 | 4,294,966,657 | 2 | 64 quadratics | `(F_q^2)^32` | 4 | **fails** |
+| 6 | 4,294,966,337 | 4 | 32 quartics | `(F_q^4)^32` | 2 | **holds** |
+
+C2's sharpening is also verified: `r_i` is a square exactly when `128 | q - 1`
+(`r_i^((q-1)/2) = (-1)^((q-1)/64)`), and the "is it a fourth power" proxy cannot
+separate `ord = 1` from `ord = 2` -- both show 32/32 squares. The earlier probe was
+right for the wrong reason. Only the order test decides.
+
+## What this means
+
+**Q3' and Q6 are one decision.** With `q = 1 mod 64`, `q != 1 mod 128`:
+
+- a nonzero quartic difference is a unit of `F_{q^4}`, so the extraction's
+  `c - c~` fails only with probability about `q^-4` -- the ~24-bit cap becomes a
+  ~123-bit margin, and the unit checks cost nothing;
+- `v_i(v_i-1) = 0` forces every quartic residue to be 0 or 1, so the extracted
+  `v_i` is a **32-scalar binary vector**; `sum_j (v_i)_j = 1` is then an equality
+  in `F_{q^4}` and, since `32 < q`, exactly one coordinate is 1. Slot-constancy is
+  automatic and **no extra `alpha` slot is needed**;
+- with the split modulus, four 1s in different scalar slots can satisfy the four
+  `Z_q`-coordinate sums, so the extracted `v_i` selects no column and the statement
+  stops parsing. That was the hole.
+
+**Q5' is the only independent blocker.** Both reviewers agree it is arithmetic
+rather than research, and C1 gives the thresholds: at root-Hermite `1.0042`,
+`s' <~ 2^14.3` and `beta' <~ 2^20.2` for the `A` relation, `s <~ 2^15.2` and
+`beta <~ 2^21.7` for the `B_0` relation. The paper's own `s ~ 2^10.5` sits well
+inside. C1 suggests `s, s' ~ 2^13-14`, `beta ~ 2^20-21`, `beta' ~ 2^19-20`, with
+rejection rate `M ~ 1.2-1.5`.
+
+C2 adds the trap that makes it unanswerable by choosing a number: deriving `s` from
+the max norm (`s ~ 11 d mu = 7040`) instead of the standard deviation gives
+`beta' = 2^18.6` and drops the key instance to ~`2^113`, fifteen bits short. **The
+two conventions differ by about 150 bits.** The fix is to derive `beta, beta'` from
+an explicit `Rej0`/`Rej1` with a stated tail bound, then run an estimator, and to
+quote the pair together. If it comes out short, the lever is `mu`, not the modulus.
+
+## Work items this creates, none of them protocol changes
+
+1. **Quartic-CRT multiplier.** `ntt.supports()` must go false at the new `q`; ring
+   multiplication becomes 32 slotwise 4x4 products. `subring.roots` currently
+   derives the quartic constants from a 256th root via `ntt.transform()`; it must
+   find a 64th root directly (`r_i = eta^(2i+1)`), and `subring.glue` must be
+   rebuilt on the quartic CRT. The slot *order* may permute, so the tests that
+   compare against the NTT convention must be re-baselined.
+2. **`_is_unit` must change meaning**: at the new `q` it is "all 32 quartic
+   residues nonzero", not "all 128 NTT coordinates nonzero". The current
+   implementation uses `ntt.forward` and will not run at the new `q` at all.
+3. **A real l2 check.** C1: `MAX_RESPONSE_NORM` is an `l_inf` bound but the paper's
+   `beta`, `beta'` are `l2` bounds, and `ring.l2_squared` returned a residue. The
+   residue bug is fixed; the verifier still needs an `l2` check against `beta`.
+4. **Theorem B.1's constant `p` must be redefined.** C2: `p` is defined via "the
+   coefficients of `c mod X^{d/l} - zeta^{2j+1}`", which presupposes
+   `zeta in Z_q` -- i.e. the paper's own analysis is written for the split case
+   that is capped at ~24 bits. Adopting the irreducible modulus moves outside the
+   paper's analysis, and it must be redone with field residues. It comes out
+   better, but it is work.
+5. **One challenge distribution.** `sigma.py` drew uniform over `{-1,0,1}` while
+   `setmembership.py` drew the paper's 1/2, 1/4, 1/4. Fixed: both now use the
+   paper's distribution.
+6. **Price the tag with an estimator.** C2's correction: under `A_ext` the
+   instance is `(4+k') x 13`, not `1 x 13`, so even `k' = 1` has a Gaussian
+   shortest vector about two orders of magnitude above the collision target.
+   `k' = 4` is cheap insurance and shape-matching, **not** forced by the estimate.
+   `k' = 1` would be defensible.
+7. **Check the later ePrint revisions** before recording the paper's `e_1`
+   double-count and sum index as errata.

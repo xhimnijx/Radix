@@ -86,7 +86,12 @@ def _challenge(
     for poly in w:
         digest.update(ring.encode(poly, p))
     digest.update(ring.encode(w_tilde, p))
-    return tuple(value % 3 - 1 for value in digest.digest(p.ring_degree))
+    # The paper's challenge distribution C: P(0) = 1/2, P(1) = P(-1) = 1/4.
+    # sigma and setmembership must not draw from different spaces.
+    return tuple(
+        0 if byte < 128 else (1 if byte < 192 else -1)
+        for byte in digest.digest(p.ring_degree)
+    )
 
 
 def _mask_vector(
