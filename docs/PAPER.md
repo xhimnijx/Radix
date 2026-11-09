@@ -142,6 +142,7 @@ All figures measured on the machine and commit named in the artefacts. No projec
 | Proof, tagged + tag | 23,040 B |
 | Parallel verification, 8 cores | 4.22x |
 | Proof decode | 2.7 ms |
+| Noise-aware proof at ell = 17 | 22,784 B |
 | Replay per year of chain at 10 tx/block | 3.9 hours |
 
 TODO: hardware description, and the Python figures for contrast.
@@ -166,15 +167,23 @@ Stated plainly, because a paper that hides these is not credible.
 
 - **Amounts are visible.** The range proof is specified and its primitives are built and
   tested, but it is not inside the proof.
-- **One-time addressing is unsolved here.** Three pieces are specified: a short `XOF(S)`,
-  an `[A | I_k]` noise-aware statement, and a public tag image. None is wired.
-- **No estimator run.** 2^158 and 2^167 are delta-model figures with named cost models, not
-  output from `lattice-estimator`.
+- **One-time addressing is partially built.** The lattice derivation works and is tested:
+  a short `XOF(S)`, the noise-aware `[A | I_k]` statement at `ell = 17`, and the public tag
+  image `T_K = A'·k`. What is missing is deriving `S` from a real KEM rather than a
+  caller-supplied secret, and wiring the meta-address into the wallet. The bound depends on
+  the spend-key distribution: with this proof's uniform-small keys the stealth secret
+  reaches `mu + 2`, not `mu`.
+- **No estimator run.** 2^158 and 2^167 are delta-model figures with named cost models
+  (ADPS16 and MATZOV reported side by side), not output from `lattice-estimator`.
+- **The noise-aware statement is wired but not proved sound.** The extraction argument for
+  `[A | I_k]` is unwritten; the statement shape works, which is not the same thing.
 - **No audit.** The extraction argument is the paper's; the restatement is signed by a
   reviewer but not proved here.
 - **The sampler's accept/reject test is still floating point.**
-- **The network has no encryption**, only an optional HMAC, and peers are configured or
-  discovered rather than authenticated by identity.
+- **The network is authenticated but not encrypted.** Messages carry an HMAC-SHA256 when
+  a shared secret is configured, so a peer cannot alter traffic undetected -- but anything
+  on the path can still read it, and peers are identified by shared secret rather than by
+  a key.
 
 ## 9. Reproducibility
 
