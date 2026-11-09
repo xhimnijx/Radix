@@ -23,7 +23,7 @@ afternoon and a week.
 | 4 | BDLOP | `bdlop.py` | **commitment digest matches Python**; homomorphism and opening tests | **done** |
 | 5 | Quadratic, tensor | `quadratic.py`, `tensor.py` | **coefficient and expected-value digests match**; flat index 2083 | **done** |
 | 6 | Recursion | `recursion.py` | **pairing digest matches**; shapes, linearity and constant-vector rejection | **done** |
-| 7 | Prove/verify | `setmembership.py` | cross-language verification | next |
+| 7 | Prove/verify | `setmembership.py` | cross-language verification | **in progress**: keys, statement, draw, head done |
 | 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | pending |
 | 9 | Timing | -- | end-to-end prove and verify, replacing the projection | pending |
 | 10 | Seam | `radix_testnet/prover.py` | `--backend rust` produces proofs the Python verifier accepts | pending |
@@ -53,9 +53,11 @@ label length is prefixed so `"ab"`+`"c"` cannot collide with `"a"`+`"bc"`.
 
 ## Current state
 
-46 Rust tests pass: 6 arithmetic, 4 SHAKE256, 4 transcript, 5 codec, 5 sampling,
-5 BDLOP, 5 tensor, 6 quadratic, 6 recursion. Every layer below the proof itself now
-has at least one value produced by the Python reference. The BDLOP commitment digest matches the Python reference byte for byte,
+51 Rust tests pass. Every layer below the proof itself has at least one value
+produced by the Python reference, and the proof's own scaffolding now does too:
+`masking_width`, `draw` and `draw_ternary` match. What remains of layer 7 is the
+verifier's body (the slot mapping, the descent, `F` and the final equation) and
+then the prover. The BDLOP commitment digest matches the Python reference byte for byte,
 which is the first check of real cryptographic structure rather than of hashing or
 encoding -- it exercises the sampling convention, the CRT multiplication and the
 commitment layout together.
