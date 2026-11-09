@@ -1,26 +1,23 @@
-feat: the one-time addressing derivation, working, with its bound stated honestly
+feat: checkpointed sync, which completes the network hardening item
 
-The retry against the fixed parameter type, and it went in one pass -- which is the evidence
-that last round's refactor was the actual blocker rather than a detour.
+A node refreshes a snapshot of its own state every CHECKPOINT_INTERVAL blocks, and
+sync_from replays from it instead of from genesis -- but only when the peer's chain hashes
+to the same block at that height.
 
-p = k + XOF(S),  P = A*p,  T = A'*p = T_K + A'*XOF(S)
+That agreement check is the whole safety argument. A snapshot is a statement about a
+PARTICULAR chain; applying it to a different one would adopt a state that never existed.
+When the hashes disagree, or the restore raises, the code falls back to a full rebuild and
+logs why rather than proceeding on a bad snapshot.
 
-The sender computes P and T from the meta-address and the shared secret; the recipient
-computes p from the spend key and gets the same values. The sender cannot form p, because
-it does not know k -- tested by showing what it CAN do (subtract A*delta and recover A*k,
-which is public) alongside what it cannot.
+The measured win is modest and was measured before this was built: 1.1x at 200 empty
+blocks, break-even around 73 skipped transactions, because restoring costs a fixed 197 ms
+that is mostly regenerating the decoy pool. The tests check correctness and the fallback
+rather than speed, and the module docstring says so.
 
-Two corrections found by the tests rather than by reading:
+replay_from now takes verify_transactions and defaults to True, matching rebuild: a chain
+from a peer is verified whatever route it arrives by.
 
-The shift used four-bit popcounts, giving a range of four, not the two its parameter name
-claims. Two-bit chunks make it a binomial of width 2, which is what CBD eta = 2 means.
+Network hardening is complete: authenticated transport, multi-hop discovery, slow-start
+bootstrap, and checkpoints in sync.
 
-And the norm bound depends on BOTH distributions: p = k + delta, so a uniform-small spend
-key (the proof's own sample, width 5) plus a width-2 shift reaches 7, not the proof's mu of
-5. With a Kyber CBD spend key of width 2 it reaches 4 and fits. That is exactly C2's
-parameter point, now asserted as what it is instead of quietly loosened: which spend-key
-distribution a wallet uses is a parameter decision, not an implementation detail.
-
-7 tests. This completes the lattice structure of item 3; what remains there is deriving the
-shared secret from a real KEM rather than a caller-supplied value, and wiring the
-meta-address into the wallet.
+5 checkpoint-sync tests, 25 across that and the p2p suite.

@@ -31,6 +31,10 @@ STATIC = Path(__file__).with_name("static")
 #: this file owns the wallet, which is why it is written 0600 and excluded from git.
 WALLET_FILE = "wallet.mnemonic"
 
+#: How often a node snapshots its own state for checkpointed replay. Every hundred
+#: blocks keeps the snapshot fresh without paying for it on each block.
+CHECKPOINT_INTERVAL = 100
+
 
 class StateError(RuntimeError):
     """Persisted state exists but cannot be read."""
@@ -90,6 +94,9 @@ class Node:
         #: loop has to be broken BEFORE submitting: a second submission of the same
         #: transaction is an error, and an error reply per relay hop is noise.
         self.seen_txs: set[str] = set()
+        #: A snapshot of our own state, refreshed every CHECKPOINT_INTERVAL blocks, so
+        #: a sync that shares our prefix can replay from here instead of from genesis.
+        self._checkpoint: dict | None = None
         self.wallet_created = False
         if faucet is not None:
             self.faucet = faucet
@@ -318,6 +325,19 @@ class Node:
         # Derived, not received. A peer no longer supplies the allocation, so it cannot
         # hand us a chain whose block zero pays a different set of keys.
         allocations = P.genesis_allocations(self.parameters)
+
+        # If we have a checkpoint and the peer's chain agrees with it at that height,
+        # replay only the blocks after it. The agreement check is what makes this safe:
+        # a snapshot is a statement about a particular chain, and applying it to a
+        # different one would adopt a state that never existed.
+        rebuilt = self._replay_from_checkpoint(blocks)
+        if rebuilt is not None:
+            self.chain = rebuilt
+            self._persist()
+            self.log.event("chain.adopted", height=self.chain.height, source=peer_text,
+                           from_checkpoint=True)
+            return {"adopted": True, "height": self.chain.height,
+                    "remote_work": remote_work, "from_checkpoint": True}
         try:
             # verify_transactions=True: this chain came from a stranger, so every
             # proof in it is checked rather than trusted.
@@ -332,6 +352,37 @@ class Node:
         self._persist()
         self.log.event("chain.adopted", height=self.chain.height, source=peer_text)
         return {"adopted": True, "height": self.chain.height, "remote_work": remote_work}
+
+    def _replay_from_checkpoint(self, blocks: list):
+        """Replay from a checkpoint when the peer's chain agrees with it, else None."""
+        state = self._checkpoint
+        if not state:
+            return None
+        from . import checkpoint as CP
+
+        height = int(state["height"])
+        if height >= len(blocks):
+            return None
+        if blocks[height].block_hash().hex() != state["block_hash"]:
+            return None
+        try:
+            return CP.replay_from(
+                state, blocks[height + 1 :], parameters=self.parameters,
+                depth=self.chain.depth, verify=self.chain.verify,
+                verify_transactions=True,
+            )
+        except Exception as error:  # noqa: BLE001 - fall back to a full replay
+            self.log.event("checkpoint.rejected", reason=str(error))
+            return None
+
+    def refresh_checkpoint(self) -> bool:
+        """Snapshot the current state, so a later sync can start from here."""
+        from . import checkpoint as CP
+
+        if self.chain.height < CHECKPOINT_INTERVAL:
+            return False
+        self._checkpoint = CP.snapshot(self.chain)
+        return True
 
     def broadcast_block(self, block) -> dict:
         """Best-effort push of a newly mined block to every configured peer."""

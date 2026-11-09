@@ -121,7 +121,8 @@ def restore(state: dict, parameters=None, depth: int = 2, verify=None) -> Chain:
     return chain
 
 
-def replay_from(state: dict, blocks: list, parameters=None, depth: int = 2, verify=None) -> Chain:
+def replay_from(state: dict, blocks: list, parameters=None, depth: int = 2, verify=None,
+                verify_transactions: bool = True) -> Chain:
     """Restore a checkpoint, then apply only the blocks after it.
 
     `blocks` must start at the checkpoint's height: the caller has already discarded
@@ -133,5 +134,5 @@ def replay_from(state: dict, blocks: list, parameters=None, depth: int = 2, veri
             raise CheckpointError(
                 f"block height {block.height} does not follow the checkpoint at {chain.height}"
             )
-        chain._apply(block)
+        chain._apply(block, verify_transactions=verify_transactions)
     return chain
