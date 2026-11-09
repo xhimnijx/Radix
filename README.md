@@ -1,95 +1,142 @@
 # Radix
 
-**Status: research prototype. Not a coin, not value-bearing, not security reviewed.**
-The launch gate is closed by design (`radix_core/launch.py`) and no flag or
-environment variable opens it. Nothing here should be deployed or assigned value.
+**A post-quantum, privacy-preserving payment protocol — research prototype.**
 
-This repository is the working record of a G100 side project: a cryptocurrency
-with Monero's privacy goals, designed so that a future quantum computer running
-Shor's algorithm does not break it. It contains two tracks, and one is parked.
+> [!WARNING]
+> **Not a cryptocurrency. No value. No security claim. Not audited.**
+> The mainnet gate in `radix_core/launch.py` is closed by design and no flag or
+> environment variable opens it. Nothing here should be deployed or assigned value.
 
-| Track | What it is | State |
+Radix implements [SMILE (ePrint 2021/564)](https://eprint.iacr.org/2021/564), a
+lattice-based ring signature with set membership, and builds a complete local testnet
+around it: chain, node, miner, wallet, CLI, GUI, packaged desktop app. The prover and
+verifier are implemented twice — in Python as a reference and in Rust for speed — and
+**each implementation verifies the other's proofs**.
+
+The goal is Monero's privacy properties without elliptic curves, so that a future
+quantum computer running Shor's algorithm does not break it.
+
+---
+
+## Try it
+
+**Prebuilt binaries:** <https://github.com/xhimnijx/Radix/releases>
+
+Releases are built by CI on native runners — the Windows `.exe` on Windows, the macOS
+binary on macOS, the Linux binary on Linux, because PyInstaller cannot cross-compile.
+Download the one for your platform, run it, and your browser opens the wallet.
+
+**From source:**
+
+```powershell
+git clone https://github.com/xhimnijx/Radix.git
+cd Radix
+python -m pip install -e .
+python -m radix_testnet          # starts the node and opens the wallet
+```
+
+Python 3.12+. The first `Send` takes **1–2 minutes** on the reference backend; see
+[the fast backend](#the-fast-backend-rust) to make it ~0.5 s.
+
+## What it does
+
+| | |
+|---|---|
+| **Private** | A spend proves "I own one of 1024 keys" without revealing which one |
+| **Double-spend proof** | A linkable tag `T = A'·s` is a deterministic function of the secret, so a repeat is detectable |
+| **Post-quantum** | Security rests on module-SIS / module-LWE, which have no known efficient quantum attack |
+| **Fast enough** | 496 ms to prove, 110 ms to verify, 32 KB proofs (Rust, measured) |
+| **Runnable** | A desktop app with a wallet UI, or a CLI |
+
+## How it works, in one paragraph
+
+Transactions live in `R_q = Z_q[X]/(X^128+1)` with `q = 4,294,966,337` chosen so that
+`X^128+1` factors into 32 **irreducible** quartics — which is what makes the challenge
+differences invertible and the extracted index genuinely one-hot. The prover commits to
+a one-hot index vector, links it to the ring's public keys through a matrix, and forces
+binaryness with a quadratic relation, all masked so nothing leaks. Recursion over the
+tensor structure makes a 1024-key ring cost about the same as a 32-key one.
+
+For the full treatment — from A-Level maths upwards — see the **[vault](vault/)**.
+
+## The fast backend (Rust)
+
+```powershell
+cd proof_rust
+cargo build --release --bin prove_request
+cd ..
+python -m radix_testnet.cli --backend rust ...
+```
+
+| | Python (reference) | Rust |
 |---|---|---|
-| **A** (parked) | global depth-64 Merkle tree plus a transparent STARK over BabyBear (Plonky3/FRI) | measured at 4.9-8.5 GiB peak proving, over the 4 GiB desktop budget; kept as the credibility baseline |
-| **B** (active) | Monero-style ring anonymity with a lattice ring signature (SMILE, ePrint 2021/564) | implemented and tested: set membership (Figs. 7-9), a linking tag, a ring-signature API and a spend layer |
+| prove | 1–2 min | **496 ms** |
+| verify | 20–38 s | **110 ms** |
 
-Start here:
+If the binary is missing, `--backend rust` refuses rather than silently falling back.
 
-- `PLAIN-ENGLISH.md` - what the project actually has, with no jargon and no optimism.
-- `ROADMAP.md` - the milestones ahead, each with a pass rule written before the work.
-- `STATUS.md` - the dated single source of truth: test counts, measured numbers, what is broken.
-- `ARCHITECTURE-DECISION.md` - why B, the measurements behind that, and where B actually stands (section 8).
-- `AUDIT-PACKET-LATTICE.md` - the review surface for the post-quantum layer: every deviation, every gap, and what to check first.
-- `REVIEW-REQUEST.md` - the brief to hand a cryptographer: five questions, in priority order, with what would count as an answer.
+## Verification
 
-The two abandoned tracks live in `archive/`: `candidate-a/` holds the original
-STARK design and the measurements that retired it, `candidate-c/` the zkVM
-fallback. They are kept because a project that hides its dead ends cannot be
-trusted about its live ones.
+The strongest claim in this repository:
 
-## Running the tests
+> A proof produced by the Rust prover is accepted by the Python verifier, **and** a
+> proof produced by the Python prover is accepted by the Rust verifier.
+
+Both directions are tested and the fixtures are committed:
 
 ```powershell
-python -m pip install -e ".[test]"
-python -m pytest -q                    # everything, about 7 minutes
-python -m pytest -q -m "not slow"      # 373 tests in about 16 seconds
+python -m pytest -q -m "not slow"                 # 411 passed, 1 xfailed (~75 s)
+python -m pytest -q tests/test_testnet_end_to_end.py   # real proofs (~6 min)
+cd proof_rust && cargo test                       # 69 passed
+python experiments/verify_rust_proof.py           # Rust proof -> Python verifier
 ```
 
-The slow tests are slow because they run the real protocol: a 128 x 1024 matrix
-over `M_q` and nineteen polynomial commitments per proof, about 20 s to prove and
-20 s to verify per signature in CPython.
+Every layer of the port has a known-answer value taken from the Python reference
+(SHAKE256, transcript, codec, BDLOP, quadratic, tensor, recursion, `set_matrix`, and the
+full prover). See [`proof_rust/PORTING.md`](proof_rust/PORTING.md).
 
-## Candidate-A reference core
+## Repository map
 
-**Status: experimental, non-value-bearing reference code.** This is an executable specification slice for deterministic Candidate-A rules, not a coin, wallet, node, or security-reviewed implementation. Do not deploy it or assign value to it.
+| Path | What |
+|---|---|
+| `vault/` | **The documentation.** 38 notes, A-Level → protocol internals |
+| `radix_core/candidate_b/lattice/` | The Python reference implementation |
+| `radix_testnet/` | Chain, node, miner, wallet, GUI, packaging |
+| `proof_rust/` | The Rust implementation and the porting record |
+| `experiments/` | Measurements, cross-checks, the modulus search |
+| `archive/` | Two abandoned tracks, kept for honesty |
 
-## What is implemented
+Root documents:
 
-- Strict little-endian U8/U16/U32/U64 encoders, canonical `Bytes`, `Vec`, and `Frame` parsing, including truncation/trailing-byte rejection.
-- Candidate-A SHAKE256 framed hashes for spend public values, note owners/commitments, nullifiers, output leaves, and the 32-byte note KDF.
-- Experimental-v1 address, output, and transaction-statement codecs, with exact fixed widths, canonical tuple vectors of 1–16 items, duplicate nullifier/commitment rejection, version and chain-ID checks. Python's general 1–16 statement codec now exposes and enforces its derived 32,385-byte maximum before nested parsing; the Rust experimental 1-in/1-out subset separately caps statements at 4,096 bytes. Standalone field-based output validation and serialization avoid trusting instance-shadowed methods.
-- Both note-plaintext layouts are explicit and separate: experimental variable-length v1 and the unactivated 652-byte zero-padded successor proposal. V1 ciphertext length is `156 + memo_length`, so it reveals memo length exactly; the padded proposal would use a constant 668-byte ciphertext but is not activated. No profile selector, version migration, or complete successor wire format exists; the output codec alone cannot identify which plaintext profile a recipient should use.
-- A concrete `cryptography==50.0.2` adapter performs FIPS 203 ML-KEM-768 key generation, encapsulation and decapsulation plus AES-256-GCM; note KDF/AAD framing and canonical payload checks remain explicit. The private `decapsulation_key` field stores pyca's 64-byte FIPS `d || z` seed and reconstructs expanded key material in the backend; the 2,400-byte expanded secret-key encoding is not importable by this adapter. Public-key validation enforces 1,184-byte length, canonical packed 12-bit polynomial coefficients `<3329`, backend parsing and generated public/private pair consistency; address parsing/serialization and real-backend encapsulation reject noncanonical keys. This is encoding/keypair validation, not proof of key ownership or production certification. Real-provider tests cover round trips, implicit rejection followed by AEAD failure, malformed keys, an AES-GCM known-answer vector, and a complete create/recover/scan wallet flow.
-- Wallet primitives compose key generation, address serialization, self-output creation, chain-bound recipient-address output creation, commitment-checked recovery, nullifier derivation and bounded 1,024-output scan chunks. `scan_outputs_v1` retains caller-asserted positions only; `scan_authenticated_outputs_v1` additionally checks each snapshotted output leaf/index against a caller-trusted depth-64 root before any KEM/AEAD provider callback. It requires one path per output and proves only membership at those indices (not root authenticity, source provenance or chunk completeness). An optional `trusted_leaf_count` rejects a range beyond the caller-trusted populated prefix; that count must be authenticated for the same root/checkpoint. The maximum chunk uses up to 4,194,304 raw path-digest bytes plus 1,941,504 raw output-field bytes. `WalletScanCursorV1` locks to legacy or authenticated mode on its first successful chunk, so legacy scan history cannot later be silently upgraded; authenticated mode also pins the exact root/count pair and rejects later checkpoint changes. `snapshot()` returns immutable cursor state for caller-managed persistence, and `from_snapshot()` restores only local state; snapshots are unavailable during an active scan and do not authenticate restored history/checkpoints. Cursor advancement and pinning occur only on success, and callers remain responsible for authenticating root/count/checkpoint and establishing range completeness. At maximum field sizes, the detached snapshot reuses references to immutable `bytes` instead of cloning output payloads. These are raw input bounds, not a process working-set bound: Python tuple/object overhead, caller-owned records/paths, backend memory and per-output KEM/AEAD cost remain unmeasured. A full 1,024-output scan now avoids up to 1,023 repeated spend-public-key derivations and 1,024 duplicate output-leaf recomputations versus the prior path; each output is snapshotted/validated once, and spend-secret/decapsulation-key checks run before output scanning, even for an empty chunk. Malformed credentials therefore fail before up to 1,024 leaf validations; this only reduces work on invalid calls. These are operation-count reductions, not measured time/CPU or working-set bounds; per-output KEM/AEAD cost remains unmeasured. `create_note_output_for_address_v1` parses the canonical address and checks the expected chain ID and ML-KEM public-key encoding before consuming note entropy; the lower-level `create_note_output_to_v1` accepts public-key components directly. Their `CreatedNoteV1` result carries the owner, recipient spend key, KEM shared secret and note opening as repr-hidden local witness material for future proving. Repr hiding is not memory protection; callers must protect these fields, and neither helper proves recipient ownership, ML-KEM encapsulation provenance, or network acceptance. The encrypted wallet keystore uses Scrypt (`N=2^15,r=8,p=1`) and AES-256-GCM; its nominal Scrypt working-memory term is `128*r*N = 32 MiB`, excluding library and allocator overhead, while actual device peak memory and CPU time have not been measured. It validates restored keys, bounds password input to 4,096 bytes before scrypt, limits wallet files to 2,048 bytes, and requires durable nonce history, and creates files exclusively (never overwriting an existing path). It is not a mnemonic/seed-derivation format; callers still need secure password entry, backups and OS ACLs. Python secret material cannot be reliably zeroized. `WalletScanCursorV1` helps page sequentially through bounded scan chunks and advances its local absolute position only after a chunk succeeds; it remains local bookkeeping and does not authenticate chain source/root/continuity or make the cursor a trusted checkpoint. `MAX_OUTPUT_RAW_FIELD_BYTES` and `MAX_SCAN_CHUNK_RAW_FIELD_BYTES` expose the schema-derived maxima: 1,896 raw field bytes per output and 1,941,504 bytes (about 1.852 MiB) for the 1,024-output chunk. This is input-field payload only, excluding Python container/object overhead, cryptographic-backend workspace, and CPU cost. It is not a measured peak-memory or scan-time bound.
-- AES-GCM nonce reservations may use either a bounded process-local registry or explicit SQLite persistence (WAL, `synchronous=FULL`, unique fingerprints, committed before encryption, no eviction). Persistent history survives reopen and serializes concurrent processes, but assumes a trusted, non-rolled-back local database; restoring/deleting/cloning old state can defeat reuse detection. Only fingerprints—not raw AES keys—are stored. Spend/wallet entropy uses Python `secrets`; ML-KEM uses OpenSSL's CSPRNG. Neither independently attests host/runtime entropy.
-- A sparse in-memory depth-64 append-only output tree with 64-sibling membership paths, checked 65-bit leaf counts through the exact `2^64` capacity boundary, and rejection of the reserved empty-leaf digest as a populated output.
-- Exact-integer balance validation and parent-linked, branch-relative `AnchorOK` with the experimental 60-block minimum age; each traversed header’s exact fields are revalidated to reject malformed or forcibly mutated records.
-- An atomic in-memory block transition that processes ordered transfers, stages nullifiers/commitments, appends outputs in order, applies exactly one mint last with 1–16 outputs, checks mint-verifier input against subsidy plus included fees and rejects totals that cannot fit in 1–16 nonzero U64 note outputs, and returns a new state only on total success. Codec/state boundaries require canonical base record types, exact tuple vectors, and field-based serialization rather than trusting instance-overridable methods; all caller-owned transfer and mint data is snapshotted before any verifier callback, callbacks receive detached canonical copies, and consensus applies only the isolated snapshots. The selected parent ancestry through the oldest referenced anchor is copied before callbacks, preventing callback-time edits to the caller's header index or header objects from changing anchor decisions. Ledger snapshots defensively copy the mutable tree on input and access, and block application recomputes tree-node integrity and binds the snapshot root to the selected parent header; the populated leaf count is read-only through the public tree API. The header does not authenticate the nullifier or commitment sets, so a valid parent snapshot must be derived by ordered replay from genesis; externally loaded snapshots are not trusted without a future checkpoint-authentication format. Transfer-count and aggregate-fee limits, subsidy, and both verifiers are explicit inputs; there are no default accepting proof stubs. A separate integer-only evaluator and cumulative-supply function reproduce the draft's illustrative emission schedule, but that unselected proposal is deliberately not wired into consensus.
-- An executable Python reference check now covers one input-note opening, Candidate-A owner/commitment/nullifier formulas, canonical source-leaf recomputation, depth-64 membership, and matching the single public nullifier in a canonical `TransactionStatementV1`. It is a host-language witness oracle only: it is not zero-knowledge or a proof, does not link the supplied KEM shared secret to source-ciphertext decapsulation, and does not check output construction, fee/balance, or anchor applicability. It is deliberately not connected to `apply_block`.
-- Tests include the existing spend-public SHAKE known-answer vector, additional framed-hash vectors, codec boundary/adversarial tests, Merkle path recomputation, memo canonicality, branch/reorg cases, block atomicity/ordering, and parser mutation/fuzz samples.
+- [`STATUS.md`](STATUS.md) — dated single source of truth: tests, measurements, what is broken
+- [`PERFORMANCE.md`](PERFORMANCE.md) — measured timings, not projections
+- [`REVIEW-FINDINGS.md`](REVIEW-FINDINGS.md) — what two independent reviewers found, retractions included
+- [`REVIEW-REQUEST.md`](REVIEW-REQUEST.md) — the brief for a third review
+- [`TESTNET.md`](TESTNET.md) — how to run and build the app
+- [`PLAIN-ENGLISH.md`](PLAIN-ENGLISH.md) — the same story without jargon
 
-## Offline wallet demonstration
+## What this is not
 
-From the repository root, after installing the project dependencies, run:
+- **Not audited.** Two informal reviews found four real defects; that is not an audit.
+- **Not 128-bit secure.** No lattice estimator run has been done, so no security level
+  may be claimed. The parameters are priced in `PERFORMANCE.md`, not proven.
+- **Not anonymous like Monero.** Amounts are visible and unproven, and the ring pool on
+  a fresh chain is mostly deterministic decoys.
+- **Not complete.** No consensus, no peer-to-peer network, no amount commitments, no
+  range proofs, no one-time addressing.
+- **Verify misses its target.** 110 ms measured against a 100 ms bar, and a phone
+  multiplier makes it worse.
 
-```powershell
-python -m examples.wallet_note_demo
-```
+[`vault/Status and Honest Limitations.md`](vault/Status%20and%20Honest%20Limitations.md)
+is the honest one-page summary.
 
-This small demonstration generates one wallet, makes a chain-bound address, creates one encrypted note for that address using the concrete ML-KEM-768/AES-256-GCM adapters, recovers it, and checks its output-leaf membership in a one-leaf in-memory Merkle tree. The displayed Base64 address is only a convenient encoding of the canonical binary address for this demo; it is not a defined textual address format. This does **not** submit a transaction, use a transaction proof, establish anonymity, or perform consensus validation. It is a local illustration of the existing wallet primitives, not a deployable wallet or node. The code path has fixed-size crypto inputs and one output; its actual CPU/RSS has not been benchmarked.
+## Contributing
 
-## Run tests
+Review is more useful than code right now. The open questions are listed in
+[`REVIEW-REQUEST.md`](REVIEW-REQUEST.md); the highest-value single task is running a
+lattice estimator against the current parameters. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-Requires Python 3.11+ and the pinned `cryptography==50.0.2` runtime dependency. Install the project and test extra with `python -m pip install -e ".[test]"`:
+## Licence
 
-```powershell
-python -m pytest -q
-```
-
-The pre-existing research artifacts remain independent checks:
-
-```powershell
-python .\archive/candidate-a/Radix-Serialization-Test-Vectors.py
-python .\archive/candidate-a/Radix-Gate-1-Reference-Model.py
-```
-
-## Explicit non-implementations / blockers
-
-- No recipient-key privacy construction has been selected: the current static-address ML-KEM design still permits candidate-view-key testing and does not establish key privacy/anonymity. ML-KEM IND-CCA is not a substitute for that analysis; see the [Gate 1 privacy blocker](<archive/candidate-a/Radix-Gate-1-Feasibility-Log.md>). The available key parser/canonical-coefficient and keypair-consistency checks are implementation safeguards, not production validation certification. There is no deterministic seed/mnemonic recovery, address rotation/subaddress scheme, authenticated chain synchronization/checkpointed scanning, transaction builder, production transaction-proof verifier, production key custody, or host/runtime entropy attestation. The encrypted file format and SQLite nonce history are non-production reference helpers; OS ACLs, robust backups, rollback protection and independent implementation review remain outstanding. The Python/OpenSSL entropy interfaces are not independently attested, and Python cannot reliably zeroize secrets.
-- There is no complete Candidate-A transaction proof accepted by consensus, consensus proof verifier, quantified soundness analysis, or demonstrated transaction-level zero-knowledge guarantee. `radix_core/transaction_relation.py` contains host-side oracles for input-note membership/nullifier and for canonical-statement one-input/one-output value conservation; neither proves an output opening nor authorizes consensus. `proof_harness/` includes component proofs and the experimental `RDXL64P1` single-AIR profile. RDXL composes Candidate-A source/note/path/nullifier relations, an output-note opening, exact one-input = output + fee arithmetic, and canonical statement binding. For its fixed empty-memo profile, it also constrains output KDF/AES-CTR for the first 140 public ciphertext bytes; the output owner remains a free witness, not derived from recipient keys. These are material prototype relations, not a complete or security-reviewed transaction proof. Remaining blockers include input ML-KEM decapsulation, output ML-KEM encapsulation and recipient binding, AES-GCM/GHASH authentication, complete state/consensus checks, and a production-suitable hiding/soundness analysis. The integrated high-memory RDXL proof test remains deferred; its device-budget fit and end-to-end proving/verification performance are unestablished. The existing amount-opening demo still uses a weak BabyBear/Poseidon2 commitment with no adequate amount-privacy claim, and all proof profiles remain experimental. The concrete cryptography adapter uses CSPRNG encapsulation and does not expose deterministic encapsulation randomness. Do not treat an AIR subrelation, host oracle, or statement-bound prototype envelope as consensus authorization or a production privacy/security guarantee.
-- The block executor is a reference transition only. It does not track cumulative monetary supply, persist state/reorg data, or choose mint/subsidy/genesis rules. A separate helper evaluates the illustrative integer emission proposal, but consensus still receives subsidy as an explicit caller-supplied input. Transfer-count and aggregate-fee ceilings are caller-supplied parameters, not selected consensus values. Empty transfer lists are allowed by this model because the protocol draft has not fixed the rule.
-- **Proof roles are separate from mining:** if this private-transaction design is adopted, the spending wallet (or a deliberately designed delegate) must create the transaction proof; full validating nodes check it. A block producer would include an already-proved transaction, not generate its spend proof. This repo has no complete wallet prover or consensus verifier, and no PoW/mining design. Ordinary remote proving exposes the private witness to the service; privacy-preserving delegation is not implemented. A research note reviews miner-paid proving, privacy-preserving outsourcing, MPC, and quantum/anonymity constraints in [`proof_harness/DELEGATED-PROVING-RESEARCH.md`](proof_harness/DELEGATED-PROVING-RESEARCH.md). Current RDXL payload estimates are 3.598 GiB (3,684.25 MiB) for the PCS LDE alone and 4.497 GiB for the hypothetical randomized-matrix-plus-LDE coexistence, against provisional 1-GiB mobile / 4-GiB desktop process budgets; these are allocation estimates, not measured RSS or a proof that a different implementation cannot fit. End-to-end proving time and mobile fit remain unknown. See [`proof_harness/README.md`](proof_harness/README.md).
-- No PoW, networking, mempool, authenticated wallet history sync, archival service, or production node.
-- The Merkle tree and models prioritize inspectability over performance, persistence, side-channel hardening, or denial-of-service resistance.
-
-Candidate A remains a research baseline. In particular, this code does not establish that its hash commitment/nullifier composition, recipient privacy, or eventual proof system is secure. External reviews are not a coding prerequisite, but this prototype cannot be represented as independently verified or production-ready.
+MIT — see [`LICENSE`](LICENSE). No warranty; not fit for any purpose; do not use it to
+store or transfer value.

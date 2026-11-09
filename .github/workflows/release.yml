@@ -1,0 +1,130 @@
+name: release
+
+# Builds one binary per platform and attaches them to a GitHub Release.
+#
+# PyInstaller cannot cross-compile, so each artefact is built on its own native
+# runner. A macOS binary built on Windows would not run, so it is not attempted.
+#
+# To cut a release:
+#   git tag v0.1.0
+#   git push origin v0.1.0
+# The artefacts appear at https://github.com/<owner>/<repo>/releases
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build a release for"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: RadixTestnet-windows
+            binary: RadixTestnet.exe
+          - os: macos-latest
+            artifact: RadixTestnet-macos
+            binary: RadixTestnet
+          - os: ubuntu-latest
+            artifact: RadixTestnet-linux
+            binary: RadixTestnet
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pyinstaller
+
+      - name: build the app
+        run: python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/radix-testnet.spec
+
+      - name: smoke test the artefact
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ runner.os }}" in
+            Windows) BIN="dist/${{ matrix.binary }}" ;;
+            *)       BIN="dist/${{ matrix.binary }}" ;;
+          esac
+          test -f "$BIN"
+          "$BIN" --no-browser --port 8666 --data-dir "$RUNNER_TEMP/radix" &
+          PID=$!
+          sleep 8
+          python - <<'PY'
+          import json, urllib.request
+          status = json.load(urllib.request.urlopen("http://127.0.0.1:8666/api/status"))
+          assert status["faucet"]["balance"] > 0, status
+          print("artefact served:", status["height"], status["faucet"]["balance"])
+          PY
+          kill $PID || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.binary }}
+          if-no-files-found: error
+
+  publish:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: lay out the files
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp artifacts/RadixTestnet-windows/RadixTestnet.exe   release/RadixTestnet-windows-x64.exe
+          cp artifacts/RadixTestnet-macos/RadixTestnet         release/RadixTestnet-macos
+          cp artifacts/RadixTestnet-linux/RadixTestnet         release/RadixTestnet-linux
+          chmod +x release/RadixTestnet-macos release/RadixTestnet-linux
+          ls -la release
+
+      - name: create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'NOTES'
+          **Research prototype. Not a cryptocurrency. No value. No security claim.**
+
+          Prebuilt desktop apps. Each is built natively: the Windows `.exe` on Windows,
+          the macOS binary on macOS, the Linux binary on Linux — PyInstaller cannot
+          cross-compile, so no artefact is built on the wrong platform.
+
+          Run it, and your browser opens the wallet at <http://127.0.0.1:8642/>.
+
+          - Windows: `RadixTestnet-windows-x64.exe` (unsigned, so SmartScreen will warn)
+          - macOS: `RadixTestnet-macos` — you may need `xattr -d com.apple.quarantine`
+          - Linux: `RadixTestnet-linux` — `chmod +x` then run
+
+          Or run from source: `python -m pip install -e . && python -m radix_testnet`
+
+          What it does and does not do: see README.md and `vault/`.
+          NOTES
+          gh release create "$TAG" release/* --title "$TAG" --notes-file notes.md || \
+            gh release upload "$TAG" release/* --clobber

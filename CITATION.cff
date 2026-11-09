@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "Research prototype. Not a cryptocurrency; no security claim."
+title: "Radix: a post-quantum privacy-preserving payment protocol (research prototype)"
+abstract: >-
+  A reference implementation in Python of the SMILE lattice ring signature with set
+  membership (ePrint 2021/564), a same-witness linkable tag, a local testnet, and a
+  Rust implementation of the prover and verifier that is cross-verified against the
+  Python reference in both directions. Not audited, not deployed, no value.
+type: software
+license: MIT
+version: 0.1.0
+date-released: 2026-11-09
+authors:
+  - family-names: "Gil"
+    given-names: "Maxim"
+repository-code: "https://github.com/xhimnijx/Radix"
+keywords:
+  - post-quantum cryptography
+  - lattice cryptography
+  - ring signatures
+  - zero knowledge
+  - privacy
+  - cryptocurrency
+references:
+  - type: article
+    title: "SMILE: Set Membership from Ideal Lattices with Applications to Ring Signatures and Confidential Transactions"
+    authors:
+      - family-names: "Del Pino"
+        given-names: "Rafael"
+      - family-names: "Katsumata"
+        given-names: "Shuichi"
+      - family-names: "Prest"
+        given-names: "Thomas"
+    year: 2021
+    url: "https://eprint.iacr.org/2021/564"
+    notes: "The protocol this repository implements. Note the e1 term erratum recorded in REVIEW-FINDINGS.md."
