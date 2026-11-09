@@ -9,10 +9,11 @@ dated record and `AUDIT-PACKET-LATTICE.md` is the technical audit.
 We have a working mathematical proof that lets someone demonstrate *"I am allowed
 to spend one of these 1,024 coins, and I will not tell you which one"*, on maths a
 quantum computer cannot break. It runs and it is tested. Two independent
-cryptographers reviewed it in November 2026: the proof itself held up, but they
-found that the parameters do not yet justify a 128-bit security claim, and that
-the serial number meant to catch double spending could be forged — I reproduced
-that forgery, and it has been withdrawn.
+cryptographers reviewed it in November 2026: the proof itself held up, but at the
+current parameters the argument is only about **24-bit sound**, not 128, and the
+first serial number for catching double spending could be forged — I reproduced
+that forgery. It has since been rebuilt into the same proof and now works (with a
+caveat about distinct coins, below).
 
 So: the privacy half exists and is sound in construction; the anti-double-spend
 half does not exist; the parameters are open. It is **not** a coin: there is no

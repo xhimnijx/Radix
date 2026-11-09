@@ -46,12 +46,24 @@ Answer these before building anything large. Each has a failure branch.
 
 ### R0 — Review packet and frozen parameters *(first pass done, 2026-11-08)*
 
-Two reviews came back. The transcription held; the first tag was withdrawn as
-forgeable and rebuilt the same day as a same-witness extension (33.5 KB, one
-proof); the parameters do not achieve 128 bits. `REVIEW-FINDINGS.md` is the record, and the
-remaining R0 work is now concrete: restore the paper's masking, re-derive `beta`
-and `beta'`, price them, unify the challenge distribution, and redesign or drop the
-tag.
+Two reviews came back, then a second round. The transcription held; the first tag
+was withdrawn as forgeable and rebuilt the same day as a same-witness extension
+(38.7 KB at k' = 4, one proof). Three things remain, in order of severity:
+
+1. **The challenge-difference term caps soundness at ~24 bits** at this modulus.
+   The unit checks fix the `c^2` attack but not the extractor, which needs
+   `c - c~` invertible. The fix is an irreducible-quartic `q` (`q = 1 mod 64`,
+   `q != 1 mod 128`), which in turn needs the quartic-CRT multiplier to keep
+   multiplication fast — no 128-point NTT exists for such a `q`.
+2. **The `2^20` mask caps it at ~2^50.** Restore the paper's Gaussian masks and
+   `Rej0`/`Rej1`, re-derive `beta` and `beta'`, and price them.
+3. **The extracted `v_i` is a 128-coordinate idempotent, not a 32-entry one-hot
+   vector.** Anything that consumes it stops parsing. Needs a linear
+   slot-constant constraint and an `alpha` slot, which the current `c^2` slot does
+   not have spare. This blocks B2 as soon as a range proof wants `v_i`.
+
+`REVIEW-FINDINGS.md` is the record; `REVIEW-REQUEST.md` is the brief for the next
+pass, and questions 3 and 5 should be rewritten for it.
 
 **Exit:** a reviewer signs an attestation over `parameters_hash()`; the modulus is
 either SMILE's or a justified choice; the three deviations are resolved against a

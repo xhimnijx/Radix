@@ -212,3 +212,102 @@ entries". The extracted object is therefore a 128-coordinate binary vector, not 
 `v_i` arriving from the extractor must be slot-constant, which the tag extension
 does not need but a future composed proof (B5) might. **Not currently addressed in
 code, in the brief, or in the paper.**
+
+## k' = 4 adopted, and the work multiplier corrected
+
+C1: k' = 4 is the first row count with a comfortable distinct-note collision
+margin (kernel shortest ~2^17.3 against a target of ~2^8.7; k' = 2 is marginal and
+k' = 3 is borderline), and it matches A's shape, so the tag reuses `M-SIS_{4,13}`
+rather than introducing a weaker instance. My earlier "x1.2 work" was wrong: that
+was k' = 1. Measured here:
+
+| Shape | Wire size | Prove | Verify | Work |
+|---|---|---|---|---|
+| untagged | 32,512 B | ~21 s | ~20 s | 1x |
+| k' = 1 | 34,048 B | 24.1 s | 23.8 s | ~1.15x |
+| **k' = 4** | **38,656 B** | **39.1 s** | **38.3 s** | **~1.86x** |
+
+C1's arithmetic reproduces exactly, including that my `tagged_size_bytes` had
+omitted the tag polynomials themselves (it counted 36,608 B; the tag adds 2,048 B).
+Fixed, and the tagged tests now run at k' = 4.
+
+## The challenge-difference gap: the unit checks are necessary but not sufficient
+
+C1's second answer is the one that changes how this project may describe itself.
+Checking that `c` and `c'` are units closes the `c^2` zero-divisor attack on the
+final equation. It does **not** close the extractor: extraction needs `c - c~`
+invertible, and at a split modulus the difference of two units can still be a zero
+divisor. At one scalar slot that happens with probability `p ~ 2^-31.4`, and over
+128 slots the soundness error is about `2^-24.4`. Restricting the challenge space
+to units does not help: a set with pairwise-difference units in the split ring has
+size at most `q`, so its error is at least `1/q ~ 2^-32`.
+
+**The fix is the modulus.** With `q = 1 mod 64` and `q != 1 mod 128`, the quartic
+factors `X^4 - r_i` are irreducible, a nonzero quartic residue is a unit of a field,
+and the difference of two ternary challenges vanishes in a factor only with
+probability `q^-4 ~ 2^-128`. The unit checks then cost nothing (failure `2^-123`).
+
+**What it costs.** With irreducible quartics there is no 128-point NTT, because
+that needs `256 | q - 1`. `ntt.supports()` goes false, `ring.mul` falls back to
+`mul_naive` at `O(d^2)`, and a 20 s proof becomes minutes. Keeping performance
+means implementing the **quartic-CRT multiplier**: 32 slots, each a 4x4 product
+(`subring.quartic_multiply`), about 512 coefficient products per ring
+multiplication — competitive with the NTT. `subring.slot` already computes residues
+directly, so only `glue` (currently NTT-driven) and the root search need to move to
+a 64th root. In Rust this is routine; in Python the slot/glue overhead must be
+measured before committing.
+
+Until that lands, the honest statement is: **soundness is about 24 bits at this
+modulus**, not 128, and the unit checks must be described as closing one concrete
+attack rather than as repairing the argument.
+
+## The slot-constant hole: an undefined term, not a weaker bound
+
+C2's answer is sharper than the question deserved. The worry was that a future
+composed proof might need the extracted `v_i` to be slot-constant. C2: a composed
+proof cannot proceed at all, because the statement **stops parsing**. The whole
+downstream structure is indexed by `l^m = 1024`: `P` has 1024 columns, the ring has
+1024 positions, and `v_1 (x) ... (x) v_m` lives in `Z_q^{32^m}`, which is only
+defined when each `v_i` is 32 scalars. A 128-coordinate binary object selects no
+column, so "which key am I spending" has no answer.
+
+And no modulus rescues it. `v(v-1) = 0` in `R_q ~ Z_q^128` says `v` is an
+idempotent, i.e. the indicator of an arbitrary subset of the 128 evaluation points;
+slot-constant means that subset is a union of the 32 four-point groups. That would
+follow only if `M_q` were a product of fields, whose only idempotents are 0 and 1 —
+and it is never a product of fields, because `r_i = (zeta^{2i+1})^4` is an explicit
+fourth power for every valid `q`.
+
+What the constraints actually deliver: 128 binary evaluations, plus
+`sum_j (v_i)_j = 1` as an `M_q` element — which is only four `Z_q` coordinates,
+because `B` in eq. (23) has exactly one nonzero row. Whether the spurious binary
+solutions can be excluded is a four-equations-over-128-bits question that neither
+the paper nor this code settles.
+
+**Severity:** a hole in the extraction chain at the last step — not a forgery by
+itself — and it belongs next to Q3, not in a footnote.
+
+**Why it must be fixed before anything composes with `v_i`.** The `c^2` coefficient
+is the only unabsorbed slot (`c^0` is absorbed by `omega`, `c^1` by `psi`), and it
+carries exactly `m+1` constraints through `m+1` independent `alpha`s: one `alpha_0`
+for `h = g + sum y_j`, one per level for `v_i(v_i-1) = 0`. There is no spare
+`alpha`. Slot-constancy is a *linear* condition (a rank-96 projection), and only
+*quadratic* terms sit at `c^2`. Enforcing it therefore means either folding a
+linear condition into an `alpha` slot, which needs an extra committed message and
+challenge to pair with, or extending to `m+2` `alpha`s — a protocol change that
+touches the `alpha_0` term, the very term a maintainer was recently about to
+delete.
+
+There is a structural tension worth recording so nobody tries to retune it away:
+the `q^-4` soundness of the vanishing checks comes from `d/l = 4` coefficients per
+slot, and that same 4 is what allows four independent binary coordinates per slot
+instead of one. Shrinking `d/l` loses the `q^-4`.
+
+**What B5 must say, in these words:** the extractor returns `v_i in Z_q^l`, not
+merely an idempotent of `R_q`; and the proof carries an explicit linear condition
+fixing `v_i` under the slot-constant projection, with the `alpha` slot it consumes
+named.
+
+**What is unaffected:** the tag. `T = <A', s>` is linear in `s` and never touches
+`v`. But anything that consumes the extracted `v_i` — a range proof, conservation,
+composition — hits this, which means it arrives at B2 rather than B5.

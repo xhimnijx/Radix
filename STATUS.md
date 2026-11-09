@@ -1,4 +1,4 @@
-﻿# Status — 2026-11-08
+# Status — 2026-11-08
 
 **One line:** the tree builds, the suite is green, the verified safety defects are
 fixed, and the mainnet launch gate exists and ships **closed**. The proof side is
@@ -16,7 +16,7 @@ in `REVIEW-FINDINGS.md`. Summary:
 | `c` / `c'` unit checks | **missing**, now fixed in code with tests (`test_candidate_b_unit_checks.py`) |
 | Masking without rejection sampling | **soundness failure**: the response bound `2^20`, not `mu = 5`, is the security parameter; the core is roughly `2^50`, not `2^128` |
 | The linkable tag | first version **forgeable** (reproduced here without a key); rebuilt as a same-witness extension on C1's advice, `A_ext = [A; A']`, 33.5 KB, 6 tests. k' = 1 gives same-note linkability; distinct-note collision resistance needs k' = 4 and is **not** claimed |
-| Parameters | open; `beta` and `beta'` must be re-derived and priced with a lattice estimator |
+| Parameters | open. Two separate caps: the challenge-difference term gives ~**24-bit** soundness at this modulus (the binding one), and the `2^20` mask gives ~`2^50`. Both must be fixed; neither is a transcription issue |
 
 The suite is 410 tests: 409 passing and one strict-xfail that guards the withdrawn tag construction. Nothing in this repository may claim 128-bit security
 until the masking is restored and the parameters are re-derived.

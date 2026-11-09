@@ -231,7 +231,7 @@ def verify_tagged(
 
 
 def tagged_size_bytes(depth: int, tag_rows: int = 1) -> int:
-    """Wire size with the tag folded in: rows = k + k'."""
+    """Wire size with the tag folded in: the proof plus the k' tag polynomials."""
     width = S.masking_width(depth, None, SMILE.matrix_rows + tag_rows)
     elements = (
         SMILE.challenge_dim
@@ -241,5 +241,6 @@ def tagged_size_bytes(depth: int, tag_rows: int = 1) -> int:
         + 2
         + SMILE.matrix_cols
         + width
+        + tag_rows  # the tag itself travels with the signature
     )
     return elements * SMILE.ring_degree * 4 + 2 * SMILE.ring_degree

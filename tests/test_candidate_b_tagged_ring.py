@@ -15,7 +15,7 @@ pytestmark = pytest.mark.slow
 
 P_ = params.SMILE
 DEPTH = 2
-TAG_ROWS = 1
+TAG_ROWS = 4  # C1: the first row count with a comfortable collision margin
 MESSAGE = b"spend once"
 
 
@@ -70,6 +70,7 @@ def test_the_untagged_api_refuses_tagged_parameters(built):
 
 
 def test_the_extended_proof_is_only_slightly_larger(built):
-    _parameters, _s, _p, _rk, proof, _tag, _second, _st = built
-    assert proof.size_bytes == RS.tagged_size_bytes(DEPTH, TAG_ROWS)
-    assert 32_000 <= proof.size_bytes <= 36_000
+    _parameters, _s, _p, _rk, proof, tag, _second, _st = built
+    total = proof.size_bytes + len(tag) * P_.ring_degree * 4
+    assert total == RS.tagged_size_bytes(DEPTH, TAG_ROWS)
+    assert 36_000 <= total <= 40_000

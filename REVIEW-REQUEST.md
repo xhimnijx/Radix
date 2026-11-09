@@ -1,9 +1,28 @@
 # Review request: the lattice ring signature
 
-> **Answered on 2026-11-08.** Two reviews came back: the tag is forgeable and has
-> been withdrawn, the parameters do not achieve 128 bits, and one transcription
-> gap was found and fixed. The record is in `REVIEW-FINDINGS.md`. This brief is
-> kept as it was sent, with the one dangerous sentence about Q1 corrected below.
+> **Answered on 2026-11-08, in two rounds.** Round one: the tag was forgeable and
+> was withdrawn; one transcription gap (the `c`/`c'` unit checks) was found and
+> fixed; the parameters do not achieve 128 bits. Round two: the tag was rebuilt as
+> a same-witness extension (`A_ext = [A; A']`, 38.7 KB at `k' = 4`), the
+> challenge-difference term was identified as capping soundness at ~24 bits, and a
+> second hole was found in the extraction chain (the extracted `v_i` is a
+> 128-coordinate idempotent, not a 32-entry one-hot vector). The record is
+> `REVIEW-FINDINGS.md`.
+>
+> **For a second review, the live questions are:**
+>
+> - **Q3' — the modulus and the challenge space.** Is an irreducible-quartic `q`
+>   (`q = 1 mod 64`, `q != 1 mod 128`) plus the quartic-CRT multiplier the right
+>   trade, or is there a cheaper route to a `c - c~`-invertible challenge space?
+> - **Q5' — the mask.** Restore Gaussian masks with `Rej0`/`Rej1`; what `beta` and
+>   `beta'` does this construction need, and do they price at 128 bits?
+> - **Q6 — slot-constancy.** `v_i` arrives as an idempotent of `R_q`, so anything
+>   that consumes it stops parsing. What is the cheapest sound way to add the
+>   linear condition, given the `c^2` slot already carries `m+1` constraints and
+>   has no spare `alpha`?
+>
+> Q4 below is answered and no longer needs review: the separate tag proof is
+> withdrawn and replaced.
 
 For the cryptographer. This is a brief, not a paper. It says what the code does,
 what we want answered, and what we already know is wrong, so no time is spent
