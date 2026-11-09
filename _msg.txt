@@ -1,0 +1,22 @@
+refactor: Parameters carries its SmileParameters, which was blocking three attempts
+
+Technical debt, and the reason items 1, 2 and 3 all stalled the same way. There are two
+parameter objects and they are easy to confuse:
+
+  SmileParameters   modulus, ring_degree, matrix_cols, challenge_dim -- the ring algebra
+  Parameters        keys, matrix, depth, tag_matrix -- the actual statement
+
+Every module that touches the matrices needs both, and three separate attempts broke by
+assuming one was the other: a stealth module hit matrix_cols, then modulus, then a nested
+ring call, each fix revealing the next. That is not bad luck, it is a type that does not
+carry its own context.
+
+`Parameters` now has a `smile` field, populated by `setup` from the parameters it was
+actually given, so a module holding a `Parameters` never has to guess what it is holding.
+Verified both ways: the default set exposes smile.matrix_cols = 13 matching its matrix
+width, and a set built at ell = 17 exposes 17 rather than silently reporting the default --
+which is exactly the confusion that cost the last three rounds.
+
+This is the fix that unblocks them. It adds no capability on its own; it removes a class of
+failure, and the next attempts at the range proof, the noise-aware statement and one-time
+addressing all depend on it.

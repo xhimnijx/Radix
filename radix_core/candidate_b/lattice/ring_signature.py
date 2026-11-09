@@ -46,6 +46,12 @@ class Parameters:
     matrix: tuple[tuple[Poly, ...], ...]
     depth: int
     tag_matrix: tuple[tuple[Poly, ...], ...] = ()
+    #: The ring algebra this statement was built over. `SmileParameters` and
+    #: `Parameters` are different objects -- the first carries modulus, ring degree and
+    #: matrix width, the second carries the actual matrices -- and three separate modules
+    #: broke by assuming one was the other. Exposing it here means a module that has a
+    #: `Parameters` never has to guess which type it is holding.
+    smile: SmileParameters = SMILE
 
     def __post_init__(self) -> None:
         if self.depth != self.keys.depth:
@@ -95,7 +101,9 @@ def setup(
     matrix = tuple(row() for _ in range(sm.matrix_rows))
     tag_matrix = tuple(row() for _ in range(tag_rows))
     keys = S.setup(rng, depth, sm, row_count=sm.matrix_rows + tag_rows)
-    return Parameters(keys=keys, matrix=matrix, depth=depth, tag_matrix=tag_matrix)
+    return Parameters(
+        keys=keys, matrix=matrix, depth=depth, tag_matrix=tag_matrix, smile=sm
+    )
 
 
 def keygen(
