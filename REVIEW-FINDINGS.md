@@ -311,3 +311,27 @@ named.
 **What is unaffected:** the tag. `T = <A', s>` is linear in `s` and never touches
 `v`. But anything that consumes the extracted `v_i` — a range proof, conservation,
 composition — hits this, which means it arrives at B2 rather than B5.
+
+## Candidate moduli for the irreducible-quartic set
+
+`experiments/irreducible_modulus_search.py` checks the criterion rather than
+asserting it: `X^128 + 1` is the 256th cyclotomic polynomial, its irreducible
+factors over `F_q` all have degree `ord_256(q)`, so they are quartics exactly when
+`q = 1 mod 64` and `q != 1 mod 128`.
+
+| `q` | `q - 2^32` | `ord_256(q)` | quartics |
+|---|---|---|---|
+| 4,294,966,337 | -959 | 4 | irreducible |
+| 4,294,965,313 | -1,983 | 4 | irreducible |
+| 4,294,964,929 | -2,367 | 4 | irreducible |
+| 4,294,960,321 | -6,975 | 4 | irreducible |
+| 4,294,958,401 | -8,895 | 4 | irreducible |
+| **4,294,962,689** (prototype) | -4,607 | **1** | **splits into linear factors** |
+
+The prototype's `ord_256 = 1` is the mechanical reason for the ~24-bit cap: every
+quartic splits completely, so `R_q ~ Z_q^128` and a challenge difference can vanish
+in any of the 128 scalar slots.
+
+Choosing one of these is not a drop-in: the M-LWE and M-SIS estimates have to be
+re-derived for the chosen `q`, the quartic-CRT multiplier has to replace the NTT,
+and `subring.glue` has to be driven by a 64th root rather than the 256th.
