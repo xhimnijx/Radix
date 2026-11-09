@@ -24,10 +24,19 @@ from radix_core.candidate_b.lattice.spend import Output
 from . import tagged as T
 
 GENESIS_PREVIOUS = b"\x00" * 32
+#: The first 8 bytes of a block hash, read as an integer, must be below the target.
+#: Difficulty is the reciprocal of that probability, so `work = 2^64 // target`.
+GENESIS_TARGET = 1 << 50
+MIN_TARGET = 1 << 32  #: hardest the chain will ever ask for
+MAX_TARGET = (1 << 64) - 1  #: easiest, and the width of the field
+#: Target spacing, and the LWMA window, from docs/CONSENSUS.md section 3.
+TARGET_INTERVAL = 120
+LWMA_WINDOW = 90
+MEDIAN_WINDOW = 11
+FUTURE_DRIFT = 7200
 #: Fixed, so two nodes can agree on the genesis block. `int(time.time())` made every
 #: node's genesis unique, which made a shared chain impossible.
 GENESIS_TIME = 1_700_000_000
-POW_BITS = 10
 DECOYS = 1024
 HASH_BYTES = 32
 
@@ -50,6 +59,8 @@ class Block:
     transactions: tuple[dict, ...]
     nonce: int
     timestamp: int
+    #: The difficulty this block was mined against, in the first 8 bytes of its hash.
+    target: int = GENESIS_TARGET
 
     def header(self) -> bytes:
         return b"".join(
@@ -59,6 +70,7 @@ class Block:
                 self.anchor,
                 self.nonce.to_bytes(8, "little"),
                 self.timestamp.to_bytes(8, "little"),
+                self.target.to_bytes(8, "little"),
                 str(len(self.transactions)).encode(),
             ]
         )
@@ -74,6 +86,7 @@ class Block:
             "transactions": list(self.transactions),
             "nonce": self.nonce,
             "timestamp": self.timestamp,
+            "target": self.target,
         }
 
     @classmethod
@@ -86,13 +99,22 @@ class Block:
                 transactions=tuple(payload["transactions"]),
                 nonce=int(payload["nonce"]),
                 timestamp=int(payload["timestamp"]),
+                target=int(payload.get("target", GENESIS_TARGET)),
             )
         except (KeyError, TypeError, ValueError) as error:
             raise ChainError(f"malformed block: {error}") from None
 
+    def work(self) -> int:
+        """Expected number of hashes this block is worth. Difficulty, in one number."""
+        return ((1 << 64) + self.target - 1) // self.target if self.target else 0
+
     def meets_power(self) -> bool:
-        leading = int.from_bytes(self.block_hash()[:2], "big")
-        return leading >> (16 - POW_BITS) == 0
+        """The first 8 bytes of the hash must be below the target.
+
+        Comparing a fixed prefix keeps the check exact and cheap; the whole 256-bit
+        hash would only make low targets marginally more precise.
+        """
+        return int.from_bytes(self.block_hash()[:8], "big") < self.target
 
 
 def output_id(note: Output, p: SmileParameters = SMILE) -> bytes:
@@ -174,6 +196,7 @@ class Chain:
             transactions=(),
             nonce=0,
             timestamp=GENESIS_TIME,
+            target=GENESIS_TARGET,
         )
         self.blocks.append(block)
         self.allocations[block.block_hash()] = sum(value for _key, value in allocations)
@@ -234,18 +257,73 @@ class Chain:
             raise ChainError("the ring signature does not verify")
 
     # ---------------------------------------------------------------- mining
-    def mine(self, timestamp: int | None = None) -> Block:
-        """Take the mempool, find a nonce, append the block."""
-        if not self.mempool:
+    def median_time_past(self) -> int:
+        """Median of the last 11 timestamps; the floor for a new block's time."""
+        recent = [block.timestamp for block in self.blocks[-MEDIAN_WINDOW:]]
+        ordered = sorted(recent)
+        return ordered[len(ordered) // 2]
+
+    def next_target(self) -> int:
+        """LWMA over the last 90 solve times, clamped to a factor of two.
+
+        `docs/CONSENSUS.md` section 3. Linear weighting means the newest solve time
+        counts 90 times the oldest, which is what lets the chain absorb a hashrate
+        change within the window instead of after it.
+        """
+        if len(self.blocks) < 2:
+            return GENESIS_TARGET
+
+        window = min(LWMA_WINDOW, len(self.blocks) - 1)
+        weighted = 0
+        weights = 0
+        for position in range(1, window + 1):
+            previous = self.blocks[-(window + 1) + position]
+            current = self.blocks[-(window + 1) + position + 1]
+            # A zero or negative solve time is a timestamp lie, not a fast block.
+            solve = max(1, current.timestamp - previous.timestamp)
+            weighted += position * solve
+            weights += position
+        average = weighted / weights
+
+        base = self.tip.target
+        # Blocks arriving faster than TARGET_INTERVAL mean the work per block must go
+        # UP, which means the target goes DOWN. The ratio is average / interval, not
+        # the other way round -- getting this backwards makes a rush of blocks make
+        # the chain easier, which is the opposite of a difficulty adjustment.
+        scaled = int(base * (average / TARGET_INTERVAL)) if average else base // 2
+        # A single block may move the target by at most 2x, so one bad timestamp
+        # cannot collapse the difficulty.
+        clamped = max(base // 2, min(base * 2, scaled))
+        return max(MIN_TARGET, min(MAX_TARGET, clamped))
+
+    def mine(self, timestamp: int | None = None, allow_empty: bool = False) -> Block:
+        """Take the mempool, find a nonce, append the block.
+
+        Empty blocks are refused by default because the wallet's mine button should
+        not manufacture them, but a real chain must permit them -- a miner with
+        nothing to include still has to produce a block, or the chain stalls.
+        `allow_empty` is that path, used by the consensus tests.
+        """
+        if not self.mempool and not allow_empty:
             raise ChainError("nothing to mine")
+        target = self.next_target()
+        when = int(time.time()) if timestamp is None else timestamp
+        floor = self.median_time_past()
+        if when <= floor:
+            when = floor + 1
         block = Block(
             height=self.height + 1,
             previous=self.anchor,
             anchor=self.anchor,
             transactions=tuple(self.mempool.values()),
             nonce=0,
-            timestamp=int(time.time()) if timestamp is None else timestamp,
+            timestamp=when,
+            target=target,
         )
+        # Mine against the target, not a fixed number of bits. The nonce bound is a
+        # sanity limit rather than a difficulty: at a realistic target the loop exits
+        # in thousands of attempts, and a target this chain would never set is the
+        # only way to reach it.
         while not block.meets_power():
             block = Block(
                 height=block.height,
@@ -254,8 +332,9 @@ class Chain:
                 transactions=block.transactions,
                 nonce=block.nonce + 1,
                 timestamp=block.timestamp,
+                target=block.target,
             )
-            if block.nonce > 1 << 24:
+            if block.nonce > 1 << 32:
                 raise ChainError("no nonce found")
         self._apply(block)
         self.mempool.clear()
@@ -278,8 +357,20 @@ class Chain:
                 "block does not build on our tip; this is a fork, and fork "
                 "reconciliation is not implemented"
             )
+        expected = self.next_target()
+        if block.target != expected:
+            raise ChainError(
+                f"block claims target {block.target} but the chain requires {expected}"
+            )
         if not block.meets_power():
             raise ChainError("block does not meet the proof-of-work target")
+        floor = self.median_time_past()
+        if block.timestamp <= floor:
+            raise ChainError(
+                f"block timestamp {block.timestamp} is not after the median {floor}"
+            )
+        if block.timestamp > int(time.time()) + FUTURE_DRIFT:
+            raise ChainError("block timestamp is too far in the future")
         self._apply(block)
 
     def allocations_wire(self) -> list:

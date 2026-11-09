@@ -21,15 +21,29 @@ from radix_testnet import params as P
 
 
 def _mine_empty(node, timestamp=None):
-    """A block with no transactions, mined the same way the chain mines one."""
+    """A block with no transactions, mined the same way the chain mines one.
+
+    The target and the timestamp both matter now: a block must carry the target the
+    chain requires, and its time must be after the median and not in the future.
+    """
+    import time as clock
+
     chain = node.chain
+    # Each block must be later than the median of the last eleven, and blocks mined
+    # inside one second would otherwise share a timestamp and be rejected.
+    when = (
+        max(int(clock.time()), chain.tip.timestamp + 1)
+        if timestamp is None
+        else timestamp
+    )
     block = Block(
         height=chain.height + 1,
         previous=chain.anchor,
         anchor=chain.anchor,
         transactions=(),
         nonce=0,
-        timestamp=chain.tip.timestamp + 1 if timestamp is None else timestamp,
+        timestamp=when,
+        target=chain.next_target(),
     )
     while not block.meets_power():
         block = dataclasses.replace(block, nonce=block.nonce + 1)
@@ -191,13 +205,13 @@ def test_a_fork_is_reconciled_by_work(two_nodes):
     # Both mine from the same genesis. The timestamps must differ or the two nodes
     # search the same nonce sequence and produce *identical* blocks, which is not a
     # fork at all -- a mistake this test made in its first version.
-    _mine_empty(first, timestamp=2_000_000_001)
-    _mine_empty(first, timestamp=2_000_000_002)
-    _mine_empty(second, timestamp=2_100_000_001)
+    _mine_empty(first, timestamp=int(__import__('time').time()) + 1)
+    _mine_empty(first, timestamp=int(__import__('time').time()) + 2)
+    _mine_empty(second, timestamp=int(__import__('time').time()) + 4)
     assert first.chain.tip.block_hash() != second.chain.tip.block_hash()
 
     # One more block settles it: the first node now has more work.
-    _mine_empty(first, timestamp=2_000_000_003)
+    _mine_empty(first, timestamp=int(__import__('time').time()) + 3)
     assert first.chain.cumulative_work() > second.chain.cumulative_work()
 
     outcome = second.sync_from(f"127.0.0.1:{_first_port}")
@@ -211,8 +225,8 @@ def test_a_fork_is_reconciled_by_work(two_nodes):
 def test_equal_work_is_broken_deterministically(two_nodes):
     """A tie must resolve the same way on both sides, or they never converge."""
     first, second, first_port, second_port = two_nodes
-    _mine_empty(first, timestamp=2_000_000_001)
-    _mine_empty(second, timestamp=2_100_000_001)
+    _mine_empty(first, timestamp=int(__import__('time').time()) + 1)
+    _mine_empty(second, timestamp=int(__import__('time').time()) + 4)
     assert first.chain.cumulative_work() == second.chain.cumulative_work()
     assert first.chain.tip.block_hash() != second.chain.tip.block_hash()
 

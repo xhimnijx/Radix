@@ -1,0 +1,18 @@
+feat: real proof of work with LWMA difficulty adjustment
+
+The chain required ten leading zero bits of the block hash -- about a thousand attempts -- and never adjusted. That is a toy, and it was the largest thing standing between this and a chain that behaves like one.
+
+A block now carries its target in the header: the first eight bytes of the hash must be below it. Work is 2^64/target, so difficulty is one number and the chain can talk about cumulative work rather than height. Mining searches against the required target instead of a fixed bit count.
+
+Difficulty follows docs/CONSENSUS.md section 3: LWMA over 90 solve times with linear weighting, clamped to a factor of two per block, and bounded so it can never ask for more than 2^32 or less than 2^64-1. Timestamps must be after the median of the last eleven blocks and no more than two hours in the future.
+
+Measured: at a ten-second interval the target tightened from 2^50 to 2^46 in five blocks, hitting the per-block clamp each time as expected. A simulation at a fixed hashrate converges to the 120-second target interval, which is the test that matters -- the algorithm only ever sees timestamps, so feeding it the timestamps a hashrate would produce tests it exactly without hashing anything.
+
+TWO BUGS OF MINE, both found by output rather than by reading:
+
+1. The adjustment ratio was inverted. Fast blocks multiplied the target instead of dividing, making a rush of blocks make the chain EASIER. The printout said "target 2^53 ... -> harder", contradicting itself in one line, which is how it surfaced.
+2. The first test helper mined every synthetic block. With 80 blocks heading towards a 2^32 target that is billions of hashes and the suite never finished. The difficulty algorithm only reads timestamps and targets, so the tests append directly; only the tests about validation mine for real.
+
+Two more test bugs in the same round: a helper that bypassed append() and therefore could not test rejection, and a "fast at end" flag that put the fast blocks at the start. Both failed for the right reason once the name matched the behaviour.
+
+The wire format changed -- the target is in the header, so every block hash is different and an older chain file will not validate. Stated in docs as well.
