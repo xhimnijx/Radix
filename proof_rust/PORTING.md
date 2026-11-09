@@ -25,8 +25,8 @@ afternoon and a week.
 | 6 | Recursion | `recursion.py` | **pairing digest matches**; shapes, linearity and constant-vector rejection | **done** |
 | 7 | Prove/verify | `setmembership.py` | cross-language verification | **both done**; Rust proofs verify in Rust and in Python |
 | 8 | Cross-checks | -- | Rust proof verified by Python, Python proof by Rust | **both directions PASS** |
-| 9 | Timing | -- | end-to-end prove and verify, replacing the projection | next |
-| 10 | Seam | `radix_testnet/prover.py` | `--backend rust` produces proofs the Python verifier accepts | pending |
+| 9 | Timing | -- | **measured**: prove 496 ms, verify 110 ms, 9.75 attempts | **done** |
+| 10 | Seam | `radix_testnet/prover.py` | **`--backend rust` produces tagged proofs Python verifies** | **done** |
 
 ## Deliberate differences from Python
 
@@ -114,6 +114,23 @@ check that exists for this purpose.
 `experiments/produce_python_proof.py` and `proof_rust/src/bin/emit_proof.rs` write
 fixtures; `experiments/verify_rust_proof.py` checks the Rust one against the Python
 reference.
+
+## The seam
+
+`src/bin/prove_request.rs` reads a request file and writes a proof; 
+`radix_testnet/rust_backend.py` builds the request and decodes the answer. A
+subprocess rather than FFI because no crates are available offline for `pyo3`, and
+the boundary is one call per proof: ~40 ms of process start against ~500 ms of
+proving.
+
+The testnet spends **tagged** proofs, which is why the request carries the matrix and
+ring already extended (`A_ext`, and `(pk_j, T)` for every member). The prover proves
+the statement it is handed and does not need to know about tags; the tag is computed
+in Python from the same `A'` the parameters carry.
+
+Measured through the seam: Rust proves a tagged spend in 0.93 s including process
+start and serialisation, and the **Python** `verify_tagged` accepts it (38 s, which
+is the Python verifier's own cost).
 
 ## Rules
 

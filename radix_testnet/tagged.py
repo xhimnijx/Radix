@@ -71,6 +71,23 @@ class TaggedSpend:
         return self.total_in == self.total_out
 
 
+def _sign(parameters, secret, public, ring_keys, message, rng):
+    """Sign one input, through whichever backend is selected.
+
+    The Rust path cannot be a drop-in replacement for `RS.sign_tagged` at the call
+    site because it returns the same pair from a subprocess; keeping the choice here
+    means `build_tagged_spend` reads the same either way.
+    """
+    from . import prover
+
+    if prover.BACKEND is prover.ProverBackend.RUST:
+        from . import rust_backend
+
+        return rust_backend.prove_tagged(parameters, secret, public, ring_keys, message)
+
+    return RS.sign_tagged(parameters, secret, public, ring_keys, message, rng)
+
+
 def build_tagged_spend(
     parameters: RS.Parameters,
     secrets: tuple[tuple[Poly, ...], ...],
@@ -94,7 +111,7 @@ def build_tagged_spend(
         raise SpendError("anchor must be 32 bytes")
     message = SP._message(anchor, input_values, outputs, fee, params)
     signed = tuple(
-        RS.sign_tagged(parameters, secret, public, tuple(ring_keys), message, rng, params)
+        _sign(parameters, secret, public, tuple(ring_keys), message, rng)
         for secret, public, ring_keys in zip(secrets, publics, rings)
     )
     return TaggedSpend(

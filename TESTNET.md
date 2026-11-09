@@ -74,11 +74,25 @@ would **not fit in a QR code** (byte mode tops out at 2,953), which is why the
 encoding is base64url and the QR uses error-correction level L. The UI shows a
 truncated address with Copy and Show full rather than a wall of text.
 
-**What a send costs.** A real tagged ring signature over 1024 members takes 1–2
-minutes in CPython, and the UI shows elapsed time while it runs. The Rust arithmetic
-is measured at 20 µs per multiplication (≈0.47 s to prove, 37 ms to verify) but the
-proof is not ported, so the harness runs the reference implementation rather than
-pretending to be fast. `--backend rust` refuses instead of silently falling back.
+**What a send costs.** Two backends, both real:
+
+| backend | prove | verify |
+|---|---|---|
+| python (reference) | ~1–2 min | ~20–38 s |
+| **rust** | **0.5–0.9 s** | ~110 ms |
+
+The Rust backend is the same protocol, ported and cross-checked: a Rust proof is
+accepted by the Python verifier and vice versa. Build it with
+
+```powershell
+cd proof_rust
+cargo build --release --bin prove_request
+```
+
+and select it with `python -m radix_testnet.cli --backend rust ...`, or by setting
+`RADIX_PROVE_BIN` to the binary. If the binary is missing, `--backend rust` **refuses**
+rather than silently falling back to Python — a demo that claims the fast path and
+quietly uses the slow one is worse than no demo.
 
 ## Version and packaging details
 

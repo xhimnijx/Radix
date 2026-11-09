@@ -48,11 +48,13 @@ def set_backend(name: str) -> ProverBackend:
     except ValueError:
         raise ProverUnavailable(f"unknown backend {name!r}") from None
     if backend is ProverBackend.RUST:
-        raise ProverUnavailable(
-            "the rust backend is arithmetic-only: proof_rust has ring multiplication "
-            "(20.1 us, measured) but no keygen, transcript, commitments or recursion. "
-            "See PERFORMANCE.md. Use --backend python."
-        )
+        from . import rust_backend
+
+        if not rust_backend.available():
+            raise ProverUnavailable(
+                "the rust prover is not built. Run: cargo build --release --bin "
+                "prove_request (in proof_rust), or set RADIX_PROVE_BIN."
+            )
     BACKEND = backend
     return backend
 
