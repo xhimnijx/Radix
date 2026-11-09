@@ -67,7 +67,7 @@ def test_a_non_binary_bit_is_refused():
 def test_the_statement_carries_the_alpha_budget():
     statement = R.build([1, 2, 3])
     assert statement["alpha_count"] == D.constraint_count(3)
-    assert R.alpha_budget(3) == 7
+    assert R.alpha_budget(3) == 6
 
 
 def test_the_carry_bounds_the_number_of_inputs():

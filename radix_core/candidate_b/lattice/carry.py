@@ -62,9 +62,19 @@ def addition_carry(left: tuple[int, ...], right: tuple[int, ...],
                    total: tuple[int, ...], digits_count: int = D.DIGITS) -> tuple[int, ...]:
     """The carry `f` with `left + right + f(X - BASE) = total`, as digit polynomials.
 
-    Computed by long addition in base 4, which is what the relation encodes. Raises if
-    the three do not actually add up, so a caller cannot use this to manufacture a
-    relation that does not exist.
+    The carry has **`digits_count + 1` coefficients**, not `digits_count`. C1's eighth-pass
+    correction: summing `m` amounts can carry out of the 32nd digit, and the relation at
+    coefficient 32 is
+
+        left_32 + right_32 + f_31 - BASE * f_32 = total_32
+
+    with `total_32 = 0` because the amount polynomials have only 32 digits. That
+    determines `f_32`, so the carry is 33 coefficients even though the amount is 32.
+    The first version of this function looped only over the digits and dropped the final
+    carry, which silently mis-handled any sum that reached the top position.
+
+    Computed by long addition in base 4, so a caller cannot manufacture a relation that
+    does not exist.
     """
     a = evaluate(left)
     b = evaluate(right)
@@ -73,11 +83,14 @@ def addition_carry(left: tuple[int, ...], right: tuple[int, ...],
         raise CarryError(f"{a} + {b} != {c}")
 
     carry = []
-    running = 0
+    carry_in = 0
     for index in range(digits_count):
-        column = left[index] + right[index] + (1 if carry and carry[-1] else 0)
-        running = (left[index] + right[index] + (carry[-1] if carry else 0)) // BASE
-        carry.append(running)
+        column = left[index] + right[index] + carry_in
+        carry_in = column // BASE
+        carry.append(carry_in)
+    # The carry out of the top digit. For a balanced transaction this is the coefficient
+    # that must vanish, and dropping it is what made the earlier version wrong.
+    carry.append(carry_in)
     return tuple(carry)
 
 

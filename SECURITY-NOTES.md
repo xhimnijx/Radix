@@ -175,7 +175,7 @@ distribution, so drift is impossible rather than merely tested.
 - Widths are `W = 25 + rows` for the masks and 13 for `z'`; the sampler **fails loudly**
   on any other width rather than substituting a nearby distribution.
 - Entries are 32-bit cumulative values, so the sampling itself is integer-only.
-- Truncation at 8 sigma leaves a tail of **2^-49.5**, far below the ~2^-16.8
+- Truncation at 12 sigma leaves a tail of **2^-107.8** per coefficient, **2^-101.8** aggregated, far below the ~2^-16.8
   statistical distance that motivated the change.
 
 **The mask parameters did not move.** `experiments/mask_calibration.py` reproduces
@@ -195,3 +195,41 @@ The B0 figure above is quoted at the current parameters, where `k' = 1`. It was 
 tag row count moves B0's lattice dimension — 4224 at `k' = 4`, 3840 at `k' = 1` — and with
 it the estimate. Reducing `k'` saved 2 KB per proof and cost 8 bits on B0. Both ends of
 that trade are now written down rather than one of them.
+
+
+## Which computation the truncation figure uses (C2, eighth pass)
+
+C2 questioned the tail figure, suggesting `2*Phi(-12)` is about `2^-101.9` per coefficient
+and about `2^-95.9` aggregated, which would sit four bits above the paper's `2^-100`.
+
+Computed exactly: `erfc(12/sqrt(2)) = 2*Phi(-12) = 3.5530e-33 = 2^-107.8` per coefficient,
+and `sqrt(4224) * 2^-107.8 = 2^-101.8` aggregated. The convention is the one the table
+generator uses, `math.erfc(cut / (sigma * sqrt(2)))`, which is the same formula. C2's
+`2^-101.9` would require `Phi(-12) = 2^-102.9`, which is a factor of thirty smaller than
+the true value.
+
+Either way the difference is immaterial against a 128-bit claim, but the note asked for
+the computation to be named and this is it: `2*Phi(-12)`, per coefficient, summed by the
+square-root bound over 4224 coefficients.
+
+## The k' design rule (C2, eighth pass)
+
+`beta = 7424 * W` exactly, because `s = 464*sqrt(W)` and `beta = s*sqrt(2Wd)`. So the
+target grows linearly in `W`, while B0's dimension `W*d` grows faster -- about **+2.6 bits
+of B0 per unit of W**. The A relation is untouched by `W` because it depends on `ell`, not
+`W`. Both reviewers confirmed `k' = 1`.
+
+Forward consequence for the range layer: about five committed messages per amount (two bit
+polynomials, two digit polynomials, one carry), so 2-in-2-out takes `W` from 30 to roughly
+50. B0 rises to about 2^236, A stays at 2^158, and each message costs about 1024 bytes.
+Budget the range layer at **21,760 -> about 42 KB**, with the security line still set by A.
+
+## The noise-aware statement needs ell = 17 (C1 and C2, eighth pass)
+
+`A_noise = [A | I_k]` has `ell + k = 17` columns where `SMILE.matrix_cols` is 13. The
+statement, keys, prover and verifier must all run with `ell = 17` for this statement, which
+means a custom parameter set rather than a flag. C2 adds that this changes the problem type
+rather than the lattice: `[A | I_k](p, e1) = P` is an inhomogeneous close-vector / ISIS
+instance, not an SIS one, so it must be priced with an ISIS/BDD estimator -- estimate about
+2^158, the same as A, and note that the estimate is only as good as the bound the verifier
+enforces on `(p, e1)`.

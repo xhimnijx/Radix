@@ -1,27 +1,31 @@
-docs: eighth-pass review request - the alpha layout, the k' re-pricing, and the extraction argument
+fix: the carry was dropping its top coefficient, and the alpha budget is two
 
-Three asks, one of them blocking the next build step.
+C1's eighth-pass catch, and it was a real bug. The relation at coefficient 32 is
+left_32 + right_32 + f_31 - 4*f_32 = total_32 with total_32 = 0, which determines f_32 --
+so the carry vector is 33 coefficients while the amount stays 32 digits. The first version
+looped only over the digits and dropped the final carry, silently mis-handling any sum that
+reached the top position.
 
-Q-Q asks for the alpha-slot layout of the range statement. The statement is fixed and
-tested as a Python specification -- five checks, from slotwise binaryness through the
-base-4 carry -- and C2's budget of three alpha per amount is the right order. What is
-missing is where each constraint sits, and four specific sub-questions: whether the bit
-polynomials take new slots or fold into c-squared, whether the carry's alpha enters before
-or after the relaxed challenge R is derived, whether constraint 4 needs its own alpha at
-all given it is a linear relation, and whether a 33rd digit is needed for the carry out of
-the top position.
+The overflow case is now refused rather than carried, and that distinction matters: two
+amounts near 2^64 sum past 2^64, no 32-digit total represents that, and the relation has
+no exact solution. The carry absorbs intermediate carries, not a mint. My first test
+expected a carry to be reported; the correct expectation was a refusal.
 
-Q-R puts the k' trade back to C2 with both ends now visible. Reducing k' from 4 to 1 moved
-W from 33 to 30, B0's dimension from 4224 to 3840, and its estimate from 2^175 to 2^167.
-That coupling was not in his analysis and I did not see it when the change was made. The
-trade is eight bits of B0 against 2 KB and three fewer module equations per tagged proof.
+ALPHA BUDGET: both reviewers say two per amount, not three. The two packed bit-polynomials
+need INDEPENDENT alphas -- C2's reason is decisive: folding one into an existing alpha gives
+alpha(v^2 - v + b^2 - b) = 0, which a prover satisfies with v^2 - v = -(b^2 - b) != 0 and
+so breaks the ring selector. The digit and carry relations are linear and need no alpha at
+all; the carry's smallness is a norm check on the relaxed proof's z. The spare the old
+formula kept for a two-term binary carry is not needed in this design.
 
-Q-S asks C1 for the extraction argument for the noise-aware statement, with three specific
-questions: whether both p and e1 come out short, what I_k does to the M-SIS instance, and
-whether the tag's zero padding creates an exploitable kernel.
+TRUNCATION FIGURE SETTLED. C2 suggested 2*Phi(-12) is about 2^-101.9 per coefficient and
+2^-95.9 aggregated, four bits above the paper's 2^-100. Computed exactly:
+erfc(12/sqrt(2)) = 3.5530e-33 = 2^-107.8 per coefficient, and sqrt(4224)*that = 2^-101.8
+aggregated. His 2^-101.9 would need Phi(-12) = 2^-102.9, a factor of thirty smaller than
+the true value. The convention is now named in SECURITY-NOTES.md: 2*Phi(-12) per
+coefficient, summed by the square-root bound.
 
-Also tells C2 his two conditions are met. He signed Theorem B.1' conditional on the mask
-sampler and the ring binding; the sampler is now one table at 12 sigma with a 2^-101.8
-aggregate, below the 2^-100 he and C1 wanted, and the ring digest binds the parameters and
-A as he asked. The one residual he named -- the float accept/reject boundary -- is still
-open and is named as such.
+Also recorded: C2's design rule beta = 7424*W exactly, so B0 gains about +2.6 bits per unit
+of W while A is untouched; the range layer is budgeted at 21,760 -> about 42 KB because W
+goes from 30 to roughly 50; and C1's and C2's point that the noise-aware statement needs
+ell = 17 wired through the statement rather than a flag.

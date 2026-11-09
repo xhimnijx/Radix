@@ -148,5 +148,16 @@ def is_slot_binary(polynomials: tuple, parameters: SmileParameters = SMILE) -> b
 
 
 def constraint_count(amounts: int, parameters: SmileParameters = SMILE) -> int:
-    """α challenges needed for `amounts` amounts: two per amount, plus one for the carry."""
-    return amounts * 2 + 1
+    """α challenges needed for `amounts` amounts: **two per amount**.
+
+    Both reviewers agreed on this in the eighth pass. The two packed bit-polynomials per
+    amount are new quadratic constraints and need independent α challenges -- folding one
+    into an existing α gives `α(v² − v + b² − b) = 0`, which a prover satisfies with
+    `v² − v = −(b² − b) != 0` and so breaks the selector.
+
+    The digit and carry relations need **no** α: they are linear in the committed values
+    and ride on the existing masked opening. The carry's smallness is a norm check on the
+    relaxed proof's `z`, not an α-weighted quadratic. The earlier `2*amounts + 1` kept a
+    spare for a two-term binary carry, which this design does not prove.
+    """
+    return amounts * 2

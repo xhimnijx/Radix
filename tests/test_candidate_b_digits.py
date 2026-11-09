@@ -110,10 +110,15 @@ def test_a_slot_holding_two_is_rejected():
 
 # ---------------------------------------------------------------- budget
 def test_the_alpha_budget_is_per_vector():
-    """C2's correction, asserted: three α for one amount, not sixty-four."""
-    assert digits.constraint_count(1) == 3
-    assert digits.constraint_count(2) == 5
-    assert digits.constraint_count(4) == 9
+    """Both reviewers' eighth-pass correction: TWO α per amount, not sixty-four.
+
+    The two bit-polynomials need independent α challenges -- folding one into an existing
+    α gives α(v² − v + b² − b) = 0, which a prover satisfies with v² − v = −(b² − b) and
+    so breaks the selector. The digit and carry relations are linear and need none.
+    """
+    assert digits.constraint_count(1) == 2
+    assert digits.constraint_count(2) == 4
+    assert digits.constraint_count(4) == 8
 
 
 def test_the_alpha_budget_is_far_below_the_naive_count():
