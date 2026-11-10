@@ -1,32 +1,25 @@
-research: the balance relation does not compose, and that is the open question now
+docs: ninth-pass review request, built around the one blocking question
 
-I set out to assemble a full hidden-amount balance proof and found a structural gap instead of
-a bug. It is worth committing because it changes what the next step is.
+Q-T is the only ask: which encoding the amounts should use. Everything else that was open in
+the eighth pass is now implemented and measured, so the request is short and specific.
 
-The binaryness check requires messages that are CONSTANT IN EACH CRT SLOT. That is what makes
-`b*b = b` hold, and it is how `digits.pack_bits` builds them.
+The evidence is in the document as a runnable demonstration rather than an assertion:
 
-The base-4 carrying identity requires multiplication by `(X - 4)` in the COEFFICIENT domain,
-where evaluating at `X = 4` recovers the integer and `(X - 4)` therefore divides the difference.
+  slot-constant 1 in slot 0            -> (1, 0, 0, 0)
+  that polynomial multiplied by (X-4)  -> (-4, 1, 0, 0)
 
-Those are different subspaces. Verified directly: multiplying a slot-constant polynomial by
-`(X - 4)` leaves the slot-constant subspace -- a slot-constant 1 in slot 0 becomes
-`(-4, 1, 0, 0)` in that slot. So a balance relation written over the bit planes is NOT the
-identity it appears to be; it would verify and mean nothing. `balance.relations` was written,
-found wanting, and REMOVED rather than shipped.
+which is why a balance relation written over the bit planes verifies and means nothing, and
+why balance.relations was removed rather than shipped.
 
-What is kept is sound and tested: `balance.build` computes the carry as the quotient of the
-digit-polynomial difference by `(X - 4)` by synthetic division, refuses a spend whose amounts
-do not add up, refuses a negative amount, refuses an empty input list, and checks the carry
-against the input count. Four tests.
+Two options are put to the reviewers, with the sub-question that decides between them: how the
+paper's ǎ, whose coefficients are the digits, relates to a slot-based binaryness check. If the
+answer is that the paper never intends slot-constant messages, the range layer I built is
+proving binaryness in the wrong subspace and should be rebuilt -- deliberately, rather than
+half-way.
 
-The block, stated as one question: resolving the mismatch needs either coefficient-domain
-amounts whose range is proven by a quartic membership test -- which the quadratic alpha
-machinery does not express -- or slot-wise carrying, which the `(X - 4)` argument does not
-give. Each packing is sound alone. Which one the construction should use is a decision I
-cannot make safely for the scheme, so it is recorded in docs/PAPER.md section 8 and the goal is
-marked blocked on it rather than guessed at.
+Also records what is NOT blocked on the answer, so the request does not read as though the
+whole project is waiting: the relation mechanism itself is cross-verified in both languages,
+and the noise-aware statement, one-time addressing and network work are complete.
 
-This is the first time in this work that a genuine design question has stopped progress. It is
-also the reason to stop rather than push: a balance relation that verifies while meaning
-nothing is the worst failure mode available, and it would have looked like success.
+Every figure in the document was checked against the code before committing:
+constraint_count(4) == 8, bit_width(16) == 5, and the subspace demonstration above.

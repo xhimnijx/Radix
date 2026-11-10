@@ -1,122 +1,116 @@
-# Review request: eighth pass
+# Review request: ninth pass
 
-For C1 and C2. Three questions, one of them blocking the next build step.
+For C1 and C2. One question this time, and it is blocking: the range constraint is now inside
+the proof in both languages, and the **balance relation cannot be stated over it** — not
+because the mechanism is missing, but because the two need different subspaces.
 
 Full history: `REVIEW-FINDINGS.md`. This page is only what is open.
 
-## What your seventh-pass answers changed
+## What your eighth-pass answers changed
 
 | Your answer | What happened |
 |---|---|
-| `XOF(S)` must be short, and for a reason the paper omits | Recorded: with uniform `XOF(S)` the stealth key does not decrypt, not merely does not fit `μ` |
-| The obstruction is `e1`, not the norm | `noisy.py`: `[A | I_k]`, witness `(p, e1)`, tag rows `[A' | 0]`, 7 tests — including that the exact relation **rejects** a valid stealth key |
-| Two bits per digit; the α budget is per *vector* | `digits.py`: **2 polynomials for 64 bits**, `constraint_count(4) == 9`, not 256. A test fails if that regresses |
-| The relaxed proof bounds `‖f‖`, not its sign; digits are still needed | `range.py`: five checks as one verifier, tested |
-| `[25]` p. 4 gives the addition relation | `carry.py`: `a + b + f(X−4) = c` over polynomials, with a test that a perturbation vanishing at `X = 4` is still rejected |
+| Bit constraints need **new** α slots, appended after `α_m` | Implemented. A fold would give `α(v²−v+b²−b)=0`, which a prover satisfies with `v²−v = −(b²−b)` |
+| The digit and carry relations need **no** α — they are linear | Implemented as `LinearRelation`; the budget is **2 α per amount**, and `constraint_count(4) == 8` |
+| Two α per amount, not three | Confirmed; the spare for a two-term binary carry is gone |
+| `k' = 1` stands, with B₀ at 2^167 | Confirmed and recorded, including that reducing `k'` cost B₀ 8 bits |
+| `[A \| I_k]` does not change the lattice, it changes the problem type | Recorded: it is an ISIS/BDD instance, not SIS, and must be priced accordingly |
+| The statement needs `ell = 17` wired, not flagged | Implemented; a 17-column statement proves and verifies |
 
 ## Measured
 
-- 558 Python tests, plus 74 Rust; cross-language acceptance at 21,760 bytes.
-- Tagged proof 22,528 B, tag 512 B, total **23,040 B** at `k' = 1`.
-- A chain adopted from a peer is now **verified**, not trusted: `rebuild` defaults to
-  `verify_transactions=True`.
+- Range constraint **inside the proof** in Python and Rust: two α per amount, bit polynomials
+  committed and never transmitted, a slot holding 2 **refused by the proof**.
+- **22,784 bytes** with two range messages against a 21,760-byte baseline — that is **512
+  bytes per bit polynomial**. `W` does not move, because a range row is an ordinary BDLOP row
+  reusing the same randomness.
+- **23,808 bytes** for a carry proof with three bit planes and a carry message.
+- Cross-language: `experiments/cross_language_range.py` and `cross_language_carry.py` both
+  report AGREE. Rust **refuses a proof whose carry does not match its bits**.
+- Last full fast-suite run: **603 passed, 1 known xfail**; Rust **70 passed**. Thirteen tests
+  were added since and pass individually but have not been re-run as a whole.
 
 ---
 
-## Q-Q (blocking). The α-slot layout for the range statement
+## Q-T (blocking). Which encoding should the amounts use?
 
-The statement is fixed and tested as a Python specification:
+The carrying identity you gave at `[25]` p. 4 is implemented and tested for two terms:
+`a + b + f(X−4) = c` over polynomials, with a test that a perturbation vanishing at `X = 4` is
+still rejected. The synthetic division that recovers `f` from the difference works, and
+`balance.build` refuses a spend whose amounts do not add up.
 
-1. every bit is a bit — `b(b−1) = 0` slotwise;
-2. every digit is `2b₁ + b₀` — ties committed bits to committed digits;
-3. every digit ∈ {0,1,2,3};
-4. the digit polynomials add up with an explicit carry;
-5. the carry is small — binary for two terms, bounded by the relaxed argument for many.
+**It cannot be lifted to a proof over the bit planes, and the reason is structural.**
 
-C2's budget says **3 α per amount**: two for the 64 bits (one per packed polynomial) and
-one for the carry. What is missing is the *layout*, and I would rather ask than guess:
+The binaryness check requires messages that are **constant in each CRT slot**. That is exactly
+what makes `b·b = b` hold, and it is how `digits.pack_bits` builds them: one bit per slot,
+lifted through `subring.from_constants`.
 
-1. **Where do the two bit-polynomials' constraints sit?** New α slots, or folds into the
-   existing `c²` slot? C2 said they must be new because the `m+1` existing α's are paired
-   one-to-one with the ring selector's `v_i` and the pairing is the mechanism. Confirm
-   that, and say which slots the new ones take.
-2. **How does the carry's α pair with the relaxed challenge `R`?** C1 said the two are
-   booked separately — `q^-4` for the `R_q` challenges, `2^-n` for `R`. Does the carry α
-   enter the transcript before or after `R` is derived, and does `z = R f + y` use the same
-   masked opening as the rest of the statement or its own?
-3. **Does constraint 4 need its own α at all**, given that `carry.holds` is a linear
-   relation over the digit polynomials and linear relations are what the framework already
-   proves? If it rides on an existing linear proof, the budget is 2 per amount plus one
-   for the relaxed bound, and the per-amount cost drops again.
-4. **Is the digit count 32 or 33?** 32 digits cover `4^32 = 2^64` exactly, so the largest
-   amount is `2^64 − 1` and carries can leave a 33rd digit. Does the statement need that
-   extra digit to be constrained to zero, or does the carry absorb it?
+The carrying identity requires multiplication by `(X−4)` in the **coefficient** domain, where
+evaluating at `X = 4` recovers the integer and `(X−4)` therefore divides the difference.
 
-## Q-R (to C2). Re-price `k'` now that both ends are visible
+These are different subspaces. Verified directly:
 
-With `k' = 1`, `W = κ + λ + rows + 2m + 1 = 30` rather than 33, so B₀'s dimension is
-**3840 rather than 4224** and its Core-SVP estimate is **2^167 rather than 2^175**.
+```
+slot-constant 1 in slot 0                          -> slot value (1, 0, 0, 0)
+that polynomial multiplied by (X−4)                -> slot value (−4, 1, 0, 0)
+```
 
-That coupling was not in your k′ analysis and I did not see it when the change was made.
-The trade is now stated at both ends:
+Multiplying a slot-constant by `(X−4)` **leaves the slot-constant subspace**. So a balance
+relation written over the bit planes is not the identity it appears to be — it verifies, and
+means nothing. I wrote `balance.relations`, found this, and **removed it rather than ship it**.
 
-| | `k' = 4` | `k' = 1` |
-|---|---|---|
-| B₀ (ADPS16) | 2^175 | **2^167** |
-| Tagged proof + tag | 26,880 B | **23,040 B** |
-| Module equations in `s` | 8 | 5 |
+### The question
 
-The decision still favours 1 — 2^167 clears 128 by 39 bits, and the binding relation is
-still A at 2^158 — but confirm, or tell me to put it back to 4.
+Which encoding does the construction intend for `ǎ`?
 
-## Q-S (to C1). The extraction argument for `[A | I_k]`
+**(a) Coefficient-domain amounts**, with the paper's `d ∈ {0,1,2,3}` tested per *coefficient*.
+That is a **quartic** membership constraint. The α machinery here expresses only quadratics, so
+this needs a different check — what does the paper use, and at what cost?
 
-You wrote that the noise-aware statement "costs `k` extra secret components, the
-corresponding `z'`/commitment elements, and **a new extraction/soundness argument**; the
-`e1` is short, so the norm side is manageable."
+**(b) Slot-wise carrying**, which avoids `(X−4)` entirely. I could not construct an argument
+that concludes the integer identity from a slot-wise sum, and I do not want to invent one.
 
-The linear algebra is built and tested: `A_noise = [A | I_k]`, witness `(p, e1)`, tag rows
-`[A' | 0]`, and the exact relation `A·p = pk` demonstrably rejects a valid stealth key.
+And the sub-question that decides it: **how does the paper's `ǎ`, whose coefficients are the
+digits, relate to a slot-based binaryness check?** If the paper never intends slot-constant
+messages, then the range constraint I built is proving binaryness in the wrong subspace and the
+whole range layer should be rebuilt over coefficient-domain digits — which I would rather do
+deliberately than discover half-way.
 
-**I cannot write that argument.** It is a theorem, not code. Specifically I do not know:
+### What is already in place either way
 
-1. Does the extraction produce `(p, e1)` both short, or only their combination, and does
-   the `v_i ∈ {0,1}` conclusion still follow when the witness is split this way?
-2. Does `I_k` change the M-SIS instance the signature rests on — `[A | I_k]` is 4×17 where
-   `A` was 4×13 — and if so is the new instance stronger or weaker than A at 2^158?
-3. Does the tag's `[A' | 0]` padding create a kernel that a forger can exploit, given the
-   tag row now has four zero columns?
+The mechanism is not the gap. `LinearRelation` — a linear relation among committed messages,
+proven inside the proof — is built, tested, and **cross-verified in both languages**. Your note
+said the balance relation "rides on the existing masked opening"; it does, and this is that
+primitive. If the answer is (a), it needs a different range check but the same relation
+machinery. If the answer is (b), it needs an argument I do not have.
 
-## Your conditions are met
+---
 
-C2 signed Theorem B.1′ conditionally: *"two things sit outside the theorem and are not yet
-closed: the mask sampler … and the ring binding."*
+## Built and working, not blocked on the above
 
-Both are closed, and both changed after that answer:
-
-1. **Sampler.** One cumulative table, read at runtime by Python and `include_bytes!` by
-   Rust, so the two cannot sample differently. Truncated at **12σ**, giving a per-coefficient
-   tail of `2^-107.8` and an aggregate of about `2^-101.8` over a response — below the
-   paper's `2^-100`, which was C1's objection to 8σ.
-2. **Ring binding.** `ring_digest` absorbs the modulus, degree, depth, the proved matrix
-   `A` and the ordered keys, in both languages, before `w`. A proof made against one ring
-   is rejected against another; there is a test for the cross-ring case.
-
-C2 also asked for the ZK distance to be restated if the tail could not reach `2^-100`. At
-12σ it does not need restating. The one residual he named — the float accept/reject
-boundary in `_reject` — is still open and is a fair item for the launch statement to carry.
+| | |
+|---|---|
+| Digits in the proof, two α per amount, both languages | non-binary bit **refused by the proof** |
+| Two-input balance (binary carry) | proven and verified |
+| `m`-input carry boundedness | by bit decomposition: 5 rows for 16 inputs |
+| `LinearRelation` | cross-verified in Python and Rust |
+| Noise-aware statement | wired at `ell = 17` |
+| One-time addressing | derivation works: short `XOF(S)`, `T_K = A'·k`, 7 tests |
+| Network | authenticated transport, two-hop discovery, slow start, checkpointed sync |
 
 ## Not asking for
 
-- **The estimator run.** The named models (ADPS16 / MATZOV) and the band are enough to
-  proceed; a run would tighten it, not change a decision.
-- **QROM.** Noted as outside the paper's theorem and as an audit-scope item.
-- **The errata.** Both confirmed by derivation, which is stronger than a diff.
+- **The estimator run.** Named models (ADPS16 / MATZOV) and the band are reported; a run would
+  tighten it, not change a decision.
+- **QROM.** Still an audit-scope item, unchanged.
+- **The floating-point accept/reject boundary.** Still open, still a fair item for the launch
+  statement.
 
 ## Reproducing
 
 ```powershell
-python -m pytest -q -m "not slow"    # 603 passed, 1 known xfail
-cd proof_rust && cargo test          # 74 passed
-python experiments/estimate_sis.py --check
+python -m pytest -q -m "not slow"          # 603 passed, 1 known xfail
+cd proof_rust && cargo test                # 70 passed
+python experiments/cross_language_range.py # AGREE
+python experiments/cross_language_carry.py # AGREE
 ```
