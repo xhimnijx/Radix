@@ -68,3 +68,38 @@ def test_the_listener_reports_its_own_genesis():
         assert reply["genesis"] == node.chain.blocks[0].block_hash().hex()
     finally:
         server.stop()
+
+
+def test_relayed_transactions_pass_authentication():
+    """S-05 / N-4: relay must work when the shared secret is set.
+
+    A bogus payload is relayed deliberately. What is being tested is not that the transaction
+    is accepted -- it should not be -- but that the *reply* is about the transaction rather
+    than about authentication. Before the fix, the relay omitted the secret, so every relayed
+    transaction was refused with an auth error and the sender saw only "unreachable".
+    """
+    import tempfile
+
+    secret = b"a shared secret for the relay test"
+    sender = N.Node(data_dir=pathlib.Path(tempfile.mkdtemp()), persist=True, peers=[])
+    receiver = N.Node(data_dir=pathlib.Path(tempfile.mkdtemp()), persist=True, peers=[])
+    sender.secret = secret
+    receiver.secret = secret
+
+    server = p2p.Server(receiver, host="127.0.0.1", port=0)
+    port = server.start()
+    try:
+        sender.peers = [f"127.0.0.1:{port}"]
+        results = sender.relay_tx({"v": 1, "anchor": "00", "signatures": []})
+        reply = results[sender.peers[0]]
+        # The payload is deliberately invalid, so a payload-level complaint is the success
+        # case here. What must NOT appear is an authentication failure -- that is what the
+        # missing secret produced, and it is the reason the defect was invisible.
+        assert "authentication" not in str(reply).lower(), (
+            f"the relayed message failed authentication, so the secret is still not passed: {reply}"
+        )
+        assert "ring_indices" in str(reply) or "error" in str(reply).lower(), (
+            f"the peer produced neither a payload error nor an auth error: {reply}"
+        )
+    finally:
+        server.stop()

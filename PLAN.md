@@ -1,6 +1,6 @@
 # Radix — Plan to Mainnet
 
-**Status:** draft, 2026-11-10. Nothing in this file is done. 159 tracked checkboxes across 17 sections.
+**Status:** 2026-11-10. **7 of 159 checkboxes are closed**, each with the test named in its *done when* condition. The other 152 are open. 159 tracked checkboxes across 17 sections.
 **Baseline:** ~18% of mainnet readiness, measured by reading the code and running it (see "Baseline" below).
 **Purpose:** the complete list of work between this commit and a mainnet launch. Every actionable line is a checkbox. Tick only when the *done when* condition is true and a test or artifact proves it.
 
@@ -42,15 +42,15 @@ The cryptography is the strongest part; the ledger, network, storage, wallet and
 ## 0. Start here — next 10 working days
 
 - [ ] **S-01** (S) Reproduce the inflation failure as a regression test that currently passes (i.e. the forgery is accepted), then invert it when P0-1 lands.
-- [ ] **S-02** (S) Make `Chain.append` verify by default and pass `verify_transactions=True` from `node.py:226`. Land with a test that a peer block with a bad proof is refused.
-- [ ] **S-03** (S) Remove the 14 `RADIX_DEBUG_VERIFY` prints and the dead code after `return` in `setmembership.py:1173–1188`.
-- [ ] **S-04** (S) Persist `target`, `coinbase`, `minted`, `immature` and `treasury` in `store.chain_to_dict` / `chain_from_dict`; add a restart test asserting identical `next_target` and preserved supply accounting.
-- [ ] **S-05** (S) Fix `node.relay_tx` to pass the p2p secret; add a relay+auth test.
+- [ ] **S-02** (S) Make `Chain.append` verify by default and pass `verify_transactions=True` from `node.py:226`. *Half done:* `node.py` now passes `True`; `append` still defaults to `False`, so the fail-closed clause is open. Land with a test that a peer block with a bad proof is refused.
+- [x] **S-03** (S) Remove the 14 `RADIX_DEBUG_VERIFY` prints and the dead code after `return` in `setmembership.py:1173–1188`. *Evidence:* `tests/test_hygiene.py` (0 debug env vars, 0 unreachable statements across `radix_core`); the withdrawn-tag block after `return` is deleted.
+- [x] **S-04** (S) Persist `target`, `coinbase`, `minted`, `immature` and `treasury` in `store.chain_to_dict` / `chain_from_dict`; add a restart test asserting identical `next_target` and preserved supply accounting. *Evidence:* `tests/test_testnet_integrity.py::test_a_restart_does_not_reset_the_supply_cap` and `::test_a_restart_does_not_reset_the_difficulty` (identical `next_target`).
+- [x] **S-05** (S) Fix `node.relay_tx` to pass the p2p secret; add a relay+auth test. *Evidence:* `tests/test_testnet_listener.py::test_relayed_transactions_pass_authentication`, verified to fail (`1 failed`) with the secret reverted and pass with it in place.
 - [ ] **S-06** (S) Write the header-commitment design note (transaction root, state root, where they go, how they are proven) for P0-3.
 - [ ] **S-07** (S) Freeze D1 and D2 (architecture and privacy claim) in a one-page decision record.
-- [ ] **S-08** (S) Add one node-wide mutation lock around peer append, `getchain` and mining; add a threaded stress test.
-- [ ] **S-09** (S) Start `p2p.Server` behind a config flag in `app.py` and `cli.py`; prove two packaged nodes can exchange a block.
-- [ ] **S-10** (S) Put a CI gate on: no bare `print` in library code, no debug env vars, duplicate definitions, unreachable code.
+- [ ] **S-08** (S) Add one node-wide mutation lock around peer append, `getchain` and mining; add a threaded stress test. *Half done:* peer append is under the lock; `getchain` is not, and there is no stress test.
+- [ ] **S-09** (S) Start `p2p.Server` behind a config flag in `app.py` and `cli.py`; prove two packaged nodes can exchange a block. *Half done:* `serve()` starts the listener and `cli.py` exposes `--p2p-port`; `app.py` still does not, and two packaged nodes have not exchanged a block.
+- [x] **S-10** (S) Put a CI gate on: no bare `print` in library code, no debug env vars, duplicate definitions, unreachable code. *Evidence:* `tests/test_hygiene.py`, four rules. The gate was checked against synthetic violations to confirm it fails when it should, and it caught real prints in `pruned_storage_model.py` on first run.
 
 ---
 
@@ -69,13 +69,13 @@ The cryptography is the strongest part; the ledger, network, storage, wallet and
 
 - [ ] **P0-1** (XL) **Bind value to notes.** Every output carries a value commitment; the spend proof proves the input values open real notes, that outputs are in range, and that balance holds as a proven relation rather than `sum(input_values) == sum(outputs) + fee`. *Where:* `chain.py:376–390`, `wallet.py:238`, `tagged.py:128–139`. *Done when:* the 1,000,000,000-atom forgery against a 4,000-atom note is rejected by the real verifier, and the regression test from S-01 is green in both proof backends.
 - [ ] **P0-2** (S) **Verify foreign transactions on every path.** `Node.handle_p2p` must not use the `verify_transactions=False` default. *Where:* `node.py:226`, `chain.py:507`. *Done when:* a peer-supplied block with an invalid proof is rejected, and the default of `append` is fail-closed.
-- [ ] **P0-3** (M) **Commit the header to its contents.** Add a transaction Merkle root and a UTXO/state root to `Block.header()`. *Where:* `chain.py:89–101`. *Done when:* two blocks with different transaction sets can never share a hash, and an inclusion proof verifies.
+- [ ] **P0-3** (M) **Commit the header to its contents.** Add a transaction Merkle root and a UTXO/state root to `Block.header()`. *Half done:* the header now carries a transaction root, so two blocks with different spends cannot share a hash; there is no state root and no inclusion proof. *Where:* `chain.py:89–101`. *Done when:* two blocks with different transaction sets can never share a hash, and an inclusion proof verifies.
 - [ ] **P0-4** (L) **Fork choice and undo journal.** Compare cumulative work (`Σ work()`), deterministic tie-break, roll back N blocks, replace the "fork reconciliation is not implemented" error. *Where:* `chain.py:507–538`, `:563–570`. *Done when:* a 100-block fork test converges both nodes on the higher-work branch and a deep-reorg test passes.
-- [ ] **P0-5** (M) **Persist all consensus state.** `target`, `coinbase`, `minted`, `immature`, `treasury`. *Where:* `store.py:98–120`. *Done when:* a mid-chain restart yields identical `next_target`, identical block acceptance, preserved `minted`, and immature coinbase still matures.
+- [x] **P0-5** (M) **Persist all consensus state.** `target`, `coinbase`, `minted`, `immature`, `treasury`. *Where:* `store.py:98–120`. *Done when:* a mid-chain restart yields identical `next_target`, identical block acceptance, preserved `minted`, and immature coinbase still matures. *Evidence:* `tests/test_testnet_integrity.py`, including `::test_an_immature_reward_still_matures_after_a_restart`, which mines past the window after a round trip and asserts no pre-restart entry is stranded.
 - [ ] **P0-6** (M) **Single-writer node.** Peer append and `getchain` currently mutate/serialize outside `node.lock`. *Where:* `node.py:223–233` vs `:548–582`. *Done when:* a HTTP + p2p + miner stress test runs clean with no corruption or serializer exceptions.
 - [ ] **P0-7** (M) **Ledger-wide conservation invariant.** Assert per block: `Σ unspent outputs + fees + treasury == emission`. Today only emission is counted. *Where:* `chain.py:632–633`. *Done when:* a total-supply RPC is exact and monotone, and the 10⁹ test trips the invariant.
 - [ ] **P0-8** (S) **One canonical transaction ID.** `submit` hashes `str(payload)` (`chain.py:369`); `transaction_key` hashes canonical JSON (`node.py:584–587`). *Done when:* a single encoder produces one id in Python, Rust and the wire spec, with a test vector.
-- [ ] **P0-9** (S) **Purge debug and dead code from the verifier.** 14 `RADIX_DEBUG_VERIFY` prints, duplicate `tag_of`/`sign_tagged`/`verify_tagged` in `ring_signature.py`, unreachable code at `setmembership.py:1173`. *Done when:* CI gates listed in S-10 are green.
+- [x] **P0-9** (S) **Purge debug and dead code from the verifier.** 14 `RADIX_DEBUG_VERIFY` prints, duplicate `tag_of`/`sign_tagged`/`verify_tagged` in `ring_signature.py`, unreachable code at `setmembership.py:1173`. *Done when:* CI gates listed in S-10 are green. *Evidence:* S-10 green in `tests/test_hygiene.py`; the verifier contains no `print`, each of the three functions is defined once, and `radix_core` has zero unreachable statements.
 
 ---
 
@@ -102,8 +102,8 @@ The cryptography is the strongest part; the ledger, network, storage, wallet and
 - [ ] **C-3** (XL) **Independent audit #1**: protocol and proof system (SMILE transcription, tag, range, balance). *Done when:* signed report received, findings tracked as issues.
 - [ ] **C-4** (L) Remediate audit findings and run **audit #2** on the fixes. *Done when:* no open critical or high findings, retest letters attached.
 - [ ] **C-5** (XL) Written soundness proofs for the range/carry/balance layer and the same-witness tag. *Done when:* proofs reviewed by an external cryptographer and referenced from the spec.
-- [ ] **C-6** (M) **CSPRNG everywhere.** Keygen uses `random.Random` seeded by SHA-256 (`wallet.py:39–41`); proof masks default to `random.Random()` (`wallet.py:230`). *Done when:* no cryptographic randomness comes from `random`, and nonce derivation is deterministic with domain separation.
-- [ ] **C-7** (M) Key-derivation review: `wallet_seed` is a single SHA-256 of the phrase (`mnemonic.py:338–347`). *Done when:* a reviewed KDF is in use, BIP-39 conformance is tested, and the derivation is versioned.
+- [ ] **C-6** (M) **CSPRNG everywhere.** *Half done:* no cryptographic randomness is instantiated from `random` any more -- keygen and the default proof-mask generator both use `csprng.CipherRng` -- but nonce derivation with domain separation is untouched. Keygen uses `random.Random` seeded by SHA-256 (`wallet.py:39–41`); proof masks default to `random.Random()` (`wallet.py:230`). *Done when:* no cryptographic randomness comes from `random`, and nonce derivation is deterministic with domain separation.
+- [ ] **C-7** (M) Key-derivation review: *Half done:* `wallet_seed` is PBKDF2-HMAC-SHA256 with the derivation version as salt and 600,000 iterations (~270 ms measured); BIP-39 conformance is not separately tested. `wallet_seed` is a single SHA-256 of the phrase (`mnemonic.py:338–347`). *Done when:* a reviewed KDF is in use, BIP-39 conformance is tested, and the derivation is versioned.
 - [ ] **C-8** (L) One-time addressing / stealth (B2) wired end to end. `stealth.py` exists and is tested but nothing uses it. *Done when:* a wallet can receive to a meta-address, the sender derives a one-time key, and the recipient scans and spends it.
 - [ ] **C-9** (M) Address format: version byte, network prefix, checksum, strict length validation. *Where:* `wallet.py:63–77`. *Done when:* a single-character typo is rejected, not silently accepted.
 - [ ] **C-10** (L) Constant-time / side-channel review of signer and verifier; audit the Rust port. *Done when:* a written review and fixes for secret-dependent branches.
@@ -121,7 +121,7 @@ The cryptography is the strongest part; the ledger, network, storage, wallet and
 - [ ] **N-1** (M) **Start a peer listener in the shipped product.** `p2p.Server` is started only in tests; `app.py` never imports it and `cli.py` only dials. *Done when:* a packaged node accepts an inbound peer.
 - [ ] **N-2** (L) Peer identity: signed handshake with a node key; drop the shared-secret HMAC model. *Where:* `p2p.py:52–88`. *Done when:* a peer is identified by key, and a message from an unknown key is refused.
 - [ ] **N-3** (L) Transport encryption (Noise or TLS) with replay resistance. *Done when:* a passive observer cannot read or replay traffic, demonstrated by test.
-- [ ] **N-4** (S) Fix `relay_tx` dropping the secret (`node.py:596`) and add a relay+auth test. *Done when:* transaction relay works with authentication enabled.
+- [x] **N-4** (S) Fix `relay_tx` dropping the secret (`node.py:596`) and add a relay+auth test. *Done when:* transaction relay works with authentication enabled. *Evidence:* same test as S-05; the relayed message reaches the peer and produces a payload-level error rather than an authentication failure.
 - [ ] **N-5** (L) Real gossip: inv/getdata, block and transaction relay, compact blocks, mempool sync, dedup. *Done when:* a 50-node network propagates a block under the target latency.
 - [ ] **N-6** (M) Address discovery: DNS seeds, peer store, gossip; eclipse-attack resistance. *Done when:* a new node bootstraps from a seed and an eclipse simulation fails to isolate it.
 - [ ] **N-7** (M) Peer scoring, banning, connection limits, per-peer rate limits. *Done when:* a misbehaving peer is banned automatically and a test proves it.

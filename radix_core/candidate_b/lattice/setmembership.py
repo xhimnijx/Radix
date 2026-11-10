@@ -64,8 +64,6 @@ class SetMembershipError(ValueError):
     """The keys, statement, witness, or proof are malformed."""
 
 
-
-
 def _p(parameters: SmileParameters | None = None) -> SmileParameters:
     return SMILE if parameters is None else parameters
 
@@ -126,7 +124,6 @@ def _gamma_elements(gamma: tuple[Poly, ...], p: SmileParameters) -> tuple[tuple[
     for poly in gamma:
         out.extend(subring.slots(poly, p))
     return tuple(out)
-
 
 
 def mask_std(width: int) -> float:
@@ -529,7 +526,6 @@ def _head(
     tx.absorb(b"w", b"".join(ring.encode(poly, p) for poly in w))
     tx.absorb(b"t", b"".join(ring.encode(poly, p) for poly in commitment))
     return tx
-
 
 
 def _tag_context(c_prime: Poly, t0: Poly, p: SmileParameters) -> bytes:
@@ -1159,18 +1155,5 @@ def verify(
         # A proof carrying a tag came from the withdrawn construction. Accepting it
         # here would let a ledger take a signature whose linkability was never checked.
         return proof.tag_proof is None
-        if tag_keys is not None:
-            if proof.tag_proof is None:
-                return False
-            if not tagmod.verify_tag(
-                tag_keys,
-                proof.tag_proof,
-                proof.challenge_prime,
-                proof.response_prime,
-                _tag_context(proof.challenge_prime, proof.commitment[0], sm),
-                sm,
-            ):
-                return False
-        return True
     except (TypeError, ValueError, KeyError, IndexError):
         return False

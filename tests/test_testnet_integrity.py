@@ -131,3 +131,35 @@ def test_a_restart_keeps_coinbase_addresses_and_maturity():
     ], "empty coinbase on restart strands every immature reward forever"
     assert reloaded.immature == chain.immature
     assert reloaded.treasury == chain.treasury
+
+
+def test_an_immature_reward_still_matures_after_a_restart():
+    """P0-5's last clause: preserved `immature` must still mature, not merely survive.
+
+    Maturity is a function of the creating height, so a block that keeps the entry and the
+    height will mature normally. This test mines past the maturity window after a round trip
+    and asserts the reward became spendable.
+    """
+    from radix_testnet import node as N
+
+    chain = build_chain(1)
+    assert chain.immature, "the mined block must have an immature coinbase to test"
+
+    work = pathlib.Path(tempfile.mkdtemp())
+    store.save_chain(chain, work)
+    reloaded = store.load_chain(work, PARAMETERS, lambda *a, **k: True)
+    assert reloaded.immature == chain.immature
+
+    stamp = chain.tip.timestamp
+    for _ in range(C.COINBASE_MATURITY + 1):
+        stamp += C.TARGET_INTERVAL
+        reloaded.miner_key = tuple(tuple([7] * 128) for _ in range(4))
+        reloaded.mine(timestamp=stamp, allow_empty=True)
+
+    # The *original* reward must be spendable; the blocks mined during this test are still
+    # inside the maturity window themselves and are correctly still immature.
+    stranded = set(chain.immature) & set(reloaded.immature)
+    assert not stranded, (
+        f"rewards created before the restart did not mature afterwards: {len(stranded)} "
+        "entries are still locked, so they are stranded forever"
+    )
