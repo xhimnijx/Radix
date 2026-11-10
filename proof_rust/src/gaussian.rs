@@ -137,8 +137,12 @@ mod tests {
     fn the_mapping_is_symmetric_and_bounded() {
         assert_eq!(from_uniform(33, 0, 0), 0);
         assert_eq!(from_uniform(33, 0, 1), 0);
-        assert_eq!(from_uniform(33, u32::MAX, 0), 21324);
-        assert_eq!(from_uniform(33, u32::MAX, 1), -21324);
+        // 12 sigma, from the table: 21324 was the 8 sigma value and this assertion was
+        // stale from the truncation change until the suite was next run.
+        let edge = (12.0 * table(33).sigma).round() as i64;
+        assert_eq!(edge, 31986, "the truncation point moved; update deliberately");
+        assert_eq!(from_uniform(33, u32::MAX, 0) as i64, edge);
+        assert_eq!(from_uniform(33, u32::MAX, 1) as i64, -edge);
         for uniform in [1u32, 1 << 20, 1 << 31, u32::MAX - 1] {
             assert_eq!(
                 from_uniform(33, uniform, 0),

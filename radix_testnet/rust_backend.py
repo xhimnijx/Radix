@@ -54,7 +54,7 @@ def build_request(
         raise RustProverError("keys do not match the statement shape")
 
     header = struct.pack(
-        "<7I",
+        "<8I",
         depth,
         rows,
         cols,
@@ -62,11 +62,14 @@ def build_request(
         width,
         index,
         len(message),
+        len(keys.range_rows),
     )
     parts = [header, message]
     for row in keys.rows0:
         parts.append(_encode_polys(row))
     for row in keys.rows:
+        parts.append(_encode_polys(row))
+    for row in keys.range_rows:
         parts.append(_encode_polys(row))
     for row in statement.matrix:
         parts.append(_encode_polys(row))

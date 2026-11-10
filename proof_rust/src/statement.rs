@@ -132,6 +132,12 @@ pub struct Keys {
     pub rows: Vec<Vec<Poly>>,
     pub depth: usize,
     pub row_count: usize,
+    /// Rows committed solely for range constraints, one per packed bit polynomial.
+    ///
+    /// They are ordinary BDLOP rows of the same width as every other row, so adding one
+    /// costs a commitment component and changes neither W nor the Gaussian tables. Empty
+    /// for every pre-range call site, which is why `Keys::new` keeps its signature.
+    pub range_rows: Vec<Vec<Poly>>,
 }
 
 impl Keys {
@@ -158,7 +164,20 @@ impl Keys {
             rows,
             depth,
             row_count,
+            range_rows: Vec::new(),
         })
+    }
+
+    /// Attach range rows. They must be the same width as every other row.
+    pub fn with_range_rows(mut self, range_rows: Vec<Vec<Poly>>) -> Result<Keys, ProofError> {
+        let width = self.width();
+        for row in &range_rows {
+            if row.len() != width {
+                return Err(ProofError("range rows must have width W".into()));
+            }
+        }
+        self.range_rows = range_rows;
+        Ok(self)
     }
 
     pub fn width(&self) -> usize {

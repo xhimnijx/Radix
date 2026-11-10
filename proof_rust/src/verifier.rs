@@ -6,7 +6,7 @@
 //! a proof that never verifies.
 
 use crate::codec::ProofWire;
-use crate::proof::{e1, final_x, gamma_elements, paper_to_slot, set_matrix};
+use crate::proof::{e1, final_x, gamma_elements, paper_to_slot_ranged, set_matrix};
 use crate::sample::dot;
 use crate::recursion::{reduce_matrix, Quartic};
 use crate::statement::{
@@ -146,9 +146,10 @@ fn verify_inner(
     transcript.absorb(b"z-prime", &crate::statement::encode_vector(&proof.response_prime));
 
     // The paper's position -> commitment-slot map.
+    let range_count = keys.range_rows.len();
     let mut slot_of = vec![0usize; rows + 2 * depth + 2];
     for position in 1..=rows + 2 * depth + 1 {
-        slot_of[position] = paper_to_slot(position, depth, rows)?;
+        slot_of[position] = paper_to_slot_ranged(position, depth, rows, range_count)?;
     }
 
     trace.push("values");
@@ -249,6 +250,31 @@ fn verify_inner(
     transcript.absorb(b"h", &crate::codec::encode_poly(&proof.h));
     trace.push("alphas");
     let alphas: Vec<Poly> = (0..=depth).map(|_| draw(&mut transcript, b"alpha")).collect();
+    // Range challenges: their own stream, drawn at the same point as the ring selector's,
+    // because sharing a challenge would let a prover satisfy the sum while breaking
+    // either constraint.
+    trace.push("betas");
+    let betas: Vec<Poly> = (0..range_count).map(|_| draw(&mut transcript, b"beta")).collect();
+    // The bit polynomials are never sent: `f^2 + c f = 0` is an identity in the committed
+    // value, so the verifier needs no witness to confirm that a message is binary.
+    let range_start = CHALLENGE_DIM + depth + rows + 1;
+    let f_range: Vec<Poly> = (0..range_count)
+        .map(|index| {
+            sub(
+                &dot(&keys.range_rows[index], &proof.response),
+                &mul_crt(&challenge, &proof.commitment[range_start + index]),
+            )
+        })
+        .collect();
+    let range_sum = add_all((0..range_count).map(|index| {
+        mul_crt(
+            &betas[index],
+            &add(
+                &mul_crt(&f_range[index], &f_range[index]),
+                &mul_crt(&challenge, &f_range[index]),
+            ),
+        )
+    }));
     transcript.absorb(
         b"t-psi",
         &crate::codec::encode_poly(&proof.commitment[proof.commitment.len() - 1]),
@@ -262,16 +288,19 @@ fn verify_inner(
     // The final term is *added*, not subtracted: python's `ring.add(x, f[...])`.
     let lhs = add(
         &add(
-            &mul_crt(&alphas[0], &inner),
-            &add_all((0..depth).map(|index| {
-                mul_crt(
-                    &alphas[index + 1],
-                    &add(
-                        &mul_crt(&f[index + 1], &f[index + 1]),
-                        &mul_crt(&challenge, &f[index + 1]),
-                    ),
-                )
-            })),
+            &add(
+                &mul_crt(&alphas[0], &inner),
+                &add_all((0..depth).map(|index| {
+                    mul_crt(
+                        &alphas[index + 1],
+                        &add(
+                            &mul_crt(&f[index + 1], &f[index + 1]),
+                            &mul_crt(&challenge, &f[index + 1]),
+                        ),
+                    )
+                })),
+            ),
+            &range_sum,
         ),
         &f[rows + 2 * depth + 1],
     );

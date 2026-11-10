@@ -1,36 +1,27 @@
-feat: digit membership now lives IN the proof, and a non-binary bit is refused there
+feat: the range constraint mirrored in Rust, and two implementations agree on it
 
-The range constraint is a term in the proof's equation, not a check beside it. Bit
-polynomials are committed messages, never transmitted; the verifier confirms they are binary
-from `f^2 + c*f = 0` on their rows, which needs no witness.
+The project's whole method is that two independent implementations must agree, and the range
+constraint is exactly the kind of change where one side can be subtly wrong and still pass
+its own tests: two new beta challenges, a shifted commitment layout, and a new term in the
+verifier's equation.
 
-  Keys.range_rows        one BDLOP row per packed bit polynomial
-  setup(range_count=)    samples them; width W is unchanged
-  _prove_once(range_bits=) commits them after `_head`, draws beta challenges after h and
-                          before c, and adds sum beta*a*(1-2b) / sum beta*a^2
-  verify                 draws the same betas and adds sum beta*(f^2 + c*f)
+  Keys.range_rows              + with_range_rows, so no existing call site changed
+  paper_to_slot_ranged         the level and psi slots shift by range_count; everything
+                               inside the head does not
+  verifier                     draws the same betas, computes f_range, adds
+                               sum beta*(f^2 + c*f)
+  request format               gains a range_count field and the range rows
 
-WHY W DOES NOT CHANGE: a range row is an ordinary BDLOP row of width W using the same
-randomness, so adding one costs a commitment component and nothing else -- no new mask
-position, no new Gaussian table. docs/ALPHA-SLOTS.md predicted W rising from 30 to ~50 and
-that was wrong; the measured cost is 512 bytes per bit polynomial.
+Measured, via experiments/cross_language_range.py: a Python proof carrying two range
+messages, 22,784 bytes and 21 commitment entries, is accepted by the Rust verifier, and the
+Rust verifier rejects the same proof against a different message. Both languages agree.
 
-THE REAL BUG THIS FOUND, and it was in digits.py rather than in the proof: pack_bits wrote
-each slot's four COEFFICIENTS equal to the bit, but the ring multiplies in the CRT domain,
-where that polynomial's slot value is 405559701, not 0 or 1. So `b*b != b`, and the
-verifier's check would have certified nothing while appearing to run. pack_bits now lifts
-the bits through subring.from_constants, and there is a test asserting `b*b == b` -- the
-property the proof consumes -- instead of the coefficient-block shape, which was a proxy
-that passed while the real property failed.
+A STALE TEST, and the reason it matters: the Rust Gaussian test asserted the maximum sample
+was 21324, which is 8 sigma. The table has been 12 sigma since the truncation change, where
+the maximum is 31986, so that assertion had been failing for however long the Rust suite went
+unrun. It now derives the bound from the table's own sigma and asserts the value explicitly,
+so the next change to the truncation is deliberate rather than silent. This is the second
+time a number in this project was right when written and wrong later; the check is now tied
+to the data rather than to a memory.
 
-Three of my own errors on the way, each found by running rather than reading: range
-commitments appended before `_head` so the prover and verifier absorbed different
-transcripts (symptom: a wrong challenge, no exception); _paper_to_slot not shifted for the
-insertion, which broke the same way; and `range_sum` passed as a third argument to
-ring.add, whose TypeError the broad except swallowed into a bare False.
-
-Measured: 22,784 bytes with two range messages on a baseline of 21,760, seven tests
-including the one that matters -- a slot holding 2 is refused BY THE PROOF.
-
-Still missing for item 1: the relaxed carry bound z = R f + y, the Rust mirror, and the
-envelope wiring.
+70 Rust tests, 603 Python tests, 1 known xfail.

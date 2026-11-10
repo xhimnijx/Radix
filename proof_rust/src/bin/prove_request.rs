@@ -79,6 +79,7 @@ fn main() {
     let width = reader.u32() as usize;
     let index = reader.u32() as usize;
     let message_len = reader.u32() as usize;
+    let range_count = reader.u32() as usize;
     let message = reader.bytes(message_len).to_vec();
 
     assert_eq!(kappa, CHALLENGE_DIM, "kappa must match the manifest");
@@ -91,6 +92,10 @@ fn main() {
     for _ in 0..rows + 2 * depth + 1 {
         b_rows.push(reader.polys(width));
     }
+    let mut range_rows = Vec::with_capacity(range_count);
+    for _ in 0..range_count {
+        range_rows.push(reader.polys(width));
+    }
     let mut matrix = Vec::with_capacity(rows);
     for _ in 0..rows {
         matrix.push(reader.polys(cols));
@@ -102,7 +107,9 @@ fn main() {
     }
     let secret = reader.polys(cols);
 
-    let keys = Keys::new(rows0, b_rows, depth, rows).expect("keys");
+    let keys = Keys::new(rows0, b_rows, depth, rows)
+        .and_then(|keys| keys.with_range_rows(range_rows))
+        .expect("keys");
     let statement = Statement::new(matrix, ring, depth).expect("statement");
 
     Attempts::reset();

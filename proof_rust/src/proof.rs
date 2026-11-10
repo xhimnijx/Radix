@@ -10,6 +10,34 @@ use crate::statement::ProofError;
 use crate::{add, glue_crt, slots, Poly, SLOTS};
 
 /// Map the paper's `t`-index (`1..k+2m+1`) to its position in the commitment vector.
+/// The paper's position -> commitment-slot map, with range commitments accounted for.
+///
+/// Range commitments are inserted immediately after the head, so the level commitments
+/// and `psi` shift by `range_count` while everything inside the head does not. Getting
+/// this wrong puts the prover and verifier on different transcripts, and the only symptom
+/// is a wrong challenge -- no error, no panic.
+pub fn paper_to_slot_ranged(
+    position: usize,
+    depth: usize,
+    rows: usize,
+    range_count: usize,
+) -> Result<usize, ProofError> {
+    let kappa = super::statement::CHALLENGE_DIM;
+    if position == 0 {
+        return Err(ProofError("paper positions start at 1".into()));
+    }
+    if position == rows + 2 * depth + 1 {
+        return Ok(kappa + rows + 2 * depth + range_count); // psi, the final entry
+    }
+    if position <= depth + rows {
+        return Ok(kappa + position - 1);
+    }
+    if position == rows + 2 * depth {
+        return Ok(kappa + depth + rows);
+    }
+    Ok(kappa + depth + rows + range_count + (position - (depth + rows)))
+}
+
 pub fn paper_to_slot(position: usize, depth: usize, rows: usize) -> Result<usize, ProofError> {
         let kappa = super::statement::CHALLENGE_DIM;
     if position == 0 {
