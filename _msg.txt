@@ -1,0 +1,27 @@
+feat: a two-input balance proof, using the machinery that already exists
+
+For two terms the base-4 carry is binary -- C1's observation, and `carry.py` asserts it -- so
+the carry polynomial is just one more packed bit polynomial: one range row, one beta
+challenge, and the binaryness check that already exists proves it. No new mechanism.
+
+Exercised end to end: a spend carrying two amounts and a carry polynomial over five range
+rows proves and verifies, and a carry whose first position holds 2 is REFUSED by the proof.
+That is a sound balance constraint for a two-input transaction.
+
+WHAT THIS IS NOT: `m`-input balance. With `m` inputs the carry reaches `m` and stops being
+binary, so the binaryness check says nothing about it. That case needs [25]'s unstructured
+linear proof -- `z = R f + y` with its own challenge matrix, drawn after the carry
+commitment and `h`, expanded from a transcript seed, with the `2^-n` lemma booked separately
+from the `q^-4` of the ring challenges. It is specified in C1's and C2's eighth pass and it
+is NOT implemented; the module docstring and the test say so rather than letting the
+existence of the two-term test imply it.
+
+The distinction is the difference between a sound balance proof for a two-input transaction
+and one for any number of inputs, and it is worth stating in exactly those terms.
+
+An error of mine on the way: I wrote range_count = 3 for two amounts plus a carry, forgetting
+that `bits_of` yields 64 bits per amount, so two amounts are four packed polynomials, not two.
+The proof refused it with "expected 3 bit polynomials, got 5" -- a good error message doing
+its job.
+
+8 range-proof tests, 604 Python tests overall.
