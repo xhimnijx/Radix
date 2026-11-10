@@ -124,3 +124,57 @@ def test_the_peer_block_path_and_the_miner_share_one_lock():
     assert "does not follow our tip" in message or "fork" in message or "does not build" in message, (
         f"the refusal was for the wrong reason: {message}"
     )
+
+
+def test_http_readers_survive_concurrent_mining():
+    """P0-6's done-when names HTTP as well as p2p and the miner.
+
+    The HTTP handler reads the chain (status, and the chain listing) while the miner appends. A
+    missing lock shows up here as a serialisation exception or a torn block list.
+    """
+    import json
+    import threading
+    import urllib.request
+
+    from radix_testnet.node import make_server
+
+    node = fresh_node()
+    server, _node = make_server("127.0.0.1", 0, node=node)
+    port = server.server_address[1]
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    errors = []
+    stop = threading.Event()
+
+    def reader():
+        while not stop.is_set():
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=10) as reply:
+                    payload = json.loads(reply.read())
+                if "height" not in payload:
+                    errors.append("status reply has no height")
+                    return
+            except Exception as error:  # noqa: BLE001 - any exception is the finding
+                errors.append(error)
+                return
+
+    readers = [threading.Thread(target=reader) for _ in range(3)]
+    for thread in readers:
+        thread.start()
+
+    stamp = node.chain.tip.timestamp
+    try:
+        for index in range(8):
+            stamp += TARGET_INTERVAL
+            node.chain.miner_key = tuple(tuple([index % 200 + 1] * 128) for _ in range(4))
+            with node.lock:
+                node.chain.mine(timestamp=stamp, allow_empty=True)
+    finally:
+        stop.set()
+        for thread in readers:
+            thread.join(timeout=30)
+        server.shutdown()
+        server.server_close()
+
+    assert not errors, f"an HTTP reader failed during mining: {errors[0]!r}"
+    assert node.chain.height == 8
