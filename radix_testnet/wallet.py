@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+
+from radix_core.candidate_b.lattice import csprng
 import random
 from dataclasses import dataclass, field
 
@@ -36,9 +38,19 @@ class WalletError(ValueError):
     """A wallet could not do what was asked."""
 
 
-def _rng_for(seed: bytes, index: int) -> random.Random:
-    digest = hashlib.sha256(seed + index.to_bytes(4, "little")).digest()
-    return random.Random(int.from_bytes(digest, "big"))
+def _rng_for(seed: bytes, index: int):
+    """The stream a wallet account's keys are derived from.
+
+    A CSPRNG, not `random.Random`. MT19937 recovers its whole state from 624 consecutive
+    outputs and makes no unpredictability claim, so it is the wrong primitive for key
+    material. The seed is still the account's position in the wallet, so derivation stays
+    deterministic and recoverable from the mnemonic -- that is the requirement -- but the
+    stream itself is cryptographic.
+    """
+    from radix_core.candidate_b.lattice import csprng
+
+    digest = hashlib.sha3_256(b"radix/wallet/rng/v1" + seed + index.to_bytes(4, "little")).digest()
+    return csprng.CipherRng(digest)
 
 
 def _encode_body(blob: bytes) -> str:
@@ -227,7 +239,9 @@ class Wallet:
             index = change_account if change_account is not None else (source.index + 1) % len(self.accounts)
             outputs.append(Output(key=self.accounts[index].public, value=change_value))
 
-        generator = rng or random.Random()
+        # The zero-knowledge masks come from this generator. A predictable mask reveals
+        # the secret it was meant to hide, so the default must be cryptographic.
+        generator = rng or csprng.fresh()
         indices = chain.ring_for(source.public, generator)
         ring_keys = tuple(chain.pool[index] for index in indices)
         spend = T.build_tagged_spend(

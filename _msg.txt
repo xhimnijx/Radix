@@ -1,28 +1,31 @@
-fix: cumulative work, relay authentication, the peer-block lock, and verifier hygiene
+fix: cryptographic randomness where it was Mersenne Twister, and a KDF for the seed
 
-Four more from the independent review, each confirmed in the code before being touched.
+Two of the review's findings are the kind that are cheap to fix and expensive to leave: they do
+not break a demo, they quietly weaken every wallet.
 
-1. CUMULATIVE WORK WAS THE BLOCK COUNT. cumulative_work returned len(self.blocks), so a chain
-   of easy blocks beat a chain of hard ones: "most work" was really "most blocks", and a miner
-   who lowered the difficulty could outrun everyone by producing more headers. It now sums
-   `2^256 / target` per block, which is the quantity "most cumulative work" is supposed to
-   compare. A test states the inequality directly: three hard blocks outweigh ten easy ones.
+1. KEYS AND PROOF MASKS CAME FROM MT19937. wallet._rng_for returned random.Random, and the default
+   proof-mask generator was `random.Random()`. Mersenne Twister recovers its entire state from 624
+   consecutive outputs and makes no unpredictability claim, so it is the wrong primitive for key
+   material -- and a predictable zero-knowledge mask reveals the secret it was meant to hide.
 
-2. TRANSACTION RELAY OMITTED THE P2P SECRET. relay_tx called p2p.Peer.parse(peer_text) with no
-   secret, so with RADIX_P2P_SECRET set, block broadcast was authenticated and transaction relay
-   was not. The receiving node rejected every relayed transaction and the sender saw only
-   "unreachable" -- silent in both directions, which is the worst way for it to fail.
+   Added radix_core/candidate_b/lattice/csprng.py: SHAKE256 in counter mode, rekeyed per block,
+   providing exactly the four methods the samplers use -- randrange, randint, getrandbits,
+   random -- with `random.Random`'s argument conventions so it drops in. randrange uses rejection
+   sampling, so the distribution is exact rather than modulo-biased. Deliberately not a Random
+   subclass, so nothing can depend on behaviour it does not promise.
 
-3. A PEER'S BLOCK WAS APPLIED OUTSIDE THE LOCK. handle_p2p mutated the chain while the miner
-   could be producing a block or the state being serialised. Now under self.lock.
+   The wallet still derives deterministically from the mnemonic (that is the requirement), but the
+   stream is now cryptographic: account index -> SHA3-256 -> keyed SHAKE stream.
 
-4. HYGIENE. Fifteen RADIX_DEBUG_VERIFY print sites were still in the verifier's reject paths,
-   and tag_of, sign_tagged and verify_tagged were each defined twice in ring_signature. Both
-   removed. The verifier now contains no print at all, and a test asserts that.
+2. THE MNEMONIC SEED WAS A BARE SHA-256. No work factor, so a stolen phrase file could be
+   brute-forced at hash speed. Now PBKDF2-HMAC-SHA256 with the derivation version as salt and
+   600,000 iterations -- measured at ~270 ms to unlock, imperceptible for a wallet and expensive
+   per guess. The phrase -> seed property is unchanged, so recovery still works; the derived keys
+   change, which is a wallet-format change and is stated here because it invalidates any address
+   recorded before this commit.
 
-One existing test had to change and it is worth naming: the p2p handshake test asserted
-reply["work"] == 1, which encoded the very defect being fixed. It now asserts the handshake
-reports the chain's own cumulative work and that it is positive, which is what the field means.
+Eight CSPRNG tests, and 64 tests across the wallet, wallet-seed, real-wallet-flow, scan-containment
+and genesis suites pass.
 
-Seven new tests. 62 tests across the chain, node, p2p and reward suites pass, and the ring
-signature and tag suites are unaffected by the duplicate removal.
+Neither of these touches the defect that matters -- value is still not bound to notes -- but they
+are the difference between a wallet that is merely unfinished and one that is unsafe to use.
