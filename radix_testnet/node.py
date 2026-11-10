@@ -738,8 +738,28 @@ def make_server(
     return ThreadingHTTPServer((host, port), handler), node
 
 
-def serve(host: str = "127.0.0.1", port: int = 8642, node: Node | None = None) -> ThreadingHTTPServer:
+def serve(
+    host: str = "127.0.0.1",
+    port: int = 8642,
+    node: Node | None = None,
+    p2p_host: str | None = None,
+    p2p_port: int = 8643,
+) -> ThreadingHTTPServer:
+    """Serve HTTP, and the peer listener with it.
+
+    The peer listener used to be started only by tests. `p2p.py` could relay, sync, discover
+    and authenticate, and nothing in the shipped product ever opened the port -- so a node
+    could not be dialled by the peers it knew about. Found by an independent review.
+    """
+    from . import p2p
+
     server, node = make_server(host, port, node)
+    peer_server = None
+    if p2p_port:
+        peer_server = p2p.Server(node, host=p2p_host or host, port=p2p_port)
+        bound = peer_server.start()
+        node.address = f"{p2p_host or host}:{bound}"
+        print(f"peer listener on {node.address}")
     print(f"radix testnet node on http://{host}:{port}  (Ctrl+C to stop)")
     print("TESTNET - NO VALUE - NO SECURITY CLAIM")
     try:
@@ -748,5 +768,7 @@ def serve(host: str = "127.0.0.1", port: int = 8642, node: Node | None = None) -
         print("\nstopped")
     finally:
         server.server_close()
+        if peer_server is not None:
+            peer_server.stop()
     return server
 

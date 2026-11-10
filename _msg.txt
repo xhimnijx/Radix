@@ -1,31 +1,24 @@
-fix: cryptographic randomness where it was Mersenne Twister, and a KDF for the seed
+fix: the peer listener ships, so the network is reachable from the product
 
-Two of the review's findings are the kind that are cheap to fix and expensive to leave: they do
-not break a demo, they quietly weaken every wallet.
+The independent review's sharpest engineering point: p2p.py could relay, sync, discover and
+authenticate, and NOTHING IN THE SHIPPED PRODUCT EVER OPENED THE PORT. serve() started the HTTP
+server and stopped there, so a node could not be dialled by the peers it already knew about. The
+peer layer existed only inside tests -- which is why it looked complete in the tests and was
+absent from anything a person could run.
 
-1. KEYS AND PROOF MASKS CAME FROM MT19937. wallet._rng_for returned random.Random, and the default
-   proof-mask generator was `random.Random()`. Mersenne Twister recovers its entire state from 624
-   consecutive outputs and makes no unpredictability claim, so it is the wrong primitive for key
-   material -- and a predictable zero-knowledge mask reveals the secret it was meant to hide.
+serve() now starts a p2p.Server alongside HTTP, records the bound address on the node so
+discovery can advertise it, and stops the listener on shutdown. The CLI gains --p2p-port: 8643 by
+default, 0 for an ephemeral port, -1 to disable.
 
-   Added radix_core/candidate_b/lattice/csprng.py: SHAKE256 in counter mode, rekeyed per block,
-   providing exactly the four methods the samplers use -- randrange, randint, getrandbits,
-   random -- with `random.Random`'s argument conventions so it drops in. randrange uses rejection
-   sampling, so the distribution is exact rather than modulo-biased. Deliberately not a Random
-   subclass, so nothing can depend on behaviour it does not promise.
+Verified over a real socket rather than by inspection: a node started on an ephemeral port
+answers a hello with its height, its cumulative work and its genesis hash, which is what a peer
+dials to check it is on the same chain.
 
-   The wallet still derives deterministically from the mnemonic (that is the requirement), but the
-   stream is now cryptographic: account index -> SHA3-256 -> keyed SHAKE stream.
+Five tests, three of which assert the wiring (the listener is constructed AND started AND its
+address recorded AND stopped) because the defect was precisely an omission that no unit test of
+p2p.py could catch.
 
-2. THE MNEMONIC SEED WAS A BARE SHA-256. No work factor, so a stolen phrase file could be
-   brute-forced at hash speed. Now PBKDF2-HMAC-SHA256 with the derivation version as salt and
-   600,000 iterations -- measured at ~270 ms to unlock, imperceptible for a wallet and expensive
-   per guess. The phrase -> seed property is unchanged, so recovery still works; the derived keys
-   change, which is a wallet-format change and is stated here because it invalidates any address
-   recorded before this commit.
-
-Eight CSPRNG tests, and 64 tests across the wallet, wallet-seed, real-wallet-flow, scan-containment
-and genesis suites pass.
-
-Neither of these touches the defect that matters -- value is still not bound to notes -- but they
-are the difference between a wallet that is merely unfinished and one that is unsafe to use.
+One honest note on the suite: test_the_auto_miner_settles_the_mempool_by_itself failed once in a
+full-file run and passed three times in isolation afterwards. It is a timing-dependent auto-miner
+test under load, not a regression from this change -- serve() is not on that path. Recorded rather
+than hidden, and worth a proper fix later.

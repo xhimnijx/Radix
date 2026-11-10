@@ -63,7 +63,8 @@ def command_node(args: argparse.Namespace) -> int:
         print(f"    {node.faucet.phrase}")
         print()
         print(f"wallet fingerprint {node.faucet.fingerprint}")
-    serve(host=args.host, port=args.port, node=node)
+    p2p_port = 0 if args.p2p_port == 0 else (None if args.p2p_port < 0 else args.p2p_port)
+    serve(host=args.host, port=args.port, node=node, p2p_port=p2p_port or 0)
     return 0
 
 
@@ -197,6 +198,12 @@ def build_parser() -> argparse.ArgumentParser:
     node = sub.add_parser("node", help="run the node and the GUI")
     node.add_argument("--host", default="127.0.0.1")
     node.add_argument("--port", type=int, default=8642)
+    node.add_argument(
+        "--p2p-port",
+        type=int,
+        default=8643,
+        help="peer listener port (0 starts one on an ephemeral port, -1 disables)",
+    )
     node.add_argument(
         "--peer",
         action="append",
