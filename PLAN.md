@@ -1,6 +1,6 @@
 # Radix — Plan to Mainnet
 
-**Status:** 2026-11-10. **9 of 159 checkboxes are closed**, each with the test named in its *done when* condition. The other 152 are open. 159 tracked checkboxes across 17 sections.
+**Status:** 2026-11-10. **10 of 159 checkboxes are closed**, each with the test named in its *done when* condition. The other 152 are open. 159 tracked checkboxes across 17 sections.
 **Baseline:** ~18% of mainnet readiness, measured by reading the code and running it (see "Baseline" below).
 **Purpose:** the complete list of work between this commit and a mainnet launch. Every actionable line is a checkbox. Tick only when the *done when* condition is true and a test or artifact proves it.
 
@@ -46,7 +46,7 @@ The cryptography is the strongest part; the ledger, network, storage, wallet and
 - [x] **S-03** (S) Remove the 14 `RADIX_DEBUG_VERIFY` prints and the dead code after `return` in `setmembership.py:1173–1188`. *Evidence:* `tests/test_hygiene.py` (0 debug env vars, 0 unreachable statements across `radix_core`); the withdrawn-tag block after `return` is deleted.
 - [x] **S-04** (S) Persist `target`, `coinbase`, `minted`, `immature` and `treasury` in `store.chain_to_dict` / `chain_from_dict`; add a restart test asserting identical `next_target` and preserved supply accounting. *Evidence:* `tests/test_testnet_integrity.py::test_a_restart_does_not_reset_the_supply_cap` and `::test_a_restart_does_not_reset_the_difficulty` (identical `next_target`).
 - [x] **S-05** (S) Fix `node.relay_tx` to pass the p2p secret; add a relay+auth test. *Evidence:* `tests/test_testnet_listener.py::test_relayed_transactions_pass_authentication`, verified to fail (`1 failed`) with the secret reverted and pass with it in place.
-- [ ] **S-06** (S) Write the header-commitment design note (transaction root, state root, where they go, how they are proven) for P0-3.
+- [x] **S-06** (S) Write the header-commitment design note (transaction root, state root, where they go, how they are proven) for P0-3. *Evidence:* `docs/HEADER-COMMITMENTS.md`. Decisions taken: binary Merkle with sorted leaves and promoted odd nodes (avoids the duplicate-last second-preimage), domain-separated, with inclusion proofs; the state root is **consensus-enforced from the start** over the unspent-note and spent-tag sets in one tree; canonical encoding rules fixed, including no floats and length-prefixed fields.
 - [ ] **S-07** (S) Freeze D1 and D2 (architecture and privacy claim) in a one-page decision record.
 - [ ] **S-08** (S) Add one node-wide mutation lock around peer append, `getchain` and mining; add a threaded stress test. *Half done:* peer append is under the lock; `getchain` is not, and there is no stress test.
 - [ ] **S-09** (S) Start `p2p.Server` behind a config flag in `app.py` and `cli.py`; prove two packaged nodes can exchange a block. *Half done:* `serve()` starts the listener and `cli.py` exposes `--p2p-port`; `app.py` still does not, and two packaged nodes have not exchanged a block.
