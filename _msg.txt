@@ -1,0 +1,34 @@
+docs: the ninth-pass answers, and a numerical check that bears on their disagreement
+
+C1 says (a): coefficient-domain amounts, rebuild the range layer coefficient-wise, and the
+current slot-constant layer should be retired from the amount path. C2 says (a) too, and then
+offers a cheaper route he calls (b) -- pair the slot-constant digits against a public w4 so the
+integer is recovered directly, no carrying, at the cost of a 2^29 supply cap.
+
+C1 rejects slot-wise carrying as unsound. That is not what C2's construction does, so the two
+may not actually conflict: C1 is rejecting the construction that carries slot-wise, and C2's
+route avoids carrying entirely.
+
+Rather than adjudicate, I tested C2's identity at the current parameters:
+
+  sum of slot values of (w4 * m)  =  sum of 4^i * d_i    EXACTLY
+  any single coefficient          =  no match
+  is (w4 * m) slot-constant?      =  no
+
+So the identity holds for the TRACE, not for the ring product, and the product leaves the
+slot-constant subspace -- the same phenomenon that killed the (X-4) relation. The trace is
+Z_q-linear and a verifier can apply it, but LinearRelation currently compares polynomials, so
+expressing this needs one small extension: an optional scalar trace mode. The residual
+argument is unchanged.
+
+That is a checkable extension rather than a second proof system, which is why (b) may be viable
+where C1 expected it not to be -- and equally why it cannot be called sound until C1 has seen
+the trace form rather than the carrying form he rejected.
+
+Also records what both reviewers agree on: the slot-constant alpha-slot range layer is wrong for
+the amount path and should be retired, while LinearRelation, the coefficient-domain carry
+identity and the base-4 digit encoding are reusable.
+
+And the consequence of the modulus, which has now decided three separate things: ord_256(q) = 4
+gives the q^-4 challenge bound AND makes slot-constant binaryness sound AND makes the Hadamard
+product coordinatewise-inexpressible.

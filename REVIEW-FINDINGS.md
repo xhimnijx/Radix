@@ -921,3 +921,65 @@ corrected here and in `SECURITY-NOTES.md`.
 
 Worth putting to C2: whether the k' trade should be re-priced now that both ends of it are
 visible — 8 bits of B0 against 2 KB and a fifth of the set-matrix work per tagged proof.
+
+
+# Ninth pass: the encoding is coefficient-domain, and the reviewers disagree on the shortcut
+
+C1 answered **(a)**: the paper's `ǎ` is a coefficient-domain polynomial whose coefficients are
+the base-4 digits; the carrying identity is coefficient-domain; the slot-constant packing is a
+different subspace that cannot enforce the amount range. The range layer should be rebuilt
+coefficient-wise. `LinearRelation`, the carry identity and the digit encoding survive. The
+evidence he cites is the paper's own proof-size formula (p. 55), where the auxiliary
+commitment and `z` carry an extra `m(2r-1)` terms -- a coefficient-wise bit/carry
+decomposition, not two slot-constant bit polynomials per amount.
+
+C2 also answered (a) and withdrew his earlier budget answer, saying he had not checked that
+binaryness and carrying live in the same subspace. He then supplied an argument for a cheaper
+route he called (b): keep the slot-constant digits, drop `(X-4)` entirely, and pair the digit
+polynomial against a public element `w4` whose slot-`i` residue is `4^i`, so that the pairing
+recovers the integer directly, with balance as one relation. The catch he named is the modulus:
+the pairing is computed in `Z_q`, so amounts must stay under `q/2` -- about 2^29 for 2-in-2-out
+with 15 base-4 digits -- which needs no carrying at all.
+
+C1 rejects slot-wise carrying outright: "You would need a new theorem connecting the slot sum
+to the integer identity, and the paper does not provide one. Do not invent it." Note that C1 is
+rejecting slot-wise *carrying*, which is not what C2's construction does -- C2's route avoids
+carrying because the pairing yields the integer directly.
+
+## What a numerical check establishes
+
+C2's identity, tested directly at the current parameters: with `w4` slot-constant at `4^i` and
+`m` slot-constant at the digits `d_i`,
+
+    sum of slot values of (w4 * m)  =  4^i * d_i summed   EXACTLY
+    any single coefficient of (w4 * m)  =  no match
+    is (w4 * m) slot-constant?  =  no
+
+So the identity holds for the **trace** (the sum of the CRT slot values), not for the ring
+product, and the product leaves the slot-constant subspace -- the same phenomenon that killed
+the `(X-4)` balance relation. `w4` is public and the sum is linear in `m`, so the trace can be
+applied by a verifier; but a `LinearRelation` currently compares *polynomials*, so expressing
+this needs one extension: an optional scalar **trace mode**, where the check becomes
+`trace(sum_j w_j m_j - k) = 0` rather than the polynomial equality. The residual argument is
+unchanged, because the trace is `Z_q`-linear.
+
+That is a small, checkable extension rather than a second proof system. It is the reason (b)
+may be viable where C1 expected it not to be -- and equally the reason it cannot be called
+sound until C1 has seen the trace form rather than the carrying form he rejected.
+
+## Where this leaves the range layer
+
+Both reviewers agree the current slot-constant alpha-slot range layer is **wrong for the amount
+path** and should be retired rather than extended. Both agree `LinearRelation`, the
+coefficient-domain carry identity and the base-4 digit encoding are reusable. What is unsettled
+is whether the amount path goes through the paper's coefficient-wise subsystem (C1) or through
+the trace pairing with a documented supply cap (C2).
+
+## A consequence of the modulus worth recording
+
+C2's observation, and it is the third time this modulus choice has decided something: choosing
+`ord_256(q) = 4` to get the `q^-4` challenge-difference bound is what makes slot-constant
+binaryness sound (each residue is an idempotent of a field), and simultaneously what makes the
+Hadamard product coordinatewise-inexpressible (the ring product is quartic, not coordinatewise).
+Slot constancy, the challenge difference, and now the range layer are all consequences of one
+parameter.
