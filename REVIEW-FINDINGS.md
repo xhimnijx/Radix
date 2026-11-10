@@ -1022,3 +1022,39 @@ committed coefficient-wise, range proven coefficient-wise, balance by trace pair
 Also confirmed in my favour: because range rows reuse `r` and do not move `W`, C2's feared +2.6
 bits per message on B0 does not bite. The estimate stands at A 2^158 / B0 2^167 with the range
 machinery inside the proof.
+
+
+# The trace pairing does not survive being turned into a scalar check
+
+C1's identity is right at the statement level: `Tr(w4*m_in) = Tr(w4*m_out) + fee` modulo `q`, and
+with every total under `q/2` the integer difference is zero. I verified the functional itself
+before building on it -- `trace(w4 * m) == sum 4^i d_i` for arbitrary digit vectors, five trials,
+exact.
+
+What does not work is checking it as a **scalar** inside this proof, and the reason is short:
+**`trace` is not multiplicative.** The prover would send `s = Tr(sum_j w_j a_j)` and the verifier
+would compare it against `Tr(sum_j w_j f_j) + Tr(c * k)`. But `f_j = a_j - c*m_j`, so
+`Tr(sum_j w_j f_j) = s - Tr(c * sum_j w_j m_j)`, and the challenge enters as a **ring product**.
+`Tr(c * k)` is not `c * Tr(k)`, so the two sides do not cancel into `Tr(rho) = 0`. The check that
+comes out is `Tr(c * rho) = 0`, which does not imply `Tr(rho) = 0`.
+
+Measured, so this is not a derivation I might have got backwards: prover sent 810,038,648 against
+a verifier value of 2,690,466,006 from a masked trace of 1,584,030,714 -- not reconcilable by any
+scalar factor of `c`.
+
+## What would work instead
+
+Commit the **paired value** `A_j = w4 * m_j` directly as the message, so the relation
+`sum_j sign_j * A_j - k = 0` is a polynomial equality and `LinearRelation` applies exactly, as C1
+said it would. The difficulty moves rather than disappearing: the range proof then has to say
+something about `A_j`, which is not digit-shaped, so the digit range and the committed amount are
+two different objects and need a link. That link is the same bridge C2 identified as not
+`R`-linear.
+
+So the honest position: the statement is sound, the primitive is right, and the bridge from a
+committed digit polynomial to its paired value is the remaining piece -- the same bridge, in a
+different place.
+
+The trace code was written, measured, found not to give the conclusion, and reverted rather than
+shipped. `LinearRelation`, the trace functional and the pairing element are sound as utilities;
+the scalar check built on them was not.
