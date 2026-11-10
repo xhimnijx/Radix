@@ -95,6 +95,18 @@ def main(argv: list[str] | None = None) -> int:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://{host}:{port}/"
 
+    # NN-1 / S-09: the desktop app must open the peer port too. It used to start only the HTTP
+    # server, so a packaged node could not be dialled and the peer layer existed only in tests.
+    peer_server = None
+    p2p_port = int(config.get("p2p_port", 8643) or 0)
+    if p2p_port:
+        from . import p2p
+
+        peer_server = p2p.Server(node, host=host, port=p2p_port)
+        bound = peer_server.start()
+        node.address = f"{host}:{bound}"
+        print(f"peers    {node.address}")
+
     print(TESTNET_BANNER)
     print()
     if node.wallet_created:
