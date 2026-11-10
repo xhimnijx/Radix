@@ -223,7 +223,10 @@ class Node:
         if kind == "block":
             try:
                 block = C.Block.from_wire(message["block"])
-                self.chain.append(block)
+                # This block came from a peer, so every transaction in it is verified. The
+                # default is False because locally mined blocks were already checked; taking
+                # that default here let a miner push arbitrary unsigned spends to every peer.
+                self.chain.append(block, verify_transactions=True)
             except (C.ChainError, KeyError, TypeError, ValueError) as error:
                 self.log.event("block.rejected", reason=str(error))
                 return {"type": "error", "reason": str(error)}

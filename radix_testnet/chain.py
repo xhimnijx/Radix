@@ -13,6 +13,7 @@ proof, not a placeholder for it.
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import time
 from dataclasses import dataclass, field
@@ -86,6 +87,25 @@ class Block:
     #: Encoded public key that receives the block reward, empty for genesis.
     coinbase: bytes = b""
 
+    def transaction_root(self) -> bytes:
+        """A digest over every transaction this block carries.
+
+        The header used to commit only to `len(transactions)`, which meant two blocks with
+        completely different spends and the same count had the same hash. Proof of work then
+        secured an ordering of block hashes rather than a ledger: a miner could publish a block,
+        then publish a different one with the same hash and the same work, and every peer would
+        accept it as the same block. Found by an independent review, 2026-11-10.
+
+        Candidates include their ring indices and the pool they were built against, so a root
+        commits to *which* notes were spent, not merely how many.
+        """
+        digest = hashlib.sha3_256(b"radix/txroot/v1")
+        # Sorted so the root depends on the set of spends, not on their order of arrival.
+        for payload in sorted(self.transactions, key=lambda item: repr(sorted(item.items()))):
+            digest.update(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode())
+            digest.update(b"\x00")
+        return digest.digest()
+
     def header(self) -> bytes:
         return b"".join(
             [
@@ -96,7 +116,7 @@ class Block:
                 self.timestamp.to_bytes(8, "little"),
                 self.target.to_bytes(8, "little"),
                 self.coinbase,
-                str(len(self.transactions)).encode(),
+                self.transaction_root(),
             ]
         )
 

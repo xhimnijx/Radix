@@ -1,17 +1,38 @@
-chore: keep the fast suite fast, and bring the test counts current
+fix: three currency-breaking defects an independent review found
 
-The full suite now passes 622 tests against 1 known xfail, but the FAST suite had grown from 11
-minutes to 38 because three files that generate real proofs were not marked slow. Every test in
-test_candidate_b_relations, test_candidate_b_carry_proof and test_candidate_b_range_proof costs
-one to five minutes, so `-m "not slow"` was running all of them.
+An independent review put the project at ~18%, against my ~80%, and it was right on the four
+defects that matter. My scoring table had no line for supply integrity, so it measured progress
+against the plan I had rather than against what a currency requires. Three of the four were
+fixable today and are fixed here.
 
-Marked slow at module level. Nothing is skipped: they run under `-m slow` exactly as before, and
-the full count is unchanged at 622. The fast suite is back to 6.5 minutes at 606 passed.
+1. THE BLOCK HASH DID NOT COMMIT TO THE TRANSACTIONS. The header carried
+   `str(len(transactions))`, so two blocks with completely different spends and the same count
+   had the SAME HASH. Proof of work secured an ordering of block hashes rather than a ledger:
+   publish a block, then publish a different block with the same hash and the same work, and
+   every peer treats it as the same block. The header now carries a transaction root -- a
+   SHA3-256 over every payload, each hashed canonically and SORTED so the root depends on the
+   set of spends rather than their arrival order. Tests cover both directions: different spends
+   differ, and the same set in a different order does not.
 
-That distinction matters for this project specifically: the fast suite is what gets run before
-every commit, and a 38-minute gate is a gate people route around. A test suite that is too slow
-to run is a test suite that stops being run, which is the same failure as the Gaussian bound that
-went stale because the Rust suite was not being run.
+2. A PEER'S BLOCK WAS APPLIED WITHOUT VERIFYING ITS TRANSACTIONS. node.py called
+   `self.chain.append(block)` and append defaults to `verify_transactions=False`, which is right
+   for locally mined blocks and wrong for a stranger's. A miner could push arbitrary unsigned
+   spends into every peer. The call site now passes True, with a comment saying why. The default
+   stays False and is asserted so, because changing it would silently re-verify every local block.
 
-Counts updated wherever a current figure is quoted: README, CONTRIBUTING, AUDIT-PACKET,
-REVIEW-REQUEST, the paper, ROADMAP and STATUS.
+3. PERSISTENCE DROPPED THE STATE THAT MATTERS. chain_to_dict wrote height, previous, anchor,
+   transactions, nonce and timestamp -- and nothing else. Omitting `minted` reset the supply cap
+   to zero on every restart, which is the same as not having one. Omitting `target` lost the
+   difficulty history, so a restarted node computed a different next_target and rejected valid
+   peer blocks. Omitting `coinbase` stranded every immature reward permanently. Omitting
+   `immature` and `treasury` lost balance-relevant state. All five now persist, and a round trip
+   is tested against minted, every target, every coinbase, maturity, treasury and next_target.
+
+Eight tests in tests/test_testnet_integrity.py. 74 tests across the chain, node, p2p, reward,
+genesis and checkpoint suites still pass.
+
+NOT FIXED, and it is the one that matters: value is not bound to notes. `input_values` is
+self-declared and nothing checks it against the note being spent, so a wallet can claim a
+billion atoms from a four-thousand-atom genesis. The reviewer demonstrated it end to end. That is
+the same defect as the unfinished range/balance research recorded in REVIEW-FINDINGS, and it is
+not something to patch -- it needs the value-commitment layer, which needs the bridge.

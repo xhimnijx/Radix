@@ -22,7 +22,7 @@ from radix_core.candidate_b.lattice import ring
 from radix_core.candidate_b.lattice.params import SMILE
 from radix_core.candidate_b.lattice.spend import Output
 
-from .chain import Block, Chain, output_id
+from .chain import GENESIS_TARGET, Block, Chain, output_id
 
 STATE_FILE = "chain.json"
 ADDRESS_BOOK_FILE = "addressbook.json"
@@ -107,9 +107,23 @@ def chain_to_dict(chain: Chain) -> dict:
                 "transactions": list(block.transactions),
                 "nonce": block.nonce,
                 "timestamp": block.timestamp,
+                # Target and coinbase are header fields. Omitting them reset the difficulty
+                # history and blanked every miner's reward address on restart, so a node
+                # recomputed a different next_target and rejected valid peer blocks.
+                "target": block.target,
+                "coinbase": block.coinbase.hex(),
             }
             for block in chain.blocks
         ],
+        # `minted` is the supply cap's running total. Omitting it reset the cap to zero on
+        # every restart, which is the same as not having one. Immature and treasury are
+        # balance-relevant state and were dropped for the same reason.
+        "minted": chain.minted,
+        "immature": {
+            (key.hex() if isinstance(key, bytes) else str(key)): int(value)
+            for key, value in chain.immature.items()
+        },
+        "treasury": {int(height): int(amount) for height, amount in chain.treasury.items()},
         "outputs": [output_to_wire(note) for note in chain.outputs.values()],
         "spent_tags": sorted(tag.hex() for tag in chain.spent_tags),
         "extra_pool": [key_to_wire(key) for key in chain.pool[chain.decoy_count :]],
@@ -133,6 +147,8 @@ def chain_from_dict(payload: dict, parameters, verify) -> Chain:
                 transactions=tuple(entry["transactions"]),
                 nonce=int(entry["nonce"]),
                 timestamp=int(entry["timestamp"]),
+                target=int(entry.get("target", 0)) or GENESIS_TARGET,
+                coinbase=bytes.fromhex(entry.get("coinbase", "")),
             )
         )
     for entry in payload["outputs"]:
@@ -143,6 +159,14 @@ def chain_from_dict(payload: dict, parameters, verify) -> Chain:
         key = key_from_wire(entry)
         if key not in chain.pool:
             chain.pool.append(key)
+    chain.minted = int(payload.get("minted", 0))
+    chain.immature = {
+        (bytes.fromhex(key) if len(key) % 2 == 0 else key): int(value)
+        for key, value in payload.get("immature", {}).items()
+    }
+    chain.treasury = {
+        int(height): int(amount) for height, amount in payload.get("treasury", {}).items()
+    }
     for entry in payload["mempool"]:
         chain.mempool[bytes.fromhex(entry["id"])] = entry["payload"]
         for tag in entry["payload"].get("tags", []):
