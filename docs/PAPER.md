@@ -178,6 +178,15 @@ nothing tied it to the data. It now derives the bound from the table's own sigma
 
 Stated plainly, because a paper that hides these is not credible.
 
+- **The balance relation is not provable yet, and the reason is structural.** The
+  binaryness check requires messages constant in each CRT slot; the base-4 carrying identity
+  requires multiplication by `(X - 4)` in the coefficient domain. Multiplying a slot-constant
+  by `(X - 4)` leaves the slot-constant subspace -- a slot-constant 1 becomes `(-4, 1, 0, 0)`
+  in that slot -- so a balance relation written over the bit planes is not the identity it
+  appears to be. Each packing is sound alone and the two do not compose. Resolving it needs
+  either coefficient-domain amounts with a quartic membership test, which the quadratic alpha
+  machinery does not express, or a slot-wise carry, which the `(X - 4)` argument does not
+  give. This is a design question for the reviewers, not an implementation bug.
 - **The range constraint is inside the proof; the wallet does not use it.** Two alpha
   challenges per amount are appended after `alpha_m` and drawn after `h` before `c`; the bit
   polynomials are committed messages that are never transmitted; and a slot holding 2 is

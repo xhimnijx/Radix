@@ -1,25 +1,32 @@
-feat: the carry and the relation mirrored in Rust, so both languages agree on balance
+research: the balance relation does not compose, and that is the open question now
 
-The carry work added two things that can silently disagree between implementations: a
-committed row with no binaryness term, and a linear relation whose algebra depends on exactly
-where `c` and the constant sit. A sign error or an off-by-one in the position space would pass
-one side's tests and fail the other's -- which is what the two-implementation discipline is
-for.
+I set out to assemble a full hidden-amount balance proof and found a structural gap instead of
+a bug. It is worth committing because it changes what the next step is.
 
-  LinearRelation in Rust      weights, signed positions, optional constant
-  verify_with_relations       verify keeps its signature and passes &[] for every old caller
-  Keys.carry_rows             + with_carry_rows, same pattern as the range rows
-  paper_to_slot_ranged        shift is now range_count + carry_count
-  request format              carry_count, the carry rows, and the relation table
+The binaryness check requires messages that are CONSTANT IN EACH CRT SLOT. That is what makes
+`b*b = b` hold, and it is how `digits.pack_bits` builds them.
 
-Measured by experiments/cross_language_carry.py: a Python proof carrying three bit planes and
-a carry message, 23,808 bytes and 23 commitment entries, is accepted by the Rust verifier;
-Rust rejects it against a different message; and Rust REFUSES a proof whose carry does not
-match its bits. Both languages agree on the balance relation, not just on the range term.
+The base-4 carrying identity requires multiplication by `(X - 4)` in the COEFFICIENT domain,
+where evaluating at `X = 4` recovers the integer and `(X - 4)` therefore divides the difference.
 
-The existing cross-language range check still passes after the format change, and the Rust
-suite is 70 passing.
+Those are different subspaces. Verified directly: multiplying a slot-constant polynomial by
+`(X - 4)` leaves the slot-constant subspace -- a slot-constant 1 in slot 0 becomes
+`(-4, 1, 0, 0)` in that slot. So a balance relation written over the bit planes is NOT the
+identity it appears to be; it would verify and mean nothing. `balance.relations` was written,
+found wanting, and REMOVED rather than shipped.
 
-One shape decision worth recording: `verify` keeps its four-argument signature and delegates
-to `verify_with_relations` with an empty slice, so no existing call site, benchmark or test
-changed. Adding a required parameter would have touched nine files to say nothing.
+What is kept is sound and tested: `balance.build` computes the carry as the quotient of the
+digit-polynomial difference by `(X - 4)` by synthetic division, refuses a spend whose amounts
+do not add up, refuses a negative amount, refuses an empty input list, and checks the carry
+against the input count. Four tests.
+
+The block, stated as one question: resolving the mismatch needs either coefficient-domain
+amounts whose range is proven by a quartic membership test -- which the quadratic alpha
+machinery does not express -- or slot-wise carrying, which the `(X - 4)` argument does not
+give. Each packing is sound alone. Which one the construction should use is a decision I
+cannot make safely for the scheme, so it is recorded in docs/PAPER.md section 8 and the goal is
+marked blocked on it rather than guessed at.
+
+This is the first time in this work that a genuine design question has stopped progress. It is
+also the reason to stop rather than push: a balance relation that verifies while meaning
+nothing is the worst failure mode available, and it would have looked like success.
