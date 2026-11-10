@@ -192,10 +192,11 @@ class Node:
             }
 
         if kind == "getchain":
-            return {
-                "type": "chain",
-                "blocks": [block.to_wire() for block in self.chain.blocks],
-            }
+            # Under the lock: serialising the chain walks the block list, and a miner appending
+            # a block mid-walk would produce a torn view. The lock is held only for the copy.
+            with self.lock:
+                blocks = [block.to_wire() for block in self.chain.blocks]
+            return {"type": "chain", "blocks": blocks}
 
         if kind == "getpeers":
             # A node serves the peers it already knows. There is no gossip protocol and
