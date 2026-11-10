@@ -1,31 +1,28 @@
-feat: a linear relation among committed messages, proven inside the proof
+feat: m-input carry boundedness, proven by decomposition rather than approximation
 
-The primitive the m-input carry needs, and the last one missing from the range layer. C1's
-eighth-pass note described it exactly: "a + b - c = f*(X-4) is linear in the committed
-values, so it rides on the existing masked opening for one row."
+For m inputs the base-4 carry reaches m and is no longer binary, so the alpha-slot binaryness
+check says nothing about it. C1's route was [25]'s relaxed proof. This takes a different
+sound route with the machinery that already exists: bit-decompose the carry.
 
-  LinearRelation(weights, positions, constant)   sum_j weight_j * m_j - constant = 0
+  Keys.carry_rows   committed messages that are NOT binary, so they get no beta and no
+                    range term; their boundedness comes from a LinearRelation
+  carry - sum 2^i b_i = 0
 
-Positions 1..k+2m+1 are the paper's message positions; negative positions index the range
-rows, so -1 is range row 0. The prover adds sum_j weight_j * a_j to psi and the verifier adds
-c*(sum_j weight_j * f_j + c*constant) to the equation, which leaves exactly -c^2 * residual.
-Since c must be a unit, the equality forces the residual to zero.
+The carry for m inputs lies in [0, m], so ceil(log2(m+1)) bits per position suffice, and
+those bits are ordinary range rows proven binary by the existing check. The carry is
+therefore bounded because it IS the sum of proven bits, not because a norm bound was hoped
+for. At m = 16 that is five bit planes plus one carry row -- cheaper than the relaxed proof
+at this size and built from checks that are already tested.
 
-Five tests, and the ordering matters: a relation that holds does not disturb verification; a
-relation whose constant does not match the message is REFUSED by the proof; a relation over
-two messages checks their sum and is refused when both are set; and a zero weight is
-documented as making the relation vacuous rather than left to be discovered.
+Bit planes are packed one polynomial per plane. That ordering is load-bearing: packing
+position-major would scatter each position's bits across different polynomials and the
+relation could not be written as a fixed weight per row.
 
-Two errors of mine, both about what a committed message IS:
+Three tests: a four-input carry decomposes and verifies; a carry that does not match its
+bits is REFUSED; and a bit plane with a 2 in it is refused by the range check as usual.
 
-The constant's sign was wrong -- c*(sum f - c*k) instead of c*(sum f + c*k) -- which made
-every relation with a non-zero constant fail. The algebra in the docstring now states the
-premultiplication that makes it work rather than leaving it implied.
+Two errors of mine: f_extra was computed before f_range existed (UnboundLocalError), and the
+first version of this test file packed position-major and built the relation twice while
+editing. Both were caught by running it.
 
-And the test compared ring.constant(1), which is 1 in every CRT slot, against
-subring.from_constants((1,0,0,...)), which is 1 in slot 0 and 0 in the other thirty-one. Those
-are different objects, so a relation that looked like it should hold did not. The helper now
-documents the difference, because it is the same slot-versus-coefficient confusion that cost
-a cycle in the range proof.
-
-5 tests. This is the mechanism the carry needs; wiring the carry through it is next.
+13 tests across the range and relation suites still pass.

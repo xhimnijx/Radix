@@ -248,6 +248,10 @@ class Keys:
     #: components but changes neither W nor the Gaussian tables -- which is why the range
     #: layer is a smaller change than the layout note first suggested.
     range_rows: tuple[tuple[Poly, ...], ...] = ()
+    #: Rows committed for the carry and similar messages that are NOT binary, so they get
+    #: no beta challenge and no range term. Their boundedness comes from a LinearRelation
+    #: tying them to the bits of their decomposition.
+    carry_rows: tuple[tuple[Poly, ...], ...] = ()
 
     @property
     def count(self) -> int:
@@ -259,7 +263,7 @@ class Keys:
             raise SetMembershipError("B_0 must have kappa rows")
         if len(self.rows) != self.count + 2 * self.depth + 1:
             raise SetMembershipError("wrong number of b rows")
-        for row in self.rows0 + self.rows + self.range_rows:
+        for row in self.rows0 + self.rows + self.range_rows + self.carry_rows:
             if len(row) != width:
                 raise SetMembershipError("key rows must have width W")
 
@@ -270,6 +274,7 @@ def setup(
     parameters: SmileParameters | None = None,
     row_count: int | None = None,
     range_count: int = 0,
+    carry_count: int = 0,
 ) -> Keys:
     sm = _p(parameters)
     rows = sm.matrix_rows if row_count is None else row_count
@@ -286,8 +291,16 @@ def setup(
     range_rows = tuple(
         tuple(ring.sample_uniform(rng, sm) for _ in range(width)) for _ in range(range_count)
     )
+    carry_rows = tuple(
+        tuple(ring.sample_uniform(rng, sm) for _ in range(width)) for _ in range(carry_count)
+    )
     return Keys(
-        rows0=rows0, rows=b_rows, depth=depth, row_count=row_count, range_rows=range_rows
+        rows0=rows0,
+        rows=b_rows,
+        depth=depth,
+        row_count=row_count,
+        range_rows=range_rows,
+        carry_rows=carry_rows,
     )
 
 
@@ -539,6 +552,7 @@ def prove(
     tag_keys: "tagmod.TagKeys | None" = None,
     range_bits: tuple[Poly, ...] = (),
     relations: tuple[LinearRelation, ...] = (),
+    carry_bits: tuple[Poly, ...] = (),
 ) -> Proof:
     """Fig. 7 with rejection sampling; retries until a mask is accepted.
 
@@ -548,7 +562,7 @@ def prove(
     for _attempt in range(MAX_ATTEMPTS):
         result = _prove_once(
             keys, statement, secret, index, message, rng, parameters, tag_keys, range_bits,
-            relations,
+            relations, carry_bits,
         )
         if result is not None:
             return result
@@ -566,6 +580,7 @@ def _prove_once(
     tag_keys: "tagmod.TagKeys | None" = None,
     range_bits: tuple[Poly, ...] = (),
     relations: tuple[LinearRelation, ...] = (),
+    carry_bits: tuple[Poly, ...] = (),
 ) -> "Proof | None":
     """One attempt. Returns None when rejection sampling rejects."""
     sm = _p(parameters)
@@ -631,6 +646,14 @@ def _prove_once(
         if len(bit_poly) != sm.ring_degree:
             raise SetMembershipError("a bit polynomial must have ring_degree coefficients")
         commitment.append(ring.add(ring.dot(row, randomness, sm), bit_poly, sm))
+    if len(carry_bits) != len(keys.carry_rows):
+        raise SetMembershipError(
+            f"expected {len(keys.carry_rows)} carry messages, got {len(carry_bits)}"
+        )
+    for row, carry_poly in zip(keys.carry_rows, carry_bits):
+        if len(carry_poly) != sm.ring_degree:
+            raise SetMembershipError("a carry message must have ring_degree coefficients")
+        commitment.append(ring.add(ring.dot(row, randomness, sm), carry_poly, sm))
 
     c_prime = _draw_ternary(tx, b"c-prime", sm)
     if not _is_unit(c_prime, sm):
@@ -749,6 +772,11 @@ def _prove_once(
         sm,
     )
     a_range = tuple(ring.dot(row, mask, sm) for row in keys.range_rows)
+    a_carry = tuple(ring.dot(row, mask, sm) for row in keys.carry_rows)
+    # Relations index the extra committed messages with negative positions in a single
+    # sequence: range rows first, then carry rows. That keeps one convention rather than
+    # two, which is what the first version of this had.
+    a_extra = a_range + a_carry
     psi_range = _add_all(
         (
             ring.mul(
@@ -786,7 +814,7 @@ def _prove_once(
                 (
                     ring.mul(
                         weight,
-                        a_values[position] if position > 0 else a_range[-position - 1],
+                        a_values[position] if position > 0 else a_extra[-position - 1],
                         sm,
                     )
                     for weight, position in zip(relation.weights, relation.positions)
@@ -866,7 +894,12 @@ def verify(
         rows = len(statement.matrix)
         width = masking_width(depth, sm, rows)
         if len(proof.commitment) != (
-            sm.challenge_dim + rows + 2 * depth + 1 + len(keys.range_rows)
+            sm.challenge_dim
+            + rows
+            + 2 * depth
+            + 1
+            + len(keys.range_rows)
+            + len(keys.carry_rows)
         ):
             import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #2 line 811")
             return False
@@ -923,7 +956,9 @@ def verify(
 
         # line 04: t_{m+i} -= (A z')_i
         slot_of = {
-            position: _paper_to_slot(position, depth, rows, sm, len(keys.range_rows))
+            position: _paper_to_slot(
+                position, depth, rows, sm, len(keys.range_rows) + len(keys.carry_rows)
+            )
             for position in range(1, rows + 2 * depth + 2)
         }
         a_z = tuple(ring.dot(row, proof.response_prime, sm) for row in statement.matrix)
@@ -1022,6 +1057,15 @@ def verify(
         # commitments, then one per level (depth - 1), then psi last. Counting back from
         # the end has to allow for the level commitments, which is where the first
         # version of this was off by one.
+        carry_start = sm.challenge_dim + depth + rows + 1 + range_count
+        f_carry = tuple(
+            ring.sub(
+                ring.dot(keys.carry_rows[j], proof.response, sm),
+                ring.mul(proof.challenge, proof.commitment[carry_start + j], sm),
+                sm,
+            )
+            for j in range(len(keys.carry_rows))
+        )
         range_start = sm.challenge_dim + depth + rows + 1
         f_range = tuple(
             ring.sub(
@@ -1031,6 +1075,8 @@ def verify(
             )
             for j in range(range_count)
         )
+        # Relations index range rows first, then carry rows, in one sequence.
+        f_extra = f_range + f_carry
         tx.absorb(b"t-psi", ring.encode(proof.commitment[-1], sm))
         tx.absorb(b"omega", ring.encode(proof.omega, sm))
         if _draw_ternary(tx, b"c", sm) != proof.challenge:
@@ -1044,7 +1090,7 @@ def verify(
                         (
                             ring.mul(
                                 weight,
-                                f[position] if position > 0 else f_range[-position - 1],
+                                f[position] if position > 0 else f_extra[-position - 1],
                                 sm,
                             )
                             for weight, position in zip(relation.weights, relation.positions)
