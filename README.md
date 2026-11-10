@@ -121,6 +121,7 @@ Root documents:
 - [`docs/PAPER.md`](docs/PAPER.md) — an implementation-study draft, with the claims and the limitations
 - [`docs/ALPHA-SLOTS.md`](docs/ALPHA-SLOTS.md) — the change specification for the range proof
 - [`docs/HEADER-COMMITMENTS.md`](docs/HEADER-COMMITMENTS.md) — transaction and state roots, and why the header needed them
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — the architecture and privacy claim, frozen
 - [`DEPLOY.md`](DEPLOY.md) — running a stagenet node on a second machine
 - [`TESTNET.md`](TESTNET.md) — how to run and build the app
 - [`PLAIN-ENGLISH.md`](PLAIN-ENGLISH.md) — the same story without jargon

@@ -1,6 +1,6 @@
 # Radix — Plan to Mainnet
 
-**Status:** 2026-11-10. **10 of 159 checkboxes are closed**, each with the test named in its *done when* condition. The other 152 are open. 159 tracked checkboxes across 17 sections.
+**Status:** 2026-11-10. **12 of 159 checkboxes are closed**, each with the test named in its *done when* condition. The other 152 are open. 159 tracked checkboxes across 17 sections.
 **Baseline:** ~18% of mainnet readiness, measured by reading the code and running it (see "Baseline" below).
 **Purpose:** the complete list of work between this commit and a mainnet launch. Every actionable line is a checkbox. Tick only when the *done when* condition is true and a test or artifact proves it.
 
@@ -56,8 +56,8 @@ The cryptography is the strongest part; the ledger, network, storage, wallet and
 
 ## D. Decisions (must be made before the corresponding work starts)
 
-- [ ] **D1** (M) **Pick one architecture.** Launch path is either Candidate B (lattice ring signature + spent-tag ledger, what `radix_testnet` runs) or Candidate A (`radix_core` commitment/nullifier/Merkle/ML-KEM reference core). `launch.py` describes a third, unimplemented STARK design. *Done when:* one tree is the launch path, the others are archived out of the release build, and `launch.py` describes the chosen system.
-- [ ] **D2** (M) **State the privacy claim precisely.** Ring anonymity with public amounts, or confidential amounts. The value-binding research is unfinished. *Done when:* one normative sentence in the spec, reflected exactly in the proof statement and the RPC documentation.
+- [x] **D1** (M) **Pick one architecture.** Launch path is either Candidate B (lattice ring signature + spent-tag ledger, what `radix_testnet` runs) or Candidate A (`radix_core` commitment/nullifier/Merkle/ML-KEM reference core). `launch.py` describes a third, unimplemented STARK design. *Done when:* one tree is the launch path, the others are archived out of the release build, and `launch.py` describes the chosen system. *Evidence:* `docs/DECISIONS.md` §D1 fixes the launch path as Candidate B and names the consequences (modulus, proof size, keystore). *Open sub-clause:* moving Candidate A out of the release build is Z-1 and rewriting `launch.py` is Z-8 -- both scheduled, neither done, so this tick covers the decision only.
+- [x] **D2** (M) **State the privacy claim precisely.** Ring anonymity with public amounts, or confidential amounts. The value-binding research is unfinished. *Done when:* one normative sentence in the spec, reflected exactly in the proof statement and the RPC documentation. *Evidence:* `docs/DECISIONS.md` §D2 gives the normative sentence -- ring anonymity over 1,024 keys, **amounts public now, confidential as the target**. `GET /api/status` returns `privacy: {mode, confidential, ring, claim}` and `tests/test_testnet_privacy_claim.py` asserts the RPC and the document agree and that the node does **not** claim confidential amounts.
 - [ ] **D3** (M) **Pick consensus.** PoW as designed, a redesigned PoW, or PoS/BFT. *Done when:* decision record plus a security-budget model that states the assumed hashrate (PoW) or validator set (PoS) and the cost of an attack.
 - [ ] **D4** (S) **Fix unit, decimals and supply cap.** Today 100 atoms/unit (2 decimals) and a cap chosen to fit under `q/2`. *Done when:* the frozen constant table is in the spec and in one code location.
 - [ ] **D5** (M) **Pick the wallet model.** One-time addresses (B2) so a keypair is not burned by one spend, or an explicit account model. *Done when:* scope and UX are written down; `wallet.py` redesign or patch is scheduled against it.

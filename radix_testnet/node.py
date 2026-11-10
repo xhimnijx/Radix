@@ -497,6 +497,17 @@ class Node:
         return {
             "banner": "TESTNET - NO VALUE - NO SECURITY CLAIM",
             "version": __version__,
+            # D2 of PLAN.md: the normative privacy claim, machine-readable so a client branches
+            # on this rather than on a document version. Amounts are public until C-1 closes.
+            "privacy": {
+                "mode": "public-amounts",
+                "confidential": False,
+                "ring": 1024,   # 32 slots to the depth-2 power: the ring the chain builds
+                "claim": (
+                    "sender anonymity within a 1024-key ring; transaction amounts are public "
+                    "until the value-binding construction is complete"
+                ),
+            },
             "height": self.chain.height,
             "tip": self.chain.tip.block_hash().hex(),
             "anchor": self.chain.anchor.hex(),
