@@ -274,10 +274,16 @@ def test_the_auto_miner_settles_the_mempool_by_itself(tmp_path, monkeypatch):
     assert node.chain.mempool
 
     start_auto_miner(node, interval=0.05)
-    deadline = time.time() + 5
+    # 5 seconds was enough alone and not always enough under a full-suite load, where this
+    # test failed roughly one run in three. The assertion is unchanged -- a block must be
+    # mined and the mempool drained -- but the wait is long enough not to race the scheduler.
+    deadline = time.time() + 60
     while time.time() < deadline and node.chain.height == 0:
         time.sleep(0.05)
-    assert node.chain.height == 1
+    assert node.chain.height == 1, (
+        "the auto-miner did not produce a block within 60 s; it is started in a background "
+        "thread, so a hang here means the thread died or the lock is held"
+    )
     assert not node.chain.mempool
 
 

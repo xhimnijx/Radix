@@ -536,11 +536,12 @@ class Chain:
             )
             if block.nonce > 1 << 32:
                 raise ChainError("no nonce found")
-        self._apply(block)
+        # Mining: the transactions were verified at submission, so this is not a trust boundary.
+        self._apply(block, verify_transactions=False)
         self.mempool.clear()
         return block
 
-    def append(self, block: Block, verify_transactions: bool = False) -> None:
+    def append(self, block: Block, verify_transactions: bool = True) -> None:
         """Validate a block that came from somewhere else, then apply it.
 
         This is the only entry point for foreign blocks, and it refuses anything that
@@ -634,7 +635,7 @@ class Chain:
             fresh.append(block, verify_transactions=verify_transactions)
         return fresh
 
-    def _apply(self, block: Block, verify_transactions: bool = False) -> None:
+    def _apply(self, block: Block, verify_transactions: bool = True) -> None:
         """Apply a block's transactions and its coinbase.
 
         `verify_transactions` is False for blocks this node mined or already

@@ -76,10 +76,22 @@ def test_a_peer_block_is_appended_with_verification():
     )
 
 
-def test_the_append_default_stays_false_for_local_blocks():
-    """The default must not change: locally mined blocks were already verified."""
-    signature = inspect.signature(C.Chain.append)
-    assert signature.parameters["verify_transactions"].default is False
+def test_append_is_fail_closed_by_default():
+    """P0-2 / S-02: an omitted flag must mean *verify*, not *trust*.
+
+    This test previously asserted the opposite -- that the default stayed False for the sake of
+    locally mined blocks. The plan requires fail-closed, and rightly: the default is the behaviour
+    a new caller gets without thinking about it, and the cost of getting it wrong is arbitrary
+    spends in every peer's chain. Mining opts out explicitly instead, where the trust boundary is
+    a comment away.
+    """
+    assert inspect.signature(C.Chain.append).parameters["verify_transactions"].default is True
+    assert inspect.signature(C.Chain._apply).parameters["verify_transactions"].default is True
+
+    mine = inspect.getsource(C.Chain.mine)
+    assert "verify_transactions=False" in mine, (
+        "mining must opt out explicitly rather than relying on a permissive default"
+    )
 
 
 def build_chain(blocks=2):
