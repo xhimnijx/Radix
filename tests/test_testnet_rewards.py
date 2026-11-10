@@ -18,6 +18,8 @@ import pytest
 from radix_core.candidate_b.lattice.spend import Output
 from radix_testnet import params as P
 from radix_testnet.chain import (
+    SUPPLY_CAP_ATOMS,
+    TAIL_END_BLOCKS,
     COINBASE_MATURITY,
     DECAY_BLOCKS,
     GENESIS_TIME,
@@ -75,7 +77,12 @@ def mine(chain, count, start=GENESIS_TIME):
 def test_emission_starts_at_the_initial_reward_and_floors_at_the_tail():
     assert emission(0) == INITIAL_REWARD_ATOMS
     assert emission(DECAY_BLOCKS) == TAIL_REWARD_ATOMS
-    assert emission(DECAY_BLOCKS * 10) == TAIL_REWARD_ATOMS
+    # The tail is flat from the end of the decay until the supply cap, and then stops. The old
+    # version of this test asserted it at DECAY_BLOCKS * 10, which is past the cap -- that
+    # assertion is what made the cap look compatible with a perpetual tail.
+    assert emission((DECAY_BLOCKS + TAIL_END_BLOCKS) // 2) == TAIL_REWARD_ATOMS
+    assert emission(TAIL_END_BLOCKS - 1) == TAIL_REWARD_ATOMS
+    assert emission(TAIL_END_BLOCKS) == 0
 
 
 def test_emission_never_increases():
@@ -86,9 +93,20 @@ def test_emission_never_increases():
         previous = current
 
 
-def test_the_tail_never_stops():
-    for height in (DECAY_BLOCKS, DECAY_BLOCKS * 100, 10**9):
-        assert emission(height) == TAIL_REWARD_ATOMS > 0
+def test_the_tail_stops_at_the_supply_cap():
+    """It used to be called `test_the_tail_never_stops`, and that was the bug.
+
+    A perpetual tail makes total supply unbounded. The supply cap is not a preference -- the
+    balance argument is a congruence modulo q, so integer balance only follows below q/2. With a
+    perpetual tail the cap was reached at height 1,000,104 and `check_supply` would have halted the
+    chain there. The tail now ends exactly at the cap, so supply is bounded and the chain is not.
+    """
+    assert emission(DECAY_BLOCKS) == TAIL_REWARD_ATOMS > 0
+    assert emission(TAIL_END_BLOCKS - 1) > 0
+    assert emission(TAIL_END_BLOCKS) == 0
+    assert emission(TAIL_END_BLOCKS * 100) == 0
+    total = sum(emission(height) for height in range(1, TAIL_END_BLOCKS))
+    assert total == SUPPLY_CAP_ATOMS, "the schedule must land exactly on the cap, not near it"
 
 
 def test_the_treasury_takes_its_slice_and_the_miner_gets_the_rest():

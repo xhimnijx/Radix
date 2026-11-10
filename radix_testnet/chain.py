@@ -208,6 +208,19 @@ def block_work(target: int) -> int:
     return WORK_UNIT // target
 
 
+#: The height at which the tail stops, chosen so the cumulative emission lands exactly on
+#: `SUPPLY_CAP_ATOMS` and never exceeds it.
+#:
+#: This is a correctness constraint, not a preference. The tail emits `TAIL_REWARD_ATOMS` per block
+#: forever, so total supply would be unbounded -- and the supply cap is a *soundness* bound, because
+#: the balance argument is a congruence modulo `q` that only yields integer balance below `q/2`.
+#: A perpetual tail and a hard cap cannot both hold: with the original schedule the cap was reached
+#: at height 1,000,104 (about 3.8 years at 120-second blocks) and `check_supply` would have *halted
+#: the chain* there. Ending the tail at exactly the cap makes supply bounded, the cap exact, and the
+#: chain immortal. After this height, block rewards are fees only.
+TAIL_END_BLOCKS = 1_000_104
+
+
 def emission(height: int) -> int:
     """The total reward for a block at `height`, in atoms.
 
@@ -218,6 +231,8 @@ def emission(height: int) -> int:
     """
     if height < 0:
         raise ChainError("height must not be negative")
+    if height >= TAIL_END_BLOCKS:
+        return 0
     if height >= DECAY_BLOCKS:
         return TAIL_REWARD_ATOMS
     span = INITIAL_REWARD_ATOMS - TAIL_REWARD_ATOMS

@@ -92,3 +92,92 @@ it instead of on a document version.
 
 The status field is the normative one: a client that reads `confidential: false` must not present
 amounts as private, whatever a document says.
+
+
+---
+
+## D3 — Consensus is PoW as designed, with the security budget stated
+
+**Decision.** Proof of work as implemented: LWMA-90 difficulty with 2× clamps, a slow start over
+the first 4,000 blocks, median-time-past for timestamps, and fork choice by cumulative work
+(`Σ 2^256 / target`, fixed to stop it being the block count).
+
+**Rejected.** PoS/BFT. It removes the 51% economics and adds a validator set, finality and slashing
+— a rewrite of `chain.py`, and roughly neutral in effort unless the expertise already exists. It
+was not chosen, so the security budget below is a miner-cost model rather than a stake model.
+
+### The security-budget model
+
+An attacker needs more than half the hash rate for long enough to build a competing branch deeper
+than the honest one. The cost has three parts:
+
+```
+cost  =  (hash_rate_share × network_hash_rate × hardware_cost_per_hash)     capital
+       + (the same hash rate × power_per_hash × hours × price_per_kWh)      energy
+       + (the value at risk × probability of detection and reversal)        consequence
+```
+
+The model is only as good as `network_hash_rate`, and at launch that number is **unknown and
+small**. So the honest statement is not a number, it is a bound:
+
+| assumed network hash rate | share needed | capital to rent it (indicative) | verdict |
+|---|---|---|---|
+| 10 kH/s | 5 kH/s | trivial — a laptop | **no security** |
+| 1 MH/s | 0.5 MH/s | one GPU for an afternoon | **no security** |
+| 1 GH/s | 0.5 GH/s | a modest farm | weak |
+| 1 TH/s | 0.5 TH/s | serious capital | defensible |
+
+**Consequence, stated plainly:** with the emission schedule as written (2,000 atoms decaying to a
+tail of 60), the security budget in *value* is zero, because the chain carries no value. PoW is the
+right choice precisely because it makes that visible: an attacker's incentive is bounded by what
+they can steal, and until the chain holds value there is nothing to steal. What PoW does **not**
+give at this size is resistance to a bored attacker with a laptop, and no amount of parameter
+tuning fixes that — only value, and therefore a real hash rate, does.
+
+**What this obliges.** E-2 must publish this model with real numbers before launch, and the launch
+gate must state the assumed hash rate it is defending against. A chain that launches below its
+stated assumption is launching with the security budget unverified.
+
+---
+
+## D4 — Unit, decimals, and the supply cap
+
+**Decision.** One unit is **100 atoms**; two decimal places. The supply cap is **570,100,000 atoms
+= 5,701,000 units**.
+
+**Why that cap.** C1's ninth-pass verdict made it load-bearing: the trace-paired balance argument is
+a congruence modulo `q`, so it yields integer balance only if every total stays below `q/2`. With
+`q = 4,294,966,337`, that is 2,147,483,168 atoms. The schedule reaches 570,093,820 — a factor of
+3.77 below the bound, so the cap is a property the emission schedule already had rather than one it
+had to be given.
+
+The constants live in exactly one place, `radix_testnet/units.py`, and the chain enforces the cap in
+`check_supply`.
+
+---
+
+## D5 — The wallet model is one-time addressing
+
+**Decision.** Every payment goes to a **one-time address**. A meta-address publishes a spend key and
+its tag image (`T_K = A'·k`); the sender derives a short shift from a shared secret and computes
+`P = A·(k + δ)` and `T = T_K + A'·δ`; the recipient derives `p = k + δ` and spends it.
+
+**Why.** Today the tag is a function of the secret, so an account is spendable exactly once and
+change has to cycle through four accounts. That is not a wallet limitation that can be papered over
+— it is the same key being reused, and it makes a wallet hold four notes rather than four thousand.
+
+**What it costs.** The derivation is implemented and tested (`stealth.py`), but nothing wires it: a
+wallet must receive to a meta-address, scan for outputs it can derive, and spend them (C-8, W-1,
+W-2). The scan is the hard part, not the derivation.
+
+**Rejected.** An account model with the tag derived per note. Simpler to reason about, but it
+changes the tag construction and therefore C-12 and the withdrawn-tag path, and it gives up
+unlinkability that one-time addressing provides for free.
+
+---
+
+## D6 — The launch bar
+
+**Not decided here.** D6 requires the go/no-go gate in `PLAN.md` §G to be signed by **named
+owners**, and naming people is not something this record can do. It stays open until the owner
+assigns names to the eight gate items.
