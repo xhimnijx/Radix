@@ -1,28 +1,25 @@
-feat: m-input carry boundedness, proven by decomposition rather than approximation
+feat: the carry and the relation mirrored in Rust, so both languages agree on balance
 
-For m inputs the base-4 carry reaches m and is no longer binary, so the alpha-slot binaryness
-check says nothing about it. C1's route was [25]'s relaxed proof. This takes a different
-sound route with the machinery that already exists: bit-decompose the carry.
+The carry work added two things that can silently disagree between implementations: a
+committed row with no binaryness term, and a linear relation whose algebra depends on exactly
+where `c` and the constant sit. A sign error or an off-by-one in the position space would pass
+one side's tests and fail the other's -- which is what the two-implementation discipline is
+for.
 
-  Keys.carry_rows   committed messages that are NOT binary, so they get no beta and no
-                    range term; their boundedness comes from a LinearRelation
-  carry - sum 2^i b_i = 0
+  LinearRelation in Rust      weights, signed positions, optional constant
+  verify_with_relations       verify keeps its signature and passes &[] for every old caller
+  Keys.carry_rows             + with_carry_rows, same pattern as the range rows
+  paper_to_slot_ranged        shift is now range_count + carry_count
+  request format              carry_count, the carry rows, and the relation table
 
-The carry for m inputs lies in [0, m], so ceil(log2(m+1)) bits per position suffice, and
-those bits are ordinary range rows proven binary by the existing check. The carry is
-therefore bounded because it IS the sum of proven bits, not because a norm bound was hoped
-for. At m = 16 that is five bit planes plus one carry row -- cheaper than the relaxed proof
-at this size and built from checks that are already tested.
+Measured by experiments/cross_language_carry.py: a Python proof carrying three bit planes and
+a carry message, 23,808 bytes and 23 commitment entries, is accepted by the Rust verifier;
+Rust rejects it against a different message; and Rust REFUSES a proof whose carry does not
+match its bits. Both languages agree on the balance relation, not just on the range term.
 
-Bit planes are packed one polynomial per plane. That ordering is load-bearing: packing
-position-major would scatter each position's bits across different polynomials and the
-relation could not be written as a fixed weight per row.
+The existing cross-language range check still passes after the format change, and the Rust
+suite is 70 passing.
 
-Three tests: a four-input carry decomposes and verifies; a carry that does not match its
-bits is REFUSED; and a bit plane with a 2 in it is refused by the range check as usual.
-
-Two errors of mine: f_extra was computed before f_range existed (UnboundLocalError), and the
-first version of this test file packed position-major and built the relation twice while
-editing. Both were caught by running it.
-
-13 tests across the range and relation suites still pass.
+One shape decision worth recording: `verify` keeps its four-argument signature and delegates
+to `verify_with_relations` with an empty slice, so no existing call site, benchmark or test
+changed. Adding a required parameter would have touched nine files to say nothing.

@@ -43,7 +43,8 @@ def _encode_polys(polys) -> bytes:
 
 
 def build_request(
-    keys: S.Keys, statement: S.Statement, secret, index: int, message: bytes
+    keys: S.Keys, statement: S.Statement, secret, index: int, message: bytes,
+    relations=(),
 ) -> bytes:
     """Serialise a proving request in the layout `prove_request.rs` expects."""
     depth = keys.depth
@@ -54,7 +55,7 @@ def build_request(
         raise RustProverError("keys do not match the statement shape")
 
     header = struct.pack(
-        "<8I",
+        "<9I",
         depth,
         rows,
         cols,
@@ -63,6 +64,7 @@ def build_request(
         index,
         len(message),
         len(keys.range_rows),
+        len(keys.carry_rows),
     )
     parts = [header, message]
     for row in keys.rows0:
@@ -71,11 +73,24 @@ def build_request(
         parts.append(_encode_polys(row))
     for row in keys.range_rows:
         parts.append(_encode_polys(row))
+    for row in keys.carry_rows:
+        parts.append(_encode_polys(row))
     for row in statement.matrix:
         parts.append(_encode_polys(row))
     for key in statement.keys:
         parts.append(_encode_polys(key))
     parts.append(_encode_polys(secret))
+    # Relations: count, then per relation the weights, the positions and the constant.
+    parts.append(struct.pack("<I", len(relations)))
+    for relation in relations:
+        parts.append(struct.pack("<I", len(relation.weights)))
+        for weight in relation.weights:
+            parts.append(_encode_polys((weight,)))
+        for position in relation.positions:
+            parts.append(struct.pack("<i", position))
+        parts.append(b"\x01" if relation.constant is not None else b"\x00")
+        if relation.constant is not None:
+            parts.append(_encode_polys((relation.constant,)))
     return b"".join(parts)
 
 
@@ -122,7 +137,7 @@ def prove(
         )
 
 
-def verify(keys: S.Keys, statement: S.Statement, proof, message: bytes) -> bool:
+def verify(keys: S.Keys, statement: S.Statement, proof, message: bytes, relations=()) -> bool:
     """Check a proof with the Rust verifier. Same request format as proving.
 
     Exit codes are kept distinct on purpose: 0 verified, 1 the proof is wrong, 2 the
@@ -138,7 +153,7 @@ def verify(keys: S.Keys, statement: S.Statement, proof, message: bytes) -> bool:
 
     # The request format carries the secret, which verification never reads; a zero
     # secret keeps one serialiser for both directions.
-    request = build_request(keys, statement, _zero_secret(), 0, message)
+    request = build_request(keys, statement, _zero_secret(), 0, message, relations)
 
     with tempfile.TemporaryDirectory(prefix="radix-verify-") as work:
         request_path = Path(work) / "request.bin"

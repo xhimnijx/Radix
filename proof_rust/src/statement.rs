@@ -138,6 +138,10 @@ pub struct Keys {
     /// costs a commitment component and changes neither W nor the Gaussian tables. Empty
     /// for every pre-range call site, which is why `Keys::new` keeps its signature.
     pub range_rows: Vec<Vec<Poly>>,
+    /// Committed messages that are NOT binary: the carry and anything like it. They get no
+    /// beta challenge and no range term; their boundedness comes from a linear relation
+    /// tying them to the bits of their decomposition.
+    pub carry_rows: Vec<Vec<Poly>>,
 }
 
 impl Keys {
@@ -165,6 +169,7 @@ impl Keys {
             depth,
             row_count,
             range_rows: Vec::new(),
+            carry_rows: Vec::new(),
         })
     }
 
@@ -177,6 +182,18 @@ impl Keys {
             }
         }
         self.range_rows = range_rows;
+        Ok(self)
+    }
+
+    /// Attach carry rows: committed messages with no binaryness constraint of their own.
+    pub fn with_carry_rows(mut self, carry_rows: Vec<Vec<Poly>>) -> Result<Keys, ProofError> {
+        let width = self.width();
+        for row in &carry_rows {
+            if row.len() != width {
+                return Err(ProofError("carry rows must have width W".into()));
+            }
+        }
+        self.carry_rows = carry_rows;
         Ok(self)
     }
 

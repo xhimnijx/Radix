@@ -8,7 +8,7 @@
 
 use radix_lattice::codec::{decode_poly, ProofWire};
 use radix_lattice::statement::{commitment_count, masking_width, Keys, Statement, CHALLENGE_DIM};
-use radix_lattice::verifier::verify;
+use radix_lattice::verifier::{verify_with_relations, LinearRelation};
 use radix_lattice::{Poly, D, SLOTS};
 
 struct Reader<'a> {
@@ -19,6 +19,23 @@ struct Reader<'a> {
 impl<'a> Reader<'a> {
     fn u32(&mut self) -> u32 {
         let value = u32::from_le_bytes([
+            self.data[self.cursor],
+            self.data[self.cursor + 1],
+            self.data[self.cursor + 2],
+            self.data[self.cursor + 3],
+        ]);
+        self.cursor += 4;
+        value
+    }
+
+    fn byte(&mut self) -> u8 {
+        let value = self.data[self.cursor];
+        self.cursor += 1;
+        value
+    }
+
+    fn i32(&mut self) -> i32 {
+        let value = i32::from_le_bytes([
             self.data[self.cursor],
             self.data[self.cursor + 1],
             self.data[self.cursor + 2],
@@ -64,6 +81,7 @@ fn main() {
     let _index = reader.u32();
     let message_len = reader.u32() as usize;
     let range_count = reader.u32() as usize;
+    let carry_count = reader.u32() as usize;
     let message = reader.bytes(message_len).to_vec();
 
     if kappa != CHALLENGE_DIM {
@@ -83,6 +101,10 @@ fn main() {
     for _ in 0..range_count {
         range_rows.push(reader.polys(width));
     }
+    let mut carry_rows = Vec::with_capacity(carry_count);
+    for _ in 0..carry_count {
+        carry_rows.push(reader.polys(width));
+    }
     let mut matrix = Vec::with_capacity(rows);
     for _ in 0..rows {
         matrix.push(reader.polys(cols));
@@ -94,8 +116,31 @@ fn main() {
     // The secret is not needed to verify, but it is in the request format; skip it.
     let _ = reader.polys(cols);
 
+    // Relations, in the order the Python writer emits them.
+    let relation_count = reader.u32() as usize;
+    let mut relations: Vec<LinearRelation> = Vec::with_capacity(relation_count);
+    for _ in 0..relation_count {
+        let weight_count = reader.u32() as usize;
+        let mut weights = Vec::with_capacity(weight_count);
+        for _ in 0..weight_count {
+            weights.push(reader.polys(1).remove(0));
+        }
+        let mut positions = Vec::with_capacity(weight_count);
+        for _ in 0..weight_count {
+            positions.push(reader.i32() as i64);
+        }
+        let has_constant = reader.byte();
+        let constant = if has_constant != 0 {
+            Some(reader.polys(1).remove(0))
+        } else {
+            None
+        };
+        relations.push(LinearRelation { weights, positions, constant });
+    }
+
     let keys = match Keys::new(rows0, b_rows, depth, rows)
         .and_then(|keys| keys.with_range_rows(range_rows))
+        .and_then(|keys| keys.with_carry_rows(carry_rows))
     {
         Ok(keys) => keys,
         Err(error) => {
@@ -113,7 +158,7 @@ fn main() {
     let expected_width = masking_width(depth, rows).unwrap_or(width);
     let proof = match ProofWire::decode(
         &proof_bytes,
-        commitment_count(rows, depth) + range_count,
+        commitment_count(rows, depth) + range_count + carry_count,
         cols,
         expected_width,
     ) {
@@ -124,7 +169,7 @@ fn main() {
         }
     };
 
-    match verify(&keys, &statement, &proof, &message) {
+    match verify_with_relations(&keys, &statement, &proof, &message, &relations) {
         Ok(true) => {
             println!("1");
         }

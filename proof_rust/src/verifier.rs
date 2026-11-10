@@ -49,13 +49,38 @@ pub fn response_bound(width: usize) -> f64 {
 
 /// Check a proof. Returns `false` for any malformed or dishonest input; never panics
 /// on attacker-supplied bytes (the codec already rejects bad lengths).
+/// `sum_j weight_j * m_{position_j} - constant = 0` over committed messages.
+///
+/// Positions 1..k+2m+1 are the paper's message positions; negative positions index the
+/// extra committed messages in one sequence, range rows first and then carry rows.
+#[derive(Clone, Debug, Default)]
+pub struct LinearRelation {
+    pub weights: Vec<Poly>,
+    pub positions: Vec<i64>,
+    pub constant: Option<Poly>,
+}
+
 pub fn verify(
     keys: &Keys,
     statement: &Statement,
     proof: &ProofWire,
     message: &[u8],
 ) -> Result<bool, ProofError> {
-    verify_inner(keys, statement, proof, message, &mut Vec::new())
+    verify_with_relations(keys, statement, proof, message, &[])
+}
+
+/// Verify with a set of linear relations over committed messages.
+///
+/// This is the primitive the carry needs, and it is empty for every pre-relation call site,
+/// which is why `verify` keeps its signature.
+pub fn verify_with_relations(
+    keys: &Keys,
+    statement: &Statement,
+    proof: &ProofWire,
+    message: &[u8],
+    relations: &[LinearRelation],
+) -> Result<bool, ProofError> {
+    verify_inner(keys, statement, proof, message, relations, &mut Vec::new())
 }
 
 /// Like `verify`, but records the name of each stage it enters. The last name is
@@ -68,7 +93,7 @@ pub fn verify_traced(
     message: &[u8],
 ) -> Result<(bool, Vec<&'static str>), ProofError> {
     let mut trace = Vec::new();
-    let ok = verify_inner(keys, statement, proof, message, &mut trace)?;
+    let ok = verify_inner(keys, statement, proof, message, &[], &mut trace)?;
     Ok((ok, trace))
 }
 
@@ -77,6 +102,7 @@ fn verify_inner(
     statement: &Statement,
     proof: &ProofWire,
     message: &[u8],
+    relations: &[LinearRelation],
     trace: &mut Vec<&'static str>,
 ) -> Result<bool, ProofError> {
     let depth = keys.depth;
@@ -147,9 +173,11 @@ fn verify_inner(
 
     // The paper's position -> commitment-slot map.
     let range_count = keys.range_rows.len();
+    let carry_count = keys.carry_rows.len();
     let mut slot_of = vec![0usize; rows + 2 * depth + 2];
     for position in 1..=rows + 2 * depth + 1 {
-        slot_of[position] = paper_to_slot_ranged(position, depth, rows, range_count)?;
+        slot_of[position] =
+            paper_to_slot_ranged(position, depth, rows, range_count + carry_count)?;
     }
 
     trace.push("values");
@@ -266,6 +294,47 @@ fn verify_inner(
             )
         })
         .collect();
+    let carry_start = CHALLENGE_DIM + depth + rows + 1 + range_count;
+    let f_carry: Vec<Poly> = (0..carry_count)
+        .map(|index| {
+            sub(
+                &dot(&keys.carry_rows[index], &proof.response),
+                &mul_crt(&challenge, &proof.commitment[carry_start + index]),
+            )
+        })
+        .collect();
+    // Relations index range rows first, then carry rows, in one sequence.
+    let mut f_extra: Vec<Poly> = f_range.clone();
+    f_extra.extend(f_carry.iter().cloned());
+
+    let relations_sum = {
+        let mut total = zero();
+        for relation in relations {
+            if relation.weights.len() != relation.positions.len() {
+                return Ok(false);
+            }
+            let mut inner = zero();
+            for (weight, position) in relation.weights.iter().zip(relation.positions.iter()) {
+                let value = if *position > 0 {
+                    f[*position as usize].clone()
+                } else {
+                    let index = (-*position - 1) as usize;
+                    if index >= f_extra.len() {
+                        return Ok(false);
+                    }
+                    f_extra[index].clone()
+                };
+                inner = add(&inner, &mul_crt(weight, &value));
+            }
+            inner = add(
+                &inner,
+                &mul_crt(&challenge, relation.constant.as_ref().unwrap_or(&zero())),
+            );
+            total = add(&total, &inner);
+        }
+        mul_crt(&challenge, &total)
+    };
+
     let range_sum = add_all((0..range_count).map(|index| {
         mul_crt(
             &betas[index],
@@ -300,7 +369,7 @@ fn verify_inner(
                     )
                 })),
             ),
-            &range_sum,
+            &add(&range_sum, &relations_sum),
         ),
         &f[rows + 2 * depth + 1],
     );
