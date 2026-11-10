@@ -361,6 +361,29 @@ def decode_bounded(data: bytes, count: int) -> tuple[Poly, ...]:
 
 
 @dataclass(frozen=True)
+class LinearRelation:
+    """`sum_j weight_j * m_{position_j} - constant = 0` over committed messages.
+
+    This is the primitive the carry needs. C1's eighth-pass note: "a + b - c = f*(X-4) is
+    linear in the committed values, so it rides on the existing masked opening for one row."
+    He was describing exactly this object.
+
+    Why it needs a challenge and a factor of `c`: the verifier can form
+    `sum_j weight_j * f_j = sum_j weight_j * a_j - c * rho` where `rho` is the relation's
+    residual, but it cannot see `a_j` (the masked values). So the relation is premultiplied
+    by `c`: the prover puts `sum_j weight_j * a_j` into `psi`, which the equation subtracts
+    with its own factor of `c`, and what remains is `-c^2 rho`. Since `c` is required to be
+    a unit, the verifier's equality forces `rho = 0`.
+
+    `positions` are the paper's t-indices, the same numbering as `_paper_to_slot`.
+    """
+
+    weights: tuple[Poly, ...]
+    positions: tuple[int, ...]
+    constant: Poly | None = None
+
+
+@dataclass(frozen=True)
 class Proof:
     commitment: tuple[Poly, ...]
     h: Poly
@@ -515,6 +538,7 @@ def prove(
     parameters: SmileParameters | None = None,
     tag_keys: "tagmod.TagKeys | None" = None,
     range_bits: tuple[Poly, ...] = (),
+    relations: tuple[LinearRelation, ...] = (),
 ) -> Proof:
     """Fig. 7 with rejection sampling; retries until a mask is accepted.
 
@@ -523,7 +547,8 @@ def prove(
     """
     for _attempt in range(MAX_ATTEMPTS):
         result = _prove_once(
-            keys, statement, secret, index, message, rng, parameters, tag_keys, range_bits
+            keys, statement, secret, index, message, rng, parameters, tag_keys, range_bits,
+            relations,
         )
         if result is not None:
             return result
@@ -540,6 +565,7 @@ def _prove_once(
     parameters: SmileParameters | None = None,
     tag_keys: "tagmod.TagKeys | None" = None,
     range_bits: tuple[Poly, ...] = (),
+    relations: tuple[LinearRelation, ...] = (),
 ) -> "Proof | None":
     """One attempt. Returns None when rejection sampling rejects."""
     sm = _p(parameters)
@@ -722,12 +748,13 @@ def _prove_once(
         (ring.mul(alphas[i + 1], ring.mul(a_values[i + 1], a_values[i + 1], sm), sm) for i in range(depth)),
         sm,
     )
+    a_range = tuple(ring.dot(row, mask, sm) for row in keys.range_rows)
     psi_range = _add_all(
         (
             ring.mul(
                 betas[j],
                 ring.mul(
-                    ring.dot(keys.range_rows[j], mask, sm),
+                    a_range[j],
                     ring.sub(
                         ring.constant(1, sm), ring.scalar(2, range_bits[j], sm), sm
                     ),
@@ -743,11 +770,7 @@ def _prove_once(
         (
             ring.mul(
                 betas[j],
-                ring.mul(
-                    ring.dot(keys.range_rows[j], mask, sm),
-                    ring.dot(keys.range_rows[j], mask, sm),
-                    sm,
-                ),
+                ring.mul(a_range[j], a_range[j], sm),
                 sm,
             )
             for j in range(range_count)
@@ -755,7 +778,31 @@ def _prove_once(
         sm,
     )
 
-    psi = ring.add(ring.add(ring.mul(alphas[0], psi_sm, sm), psi_bin, sm), psi_range, sm)
+    # Each relation contributes sum_j weight_j * a_{position_j} to psi. The verifier
+    # premultiplies the relation by c, so what survives the equation is -c^2 * residual.
+    psi_lin = _add_all(
+        (
+            _add_all(
+                (
+                    ring.mul(
+                        weight,
+                        a_values[position] if position > 0 else a_range[-position - 1],
+                        sm,
+                    )
+                    for weight, position in zip(relation.weights, relation.positions)
+                ),
+                sm,
+            )
+            for relation in relations
+        ),
+        sm,
+    )
+
+    psi = ring.add(
+        ring.add(ring.add(ring.mul(alphas[0], psi_sm, sm), psi_bin, sm), psi_range, sm),
+        psi_lin,
+        sm,
+    )
     omega = ring.add(
         ring.add(
             ring.add(ring.mul(alphas[0], omega_sm, sm), omega_bin, sm), omega_range, sm
@@ -807,6 +854,7 @@ def verify(
     message: bytes,
     parameters: SmileParameters | None = None,
     tag_keys: "tagmod.TagKeys | None" = None,
+    relations: tuple[LinearRelation, ...] = (),
 ) -> bool:
     """Fig. 9 lines 01-15, plus the optional B3 tag proof."""
     sm = _p(parameters)
@@ -989,6 +1037,33 @@ def verify(
             import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #10 line 969")
             return False
 
+        relations_sum = _add_all(
+            (
+                ring.add(
+                    _add_all(
+                        (
+                            ring.mul(
+                                weight,
+                                f[position] if position > 0 else f_range[-position - 1],
+                                sm,
+                            )
+                            for weight, position in zip(relation.weights, relation.positions)
+                        ),
+                        sm,
+                    ),
+                    ring.mul(
+                        proof.challenge,
+                        relation.constant if relation.constant is not None else ring.zero(sm),
+                        sm,
+                    ),
+                    sm,
+                )
+                for relation in relations
+            ),
+            sm,
+        )
+        relations_sum = ring.mul(proof.challenge, relations_sum, sm)
+
         range_sum = _add_all(
             (
                 ring.mul(
@@ -1026,7 +1101,7 @@ def verify(
                     ),
                     sm,
                 ),
-                range_sum,
+                ring.add(range_sum, relations_sum, sm),
                 sm,
             ),
             f[rows + 2 * depth + 1],

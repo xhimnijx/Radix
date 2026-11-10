@@ -1,27 +1,31 @@
-feat: a two-input balance proof, using the machinery that already exists
+feat: a linear relation among committed messages, proven inside the proof
 
-For two terms the base-4 carry is binary -- C1's observation, and `carry.py` asserts it -- so
-the carry polynomial is just one more packed bit polynomial: one range row, one beta
-challenge, and the binaryness check that already exists proves it. No new mechanism.
+The primitive the m-input carry needs, and the last one missing from the range layer. C1's
+eighth-pass note described it exactly: "a + b - c = f*(X-4) is linear in the committed
+values, so it rides on the existing masked opening for one row."
 
-Exercised end to end: a spend carrying two amounts and a carry polynomial over five range
-rows proves and verifies, and a carry whose first position holds 2 is REFUSED by the proof.
-That is a sound balance constraint for a two-input transaction.
+  LinearRelation(weights, positions, constant)   sum_j weight_j * m_j - constant = 0
 
-WHAT THIS IS NOT: `m`-input balance. With `m` inputs the carry reaches `m` and stops being
-binary, so the binaryness check says nothing about it. That case needs [25]'s unstructured
-linear proof -- `z = R f + y` with its own challenge matrix, drawn after the carry
-commitment and `h`, expanded from a transcript seed, with the `2^-n` lemma booked separately
-from the `q^-4` of the ring challenges. It is specified in C1's and C2's eighth pass and it
-is NOT implemented; the module docstring and the test say so rather than letting the
-existence of the two-term test imply it.
+Positions 1..k+2m+1 are the paper's message positions; negative positions index the range
+rows, so -1 is range row 0. The prover adds sum_j weight_j * a_j to psi and the verifier adds
+c*(sum_j weight_j * f_j + c*constant) to the equation, which leaves exactly -c^2 * residual.
+Since c must be a unit, the equality forces the residual to zero.
 
-The distinction is the difference between a sound balance proof for a two-input transaction
-and one for any number of inputs, and it is worth stating in exactly those terms.
+Five tests, and the ordering matters: a relation that holds does not disturb verification; a
+relation whose constant does not match the message is REFUSED by the proof; a relation over
+two messages checks their sum and is refused when both are set; and a zero weight is
+documented as making the relation vacuous rather than left to be discovered.
 
-An error of mine on the way: I wrote range_count = 3 for two amounts plus a carry, forgetting
-that `bits_of` yields 64 bits per amount, so two amounts are four packed polynomials, not two.
-The proof refused it with "expected 3 bit polynomials, got 5" -- a good error message doing
-its job.
+Two errors of mine, both about what a committed message IS:
 
-8 range-proof tests, 604 Python tests overall.
+The constant's sign was wrong -- c*(sum f - c*k) instead of c*(sum f + c*k) -- which made
+every relation with a non-zero constant fail. The algebra in the docstring now states the
+premultiplication that makes it work rather than leaving it implied.
+
+And the test compared ring.constant(1), which is 1 in every CRT slot, against
+subring.from_constants((1,0,0,...)), which is 1 in slot 0 and 0 in the other thirty-one. Those
+are different objects, so a relation that looked like it should hold did not. The helper now
+documents the difference, because it is the same slot-versus-coefficient confusion that cost
+a cycle in the range proof.
+
+5 tests. This is the mechanism the carry needs; wiring the carry through it is next.
