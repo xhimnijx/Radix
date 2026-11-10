@@ -983,3 +983,42 @@ binaryness sound (each residue is an idempotent of a field), and simultaneously 
 Hadamard product coordinatewise-inexpressible (the ring product is quartic, not coordinatewise).
 Slot constancy, the challenge difference, and now the range layer are all consequences of one
 parameter.
+
+
+# C1's verdict: the trace pairing is sound for balance, under three conditions
+
+Answered directly, and it unblocks the balance argument without `[25]`'s carry/addition vector
+layer:
+
+    Tr(w4*m_in) = Tr(w4*m_out) + fee   (mod q)
+
+holds, so the integer difference is a multiple of `q`. If both totals stay under a supply cap
+`C < q/2`, the integer difference has absolute value below `q`, so the only multiple of `q` it
+can be is zero, and integer balance follows. This is a **different trade-off** from the carry
+identity `a + b + f(X-4) = c`: the carry proves polynomial addition over `Z` and gives 64-bit
+no-wrap without a cap, while the trace pairing proves the evaluation at `X = 4` modulo `q` and
+buys the integer conclusion with the cap.
+
+Three conditions, and all three are now recorded in code rather than prose:
+
+1. **A coefficient-wise range proof is still required.** The trace pairing is an evaluation, not
+   a range check. It assumes the coefficients are digits, so it does not substitute for proving
+   them in `{0,1,2,3}`. This is the remaining work on the amount path.
+2. **The cap must be a consensus rule.** A documented cap is not a proof. `check_supply` is
+   called on every block, `Chain.minted` accumulates, and exceeding the cap raises rather than
+   returning a verdict. Six tests in `tests/test_testnet_supply_cap.py`.
+3. **`C < q/2`.** Measured: the emission schedule totals **570,093,820 atoms** = 2^29.1, a factor
+   of 7.5 below `q/2 = 2^31`. The cap is a property the schedule already had.
+
+## What this settles and what it does not
+
+Settled: balance needs no carry vector, the `(X-4)` path is retired rather than extended, and the
+`LinearRelation` primitive is exactly the mechanism -- once it gains a scalar trace projection.
+
+Not settled: the coefficient-wise range proof. C1 confirms `[25]`'s bit/relaxed layer is a
+candidate, and that the trace pairing is not a substitute for it. So the amount path is: digits
+committed coefficient-wise, range proven coefficient-wise, balance by trace pairing under the cap.
+
+Also confirmed in my favour: because range rows reuse `r` and do not move `W`, C2's feared +2.6
+bits per message on B0 does not bite. The estimate stands at A 2^158 / B0 2^167 with the range
+machinery inside the proof.

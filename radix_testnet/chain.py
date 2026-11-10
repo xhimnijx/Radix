@@ -144,6 +144,34 @@ class Block:
         return int.from_bytes(self.block_hash()[:8], "big") < self.target
 
 
+#: The supply cap, and it is a **consensus rule rather than a document**.
+#:
+#: The balance argument needs it. `Tr(w4*m_in) = Tr(w4*m_out) + fee` holds modulo `q`, so the
+#: integer difference is a multiple of `q`; it is zero only if both totals stay below `q/2`.
+#: With `q = 2^32`, that means the whole supply must be under 2^31 atoms.
+#:
+#: The schedule reaches 570,093,820 atoms by the end of the decay and after, which is 2^29.1 --
+#: a factor of 7.5 below `q/2`, so the argument is comfortable rather than marginal. A documented
+#: cap that the chain does not enforce is not a proof, which is why `check_supply` exists and is
+#: called on every block.
+SUPPLY_CAP_ATOMS = 570_100_000        # the schedule total, rounded up to a round number
+
+def check_supply(minted_atoms: int) -> None:
+    """Refuse a chain whose cumulative emission has passed the cap.
+
+    This is the invariant the balance argument rests on. If it ever fails, the trace pairing
+    stops being sound, so it raises rather than returning a verdict: a chain in this state
+    should not keep running.
+    """
+    if minted_atoms < 0:
+        raise ChainError("minted atoms must not be negative")
+    if minted_atoms > SUPPLY_CAP_ATOMS:
+        raise ChainError(
+            f"supply cap exceeded: {minted_atoms} atoms minted against a cap of "
+            f"{SUPPLY_CAP_ATOMS}; the trace-paired balance argument is only sound below it"
+        )
+
+
 def emission(height: int) -> int:
     """The total reward for a block at `height`, in atoms.
 
@@ -257,6 +285,8 @@ class Chain:
     def decoy_count(self) -> int:
         """The deterministic decoys, which the store does not need to write out."""
         return DECOYS
+
+    minted: int = 0
 
     def genesis(self, allocations: list[tuple[tuple[Poly, ...], int]]) -> None:
         """The first block: no transactions, one block hash to anchor against.
@@ -596,6 +626,11 @@ class Chain:
         # it pays nobody.
         if block.coinbase and block.height > 0:
             miner_atoms, treasury_atoms = block_reward(block.height, total_fees)
+            # The supply cap is enforced here, on every block, rather than documented. The
+            # trace-paired balance argument is only sound below `q/2`, so a chain that
+            # exceeded this would have silently lost the property the balance rests on.
+            self.minted = getattr(self, "minted", 0) + emission(block.height)
+            check_supply(self.minted)
             if treasury_atoms:
                 self.treasury[block.height] = treasury_atoms
             if miner_atoms:
