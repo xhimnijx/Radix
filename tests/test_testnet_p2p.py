@@ -87,7 +87,10 @@ def test_a_handshake_reports_height_and_work(two_nodes):
 
     assert reply["type"] == "hello"
     assert reply["height"] == first.chain.height == 0
-    assert reply["work"] == first.chain.cumulative_work() == 1
+    # Work is `2^256 / target`, summed over blocks -- not the block count. The old
+    # assertion pinned it to 1, which was the defect itself.
+    assert reply["work"] == first.chain.cumulative_work()
+    assert reply["work"] > 0
     assert reply["genesis"] == first.chain.blocks[0].block_hash().hex()
 
 

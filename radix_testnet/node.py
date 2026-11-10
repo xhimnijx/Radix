@@ -226,7 +226,10 @@ class Node:
                 # This block came from a peer, so every transaction in it is verified. The
                 # default is False because locally mined blocks were already checked; taking
                 # that default here let a miner push arbitrary unsigned spends to every peer.
-                self.chain.append(block, verify_transactions=True)
+                # Under the lock: a peer thread may not mutate the chain while the miner
+                # is producing a block or the state is being serialised.
+                with self.lock:
+                    self.chain.append(block, verify_transactions=True)
             except (C.ChainError, KeyError, TypeError, ValueError) as error:
                 self.log.event("block.rejected", reason=str(error))
                 return {"type": "error", "reason": str(error)}
@@ -596,7 +599,13 @@ class Node:
         results = {}
         for peer_text in self.peers:
             try:
-                reply = p2p.Peer.parse(peer_text).call({"type": "tx", "payload": payload})
+                # The secret must be passed here too. It was omitted, so with
+                # RADIX_P2P_SECRET set, block broadcast was authenticated and transaction
+                # relay was not -- the peer rejected every relayed transaction and the
+                # sender saw only "unreachable". Silent in both directions.
+                reply = p2p.Peer.parse(peer_text, secret=self.secret).call(
+                    {"type": "tx", "payload": payload}
+                )
                 results[peer_text] = reply.get("type")
             except (p2p.PeerError, OSError) as error:
                 results[peer_text] = f"unreachable: {error}"

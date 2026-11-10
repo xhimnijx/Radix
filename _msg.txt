@@ -1,38 +1,28 @@
-fix: three currency-breaking defects an independent review found
+fix: cumulative work, relay authentication, the peer-block lock, and verifier hygiene
 
-An independent review put the project at ~18%, against my ~80%, and it was right on the four
-defects that matter. My scoring table had no line for supply integrity, so it measured progress
-against the plan I had rather than against what a currency requires. Three of the four were
-fixable today and are fixed here.
+Four more from the independent review, each confirmed in the code before being touched.
 
-1. THE BLOCK HASH DID NOT COMMIT TO THE TRANSACTIONS. The header carried
-   `str(len(transactions))`, so two blocks with completely different spends and the same count
-   had the SAME HASH. Proof of work secured an ordering of block hashes rather than a ledger:
-   publish a block, then publish a different block with the same hash and the same work, and
-   every peer treats it as the same block. The header now carries a transaction root -- a
-   SHA3-256 over every payload, each hashed canonically and SORTED so the root depends on the
-   set of spends rather than their arrival order. Tests cover both directions: different spends
-   differ, and the same set in a different order does not.
+1. CUMULATIVE WORK WAS THE BLOCK COUNT. cumulative_work returned len(self.blocks), so a chain
+   of easy blocks beat a chain of hard ones: "most work" was really "most blocks", and a miner
+   who lowered the difficulty could outrun everyone by producing more headers. It now sums
+   `2^256 / target` per block, which is the quantity "most cumulative work" is supposed to
+   compare. A test states the inequality directly: three hard blocks outweigh ten easy ones.
 
-2. A PEER'S BLOCK WAS APPLIED WITHOUT VERIFYING ITS TRANSACTIONS. node.py called
-   `self.chain.append(block)` and append defaults to `verify_transactions=False`, which is right
-   for locally mined blocks and wrong for a stranger's. A miner could push arbitrary unsigned
-   spends into every peer. The call site now passes True, with a comment saying why. The default
-   stays False and is asserted so, because changing it would silently re-verify every local block.
+2. TRANSACTION RELAY OMITTED THE P2P SECRET. relay_tx called p2p.Peer.parse(peer_text) with no
+   secret, so with RADIX_P2P_SECRET set, block broadcast was authenticated and transaction relay
+   was not. The receiving node rejected every relayed transaction and the sender saw only
+   "unreachable" -- silent in both directions, which is the worst way for it to fail.
 
-3. PERSISTENCE DROPPED THE STATE THAT MATTERS. chain_to_dict wrote height, previous, anchor,
-   transactions, nonce and timestamp -- and nothing else. Omitting `minted` reset the supply cap
-   to zero on every restart, which is the same as not having one. Omitting `target` lost the
-   difficulty history, so a restarted node computed a different next_target and rejected valid
-   peer blocks. Omitting `coinbase` stranded every immature reward permanently. Omitting
-   `immature` and `treasury` lost balance-relevant state. All five now persist, and a round trip
-   is tested against minted, every target, every coinbase, maturity, treasury and next_target.
+3. A PEER'S BLOCK WAS APPLIED OUTSIDE THE LOCK. handle_p2p mutated the chain while the miner
+   could be producing a block or the state being serialised. Now under self.lock.
 
-Eight tests in tests/test_testnet_integrity.py. 74 tests across the chain, node, p2p, reward,
-genesis and checkpoint suites still pass.
+4. HYGIENE. Fifteen RADIX_DEBUG_VERIFY print sites were still in the verifier's reject paths,
+   and tag_of, sign_tagged and verify_tagged were each defined twice in ring_signature. Both
+   removed. The verifier now contains no print at all, and a test asserts that.
 
-NOT FIXED, and it is the one that matters: value is not bound to notes. `input_values` is
-self-declared and nothing checks it against the note being spent, so a wallet can claim a
-billion atoms from a four-thousand-atom genesis. The reviewer demonstrated it end to end. That is
-the same defect as the unfinished range/balance research recorded in REVIEW-FINDINGS, and it is
-not something to patch -- it needs the value-commitment layer, which needs the bridge.
+One existing test had to change and it is worth naming: the p2p handshake test asserted
+reply["work"] == 1, which encoded the very defect being fixed. It now asserts the handshake
+reports the chain's own cumulative work and that it is positive, which is what the field means.
+
+Seven new tests. 62 tests across the chain, node, p2p and reward suites pass, and the ring
+signature and tag suites are unaffected by the duplicate removal.

@@ -192,6 +192,22 @@ def check_supply(minted_atoms: int) -> None:
         )
 
 
+#: The hash space a target is a fraction of, for turning a target into work.
+WORK_UNIT = 1 << 256
+
+
+def block_work(target: int) -> int:
+    """Expected hashes a block at `target` represents.
+
+    A guard rather than an exception for a non-positive target: a block decoded from a peer
+    with a zero target should be rejected by `append`'s validation, and this function should
+    not be the thing that crashes a node before it gets there.
+    """
+    if target <= 0:
+        return 0
+    return WORK_UNIT // target
+
+
 def emission(height: int) -> int:
     """The total reward for a block at `height`, in atoms.
 
@@ -581,13 +597,19 @@ class Chain:
         return out
 
     def cumulative_work(self) -> int:
-        """Sum of difficulty over the chain.
+        """Sum of the work each block proves: `2^256 / target` per block.
 
-        Difficulty is 1 for every block today, so this equals the height. It is written
-        as a sum anyway, so that adding a real difficulty target does not require
-        rewriting every caller -- only this function.
+        This used to return `len(self.blocks)`, which meant a chain of easy blocks beat a
+        chain of hard ones -- so the "most work" rule was really "most blocks", and a miner
+        who lowered the difficulty could outrun everyone by producing more headers. Found by
+        an independent review, 2026-11-10.
+
+        Work is measured against a full 256-bit hash space: a block whose target is `t`
+        represents `2^256 / t` expected hashes. Summing those is the quantity Bitcoin's
+        "most cumulative work" rule compares, and it makes a chain of hard blocks beat a
+        longer chain of easy ones.
         """
-        return len(self.blocks)
+        return sum(block_work(block.target) for block in self.blocks)
 
     @classmethod
     def rebuild(

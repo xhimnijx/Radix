@@ -889,7 +889,6 @@ def verify(
     try:
         depth = keys.depth
         if depth != statement.depth or type(proof) is not Proof:
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #1 line 805")
             return False
         rows = len(statement.matrix)
         width = masking_width(depth, sm, rows)
@@ -901,10 +900,8 @@ def verify(
             + len(keys.range_rows)
             + len(keys.carry_rows)
         ):
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #2 line 811")
             return False
         if len(proof.response_prime) != sm.matrix_cols or len(proof.response) != width:
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #3 line 813")
             return False
         # l2 bounds, as the paper states them: beta = s sqrt(2Wd) and
         # beta' = s' sqrt(2 ell d). The old check was l-infinity, which let the
@@ -914,24 +911,19 @@ def verify(
         limit = response_bound_infinity(width)
         for poly in proof.response:
             if any(min(value, sm.modulus - value) > limit for value in poly):
-                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #4 line 822")
                 return False
         if _l2_squared(proof.response, sm) > _response_bound(width, sm):
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #5 line 824")
             return False
         limit_prime = response_bound_infinity(sm.matrix_cols)
         for poly in proof.response_prime:
             if any(min(value, sm.modulus - value) > limit_prime for value in poly):
-                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #6 line 828")
                 return False
         if _l2_squared(proof.response_prime, sm) > _response_bound(sm.matrix_cols, sm):
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #7 line 830")
             return False
         # The line-13 argument divides by c^2 and the tag argument by c', so both
         # must be units. Without this check a non-unit challenge leaves a
         # coordinate where the constraint is vacuous (review finding, 2026-11-08).
         if not _is_unit(proof.challenge, sm) or not _is_unit(proof.challenge_prime, sm):
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #8 line 835")
             return False
 
         # Fig. 9 line 03 inverted: w = B_0 z - c t_0, so it need not be sent.
@@ -950,7 +942,6 @@ def verify(
         message, w, proof.commitment[:head_length], sm, ring_digest(statement, sm)
     )
         if _draw_ternary(tx, b"c-prime", sm) != proof.challenge_prime:
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #9 line 853")
             return False
         tx.absorb(b"z-prime", b"".join(ring.encode(poly, sm) for poly in proof.response_prime))
 
@@ -1080,7 +1071,6 @@ def verify(
         tx.absorb(b"t-psi", ring.encode(proof.commitment[-1], sm))
         tx.absorb(b"omega", ring.encode(proof.omega, sm))
         if _draw_ternary(tx, b"c", sm) != proof.challenge:
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #10 line 969")
             return False
 
         relations_sum = _add_all(
@@ -1154,13 +1144,11 @@ def verify(
             sm,
         )
         if lhs != proof.omega:
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #11 line 1015")
             return False
 
         # lines 14-15
         prefix = sm.ring_degree // SLOTS
         if any(proof.h[i] != 0 for i in range(prefix)):
-            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #12 line 1020")
             return False
 
         if tag_keys is not None:
@@ -1173,7 +1161,6 @@ def verify(
         return proof.tag_proof is None
         if tag_keys is not None:
             if proof.tag_proof is None:
-                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #13 line 1032")
                 return False
             if not tagmod.verify_tag(
                 tag_keys,
@@ -1183,9 +1170,7 @@ def verify(
                 _tag_context(proof.challenge_prime, proof.commitment[0], sm),
                 sm,
             ):
-                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #14 line 1041")
                 return False
         return True
     except (TypeError, ValueError, KeyError, IndexError):
-        import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #15 line 1044")
         return False
