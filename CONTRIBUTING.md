@@ -15,7 +15,7 @@ missing features. If you are a cryptographer, the highest-value hour you can spe
 
 ## If you are writing code
 
-- **Python:** `python -m pytest -q -m "not slow"` must stay green (411 tests, ~75 s).
+- **Python:** `python -m pytest -q -m "not slow"` must stay green (603 tests, ~11 min).
 - **Rust:** `cargo test` in `proof_rust/` must stay green (70 tests).
 - **Cross-language:** if you touch the protocol, the Python proof → Rust verifier and
   Rust proof → Python verifier checks must still pass.

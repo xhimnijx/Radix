@@ -142,6 +142,7 @@ All figures measured on the machine and commit named in the artefacts. No projec
 | Proof, tagged + tag | 23,040 B |
 | Parallel verification, 8 cores | 4.22x |
 | Proof decode | 2.7 ms |
+| Range proof, two messages in proof | 22,784 B, accepted by both implementations |
 | Noise-aware proof at ell = 17 | 22,784 B |
 | Replay per year of chain at 10 tx/block | 3.9 hours |
 
@@ -157,16 +158,33 @@ The paper's most useful section, and the reason to write it.
 | `g`'s zero prefix applied to slots, not coefficients | the port disagreed | every stage still passed; only the `h`-prefix check caught it |
 | The genesis hash did not commit to the allocation | building a second node | both chains looked valid independently |
 | A block reward to a reused key collapses | writing the reward test | the failure only appears with two rewards to one key |
+| Bit packing wrote coefficient blocks, so `b·b ≠ b` in the ring | a proof that should have verified did not | the packing *looked* slot-constant, and the test that checked it agreed |
+| A Gaussian bound asserting 8σ while the table is 12σ | running the Rust suite | the suite had not been run since the truncation change |
 
 Each is reproducible from the artefacts. The first two are the argument for the method:
 neither was findable by reading, and both were wrong in both implementations.
+
+The fifth is the sharpest example of a *test* being the problem rather than the code. `pack_bits`
+filled each ring slot's four coefficients with the bit, which is slot-constant in the
+coefficient representation and not in the CRT, where the ring actually multiplies. The property
+the proof consumes is `b·b = b`, and it was false. The test that "checked" the packing asserted
+the coefficient-block shape instead — a proxy that passed while the real property failed. Both
+now test the real property.
+
+The sixth generalises: a bound was correct when written and wrong after a parameter change, and
+nothing tied it to the data. It now derives the bound from the table's own sigma.
 
 ## 8. Limitations
 
 Stated plainly, because a paper that hides these is not credible.
 
-- **Amounts are visible.** The range proof is specified and its primitives are built and
-  tested, but it is not inside the proof.
+- **The range constraint is inside the proof; the wallet does not use it.** Two alpha
+  challenges per amount are appended after `alpha_m` and drawn after `h` before `c`; the bit
+  polynomials are committed messages that are never transmitted; and a slot holding 2 is
+  refused by the proof rather than by a checker beside it. Both implementations agree on a
+  22,784-byte proof carrying two range messages. What is missing is the relaxed carry bound
+  (`z = R f + y`) and the envelope wiring, so the amounts a wallet actually spends are still
+  carried in the clear.
 - **One-time addressing is partially built.** The lattice derivation works and is tested:
   a short `XOF(S)`, the noise-aware `[A | I_k]` statement at `ell = 17`, and the public tag
   image `T_K = A'·k`. What is missing is deriving `S` from a real KEM rather than a
@@ -188,7 +206,7 @@ Stated plainly, because a paper that hides these is not credible.
 ## 9. Reproducibility
 
 ```powershell
-python -m pytest -q -m "not slow"    # 569 passed, 1 known xfail
+python -m pytest -q -m "not slow"    # 603 passed, 1 known xfail
 cd proof_rust && cargo test          # 74 passed
 python experiments/verify_rust_proof.py
 python experiments/estimate_sis.py --check

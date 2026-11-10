@@ -31,9 +31,11 @@ Out of scope — claims the project explicitly does not make (see
 [`vault/What This Is Not.md`](vault/What%20This%20Is%20Not.md)):
 
 - "the parameters are not 128-bit" — this is already stated in `STATUS.md`;
-- amounts are visible and unproven — this is a documented B2 gap;
+- amounts are carried in the clear by the wallet even though the range constraint now
+  exists inside the proof — the gap is the wiring, not the cryptography;
 - the faucet seed is public, so anyone can spend the testnet's units;
-- the testnet has no consensus, no peers, and no economic layer;
+- the testnet has no economic layer or value; it does now have consensus and a
+  peer-to-peer layer, neither of which is audited;
 - anything requiring deployment of value, which the launch gate prevents.
 
 ## What we will do

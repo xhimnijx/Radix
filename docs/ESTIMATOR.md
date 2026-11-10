@@ -150,3 +150,32 @@ parameter conversation restarts. That is the point of running it.
 - `experiments/estimate_sis.py` — the checked delta model and the estimator arguments
 - [`SECURITY-NOTES.md`](../SECURITY-NOTES.md) — what the numbers mean and do not
 - [`REVIEW-REQUEST.md`](../REVIEW-REQUEST.md) — where this was asked
+
+
+## What is available without Sage (added 2026-11-10)
+
+`experiments/estimate_sis.py` reports the **named cost models** rather than a single
+exponent, which is what the reviewer asked for:
+
+- **ADPS16** = `0.292 * b`, the classical Core-SVP convention of Alkim, Ducas, Poppelman and
+  Schwabe, quoted throughout the NIST submissions;
+- **MATZOV** = `0.265 * b`, the quantum convention from the MATZOV report.
+
+Current output, from `python experiments/estimate_sis.py --check`:
+
+| relation | n | det^(1/n) | delta | block | ADPS16 | MATZOV | band |
+|---|---|---|---|---|---|---|---|
+| A (k = 4, W = 30) | 1664 | 2^9.85 | 1.003218 | 541 | **2^158.0** | 2^143.3 | 2^143-2^173 |
+| B0 (W = 30) | 3840 | 2^10.67 | 1.003091 | 572 | **2^167.0** | 2^151.6 | 2^152-2^182 |
+
+The band is +/-15 bits from C2's measured sensitivity of about 15 bits per half-bit of
+target. It is not a point estimate and the output says so.
+
+`--check` pins both rows to the current parameters, which is the only reason the `B0` figure
+was caught being stale: reducing `k'` from 4 to 1 shrank `W` from 33 to 30, dropping `B0`'s
+dimension from 4224 to 3840 and its estimate by 8 bits. Neither reviewer priced that
+coupling and neither did the implementation.
+
+Running the reference `lattice-estimator` would check the *dimensions and determinants*
+against a reference implementation. It would not change the model, and both reviewers have
+already agreed the result clears 128 bits.

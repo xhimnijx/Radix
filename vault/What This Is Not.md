@@ -9,7 +9,8 @@ A list of things a reader might reasonably assume, and which are false.
 
 ## It is not a cryptocurrency
 
-No token, no network, no peers, no consensus, no economics. The testnet runs one node on
+No token, no value, no audit. A peer-to-peer layer and consensus both exist now; the
+testnet can run several nodes, though by default it runs one on
 localhost. `radix_core/launch.py` contains the mainnet gate and it is **closed** — it
 requires a signed audit manifest that does not exist.
 
@@ -29,7 +30,8 @@ this repository may claim 128-bit security.*
 
 - The ring is drawn from a pool that, on a fresh chain, is mostly **deterministic
   decoys**.
-- Amounts are **visible** and unproven ([[Transactions Outputs and Spends]]).
+- Amounts are **carried in the clear** by the wallet. The range constraint itself now
+  exists inside the proof; the gap is the wiring, not the cryptography.
 - One keypair can be spent once, so activity clusters by account
   ([[The Wallet and Its Accounts]]).
 
@@ -43,8 +45,9 @@ and has no margin on a phone ([[Performance Measurements]]).
 
 ## It is not complete
 
-Missing: amount commitments, range proofs, conservation proofs, one-time addressing, a
-fee market, consensus, and networking. [[Status and Honest Limitations]] is the list.
+Missing: the relaxed carry bound, the value-commitment wiring, one-time addressing in the
+wallet, and the audit. Range proofs, a fee market, consensus and networking are no longer
+on this list. [[Status and Honest Limitations]] is the list.
 
 ## It is not the first or the best
 

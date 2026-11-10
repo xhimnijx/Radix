@@ -87,7 +87,10 @@ Python artifact, not an algorithmic statement; the NTT is `O(d log d)`.
   without a key (`experiments/tag_forgery_repro.py`, recorded in
   `REVIEW-FINDINGS.md`). Double spending is therefore still unprevented, and the
   single largest gap is unchanged.
-* **No amount commitments or range proofs** (milestone B5). The spend layer uses
+* **Amount commitments and the range constraint.** The range constraint is in the proof
+  in both languages (two alpha challenges per amount, non-binary bits refused, 22,784-byte
+  cross-verified proof); the value commitment and the relaxed carry bound are not. The spend
+  layer still uses
   equal-value rings, so the balance check is sound without them, but the value is
   public per input.
 * **No linkable variant**, no key-image analogue, no multi-input aggregation in
@@ -113,7 +116,7 @@ Python artifact, not an algorithmic statement; the NTT is `O(d log d)`.
 python -m pytest tests/test_candidate_b_setmembership.py -q   # ~84 s
 python -m pytest tests/test_candidate_b_ring_signature.py -q  # ~80 s
 python -m pytest tests/test_candidate_b_spend.py -q            # ~41 s
-python -m pytest -q                                            # 385 passed, ~210 s
+python -m pytest -q                                            # 603 passed, ~11 min
 ```
 
 The slow tests are slow because they run the real protocol: a 128 x 1024 matrix

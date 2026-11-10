@@ -10,10 +10,16 @@ PC, your phone and other people can use it.
 > 20 s (Python), so a trivial loop is a denial of service. Do not put it on the public
 > internet. The section on access explains what to do instead.
 
-## Read this before you plan anything: there is no peer-to-peer layer
+## Read this before you plan anything: the peer layer exists but is unencrypted
 
-`radix_testnet` is **one process with one chain**. Two nodes do not discover each
-other, do not sync, and do not agree. Consequences that matter:
+**Corrected 2026-11-10.** An earlier version of this page said two nodes do not
+discover each other, do not sync, and do not agree. They do all three: nodes relay
+transactions, sync whole chains with fork reconciliation, discover peers two hops out, and
+authenticate every message with an HMAC when a shared secret is configured. What is still
+true is that the transport is **not encrypted**, so anything on the path can read it, and a
+node's identity is a shared secret rather than a key.
+
+Consequences that still matter:
 
 - The Ubuntu laptop is **the** node. Your PC and phone are *clients* pointing at it.
   That is what a stagenet is here — one server, several clients — not a network of

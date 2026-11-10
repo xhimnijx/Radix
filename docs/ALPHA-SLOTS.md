@@ -1,5 +1,16 @@
 # The α-slot range proof: change specification
 
+> **STATUS 2026-11-10: steps 1-4 and 6 are implemented in both languages.** The range
+> constraint runs inside the proof: two alpha challenges per amount appended after `alpha_m`
+> and drawn after `h` before `c`, bit polynomials committed and never transmitted, a slot
+> holding 2 refused by the proof, and a 22,784-byte proof accepted by both implementations.
+> Steps 5 (the relaxed carry bound) and 7-8 (fixtures, re-measure) are outstanding.
+>
+> **One prediction in this document was wrong and is corrected below:** `W` does not grow.
+> A range row is an ordinary BDLOP row of width `W` reusing the same randomness, so adding
+> one costs a commitment component and changes neither `W` nor the Gaussian tables. The
+> measured cost is **512 bytes per bit polynomial**, not the ~42 KB this document estimated.
+
 This is the plan for the largest remaining piece of mainnet readiness. It exists because
 starting that change without it produced three failed attempts, each discovering the next
 type or arity only after the previous one was fixed.
@@ -41,8 +52,10 @@ relation and one more row, not a second σ. It adds `z ∈ Z_q^n` (256–512 B) 
 Each of these changes the wire format, so they must be done together or not at all.
 
 1. **Extend the commitment arity.** `κ + rows + 2m + 1` gains the message count for the range
-   data: two bit polynomials per amount, plus one carry polynomial. At 2-in-2-out that is
-   five messages, so `W` goes from 30 to roughly 50.
+   data: two bit polynomials per amount, plus one carry polynomial.
+   **Measured: `W` stays at 30.** The rows are added as `Keys.range_rows`, each an ordinary
+   BDLOP row of the existing width reusing the same randomness, so the mask, the response and
+   every Gaussian table are untouched. The cost is one commitment component each: 512 bytes.
 2. **Extend `masking_width`** accordingly, and regenerate the Gaussian tables for every width
    the code now uses. The sampler **fails loudly** on an unknown width — which is what you
    want, and it will tell you exactly which tables are missing.
@@ -51,10 +64,13 @@ Each of these changes the wire format, so they must be done together or not at a
 4. **Add the ψ/ω terms.** `ψ += Σ β_b · a_b · (1 − 2b)` and `ω += Σ β_b · a_b²`, mirroring
    `psi_bin`/`omega_bin` exactly with `v` replaced by `b`.
 5. **Draw `R` and add the carry row.** After the carry commitment and `h`, before `c`.
+   **Outstanding.**
 6. **Extend the verifier.** Recompute the same terms from the transmitted polynomials, and
    check the carry bound against the transmitted `z`.
 7. **Regenerate both cross-language fixtures** and re-verify acceptance in both directions.
-8. **Re-measure.** Expect about 42 KB, with the security line still set by `A` at 2^158.
+8. **Re-measure.** Measured so far: 22,784 bytes with two range messages, against a
+   21,760-byte baseline — 512 bytes each, as above. The security line is still set by `A` at
+   2^158, and `B0` is unaffected by range rows at all.
 
 ## What must be true when this lands
 

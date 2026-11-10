@@ -21,7 +21,8 @@ A **research prototype** of a post-quantum, privacy-preserving cryptocurrency:
 ## What this is not
 
 > [!danger] Not a cryptocurrency
-> No value. No consensus. No peer-to-peer network. No audit. The mainnet gate in
+> No value. No audit. Consensus and a peer-to-peer network now exist -- see the
+> correction below -- and the mainnet gate in
 > `radix_core/launch.py` is closed by design and requires a signed audit manifest that
 > does not exist.
 
@@ -52,7 +53,9 @@ These are stated in `TESTNET.md` too:
 - **Trivial proof of work** (`POW_BITS = 10`) for block shape, not security.
 - **Deterministic parameters** so node, wallet and tests agree; a real deployment takes
   a reviewed manifest.
-- **No one-time addresses**, so outputs are addressed directly to a public key.
+- **One-time addressing is derived but not wired.** The lattice construction works and is
+  tested; a wallet still addresses outputs directly to a public key, so a key is spendable
+  once.
 
 ## What *is* solidly established
 
@@ -71,3 +74,20 @@ To balance the list above, these are not hedged:
 working testnet attached, whose parameters have not yet been priced."*
 
 That sentence is the whole project. Anything beyond it would be an overclaim.
+
+
+## Correction, 2026-11-10
+
+Everything above was accurate when written. Four things have changed and are stated here
+rather than rewritten in place, so the record shows what moved:
+
+- **Consensus exists.** Proof of work, LWMA-90 difficulty with a slow start, median-time-past,
+  fork choice on total work, emission with a treasury, coinbase maturity, and fees paid to
+  the miner.
+- **A peer-to-peer layer exists.** Relay, whole-chain sync with fork reconciliation,
+  authenticated transport, two-hop discovery, checkpointed sync. It is not encrypted.
+- **The range constraint is inside the proof.** Two alpha challenges per amount, bit
+  polynomials committed and never sent, a non-binary bit refused by the proof, and both
+  implementations agreeing on a 22,784-byte proof. The *wallet* still carries amounts in the
+  clear, and the relaxed carry bound is unfinished.
+- **`B0` is 2^167, not 2^175.** Reducing `k'` from 4 to 1 shrank the commitment width.

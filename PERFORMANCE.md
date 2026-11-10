@@ -73,6 +73,10 @@ warning: 110 ms on the machine that produced it. Any phone multiplier makes it
 worse. The earlier projection of 130 ms was pessimistic; 110 ms is still over the
 line.
 
+Repeated runs land between **106 and 110 ms**; the tighter figure came from the later
+measurement run recorded in `STATUS.md`. The bar is 100 ms, so the verdict does not depend
+on which of the two you take: both miss it.
+
 The options, none measured:
 
 1. **Batch verification.** A node verifying many transactions amortises the set

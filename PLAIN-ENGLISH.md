@@ -20,7 +20,7 @@ That is now out of date in three ways, and the corrections are more interesting 
 original text.
 
 **The parameters are priced, and they are fine.** Two cryptography reviewers, working
-independently, put the hard problem at roughly 2^158 and 2^175 operations. The earlier
+independently, put the hard problem at roughly 2^158 and 2^167 operations. The earlier
 worry that it might be far weaker came from a comparison that was backwards: the proof's
 tolerance sat *below* what an attacker could reach, which means the attack is harder than
 expected, not easier.
@@ -73,14 +73,21 @@ real proofs take about 20 seconds each, which is why the full run is ~7 minutes.
 
 Being blunt, because this is the part that decides whether the project is real:
 
-- **No network.** No nodes, no peer-to-peer gossip, no way for two computers to
+- **A network exists.** Nodes relay transactions, sync chains, discover peers two hops
+  out and authenticate their messages. It is not encrypted. Earlier versions of this page
+  said there was no way for two computers to talk; that stopped being true.
   agree on anything.
-- **No consensus.** No rule for who adds the next block, no proof-of-work, no
+- **Consensus exists.** Proof of work, a difficulty that adjusts, a rule for choosing
+  between competing chains, and a slow start so a fresh chain cannot be mined flat in
+  minutes. Earlier versions of this page said there was no rule for who adds the next
+  block; that stopped being true.
   finality. This is the single largest missing piece of a *currency*.
 - **No wallet for this design.** The existing wallet belongs to the old
   Candidate-A track. The new pieces have an API, not an app.
-- **Values are not hidden.** Coins carry an amount in the clear. Monero hides
-  amounts with range proofs; we have not built that yet.
+- **Values are not hidden yet.** The range constraint now exists *inside* the proof --
+  a bit that is not binary is refused by the proof itself, and both implementations agree
+  on it -- but the coins still carry amounts in the clear, because the wallet does not use
+  the commitment yet and the carry bound is unfinished.
 - **No audit.** Nobody qualified has reviewed the maths. It is a research
   prototype and it says so in every document.
 - **Not the paper's parameters.** The modulus is a placeholder of the right size,

@@ -86,7 +86,7 @@ The strongest claim in this repository:
 Both directions are tested and the fixtures are committed:
 
 ```powershell
-python -m pytest -q -m "not slow"                 # 411 passed, 1 xfailed (~75 s)
+python -m pytest -q -m "not slow"                 # 603 passed, 1 xfailed (~11 min)
 python -m pytest -q tests/test_testnet_end_to_end.py   # real proofs (~6 min)
 cd proof_rust && cargo test                       # 70 passed
 python experiments/verify_rust_proof.py           # Rust proof -> Python verifier
@@ -129,12 +129,16 @@ Root documents:
 - **Not audited.** Two informal reviews found four real defects; that is not an audit.
 - **Not 128-bit secure.** No lattice estimator run has been done, so no security level
   may be claimed. The parameters are priced in `PERFORMANCE.md`, not proven.
-- **Not anonymous like Monero.** Amounts are visible and unproven, and the ring pool on
-  a fresh chain is mostly deterministic decoys.
-- **Not complete.** No consensus, no peer-to-peer network, no amount commitments, no
-  range proofs, no one-time addressing.
-- **Verify misses its target.** 110 ms measured against a 100 ms bar, and a phone
-  multiplier makes it worse.
+- **Not anonymous like Monero.** The range constraint now runs *inside* the proof -- two
+  alpha challenges per amount, refused when a bit is not binary, agreed by both
+  implementations -- but the amounts a wallet actually spends are still carried in the
+  clear, and the ring pool on a fresh chain is mostly deterministic decoys.
+- **Not finished.** The relaxed carry bound, wallet integration of the stealth derivation,
+  and the audit are outstanding. Consensus, the peer-to-peer network, amount commitments and
+  the range proof itself do exist.
+- **Verify misses its target.** 106-110 ms measured against a 100 ms bar, and a phone
+  multiplier makes it worse. Both ends of that range miss it, so the verdict does not
+  depend on which measurement you prefer.
 
 [`vault/Status and Honest Limitations.md`](vault/Status%20and%20Honest%20Limitations.md)
 is the honest one-page summary.

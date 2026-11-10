@@ -11,7 +11,7 @@ work, so a failure is visible rather than argued away.
 ## Where we are
 
 A working lattice ring signature with a linking tag, a spend layer that checks
-balance and refuses reused tags, and 404 tests that run the real protocol.
+balance and refuses reused tags, and 603 tests that run the real protocol.
 
 | Quantity | Value |
 |---|---|

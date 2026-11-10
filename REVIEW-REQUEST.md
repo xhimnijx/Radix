@@ -116,7 +116,7 @@ boundary in `_reject` — is still open and is a fair item for the launch statem
 ## Reproducing
 
 ```powershell
-python -m pytest -q -m "not slow"    # 558 passed, 1 known xfail
+python -m pytest -q -m "not slow"    # 603 passed, 1 known xfail
 cd proof_rust && cargo test          # 74 passed
 python experiments/estimate_sis.py --check
 ```

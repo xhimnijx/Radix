@@ -88,7 +88,10 @@ silently starting fresh: silent reset would look like the data had never existed
 
 ## What is missing, and known to be missing
 
-- no consensus, no peers, no fork choice;
+- **(corrected 2026-11-10)** consensus, peers and fork choice all exist now: proof of
+  work, LWMA-90 difficulty with a slow start, fork choice on total work, relay, sync,
+  authenticated transport and two-hop discovery. What is still true is that there is no
+  economic layer and no audit;
 - no difficulty adjustment;
 - no fee market;
 - no pruning (because pruning is impossible without revealing spends).

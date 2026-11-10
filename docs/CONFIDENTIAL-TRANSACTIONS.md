@@ -25,9 +25,18 @@ t₀ = B₀ · r                r ∈ R_q^{κ+λ+1}   (the coin key)
 t₁ = ⟨b₁, r⟩ + ǎ
 ```
 
-and `ǎ` encodes an amount as **base-4 digits**: its coefficient vector has entries in
-`{0, 1, 2, 3}` and represents `amt` in base 4 over `[0, 2^64 − 1]` (p. 52). Sixty-four
-bits is therefore **32 digits**, so only 32 of the 128 coefficients carry information.
+and `ǎ` encodes an amount as **base-4 digits**, representing `amt` in base 4 over
+`[0, 2^64 − 1]` (p. 52). Sixty-four bits is therefore **32 digits**.
+
+> **Correction, 2026-11-10.** An earlier version of this paragraph said the digit vector
+> occupies the first 32 of the 128 coefficients with the rest zero. That is not what the
+> implementation does, and the difference is load-bearing: `pack_bits` now builds the
+> polynomial by **lifting the bit values into the CRT domain** (`subring.from_constants`),
+> one bit per slot. The ring multiplies in the CRT, so a polynomial whose coefficient blocks
+> are constant is not the same object as one whose *slot* value is that bit — `b·b = b` holds
+> for the second and fails for the first. The range constraint spent one debugging cycle on
+> exactly this, and `tests/test_candidate_b_digits.py` now asserts `b·b = b` rather than the
+> coefficient shape.
 
 That encoding is the whole trick. **The range proof is not a bit-decomposition — it is a
 digit-membership proof**: each of the 32 coefficient positions must lie in `{0,1,2,3}`.

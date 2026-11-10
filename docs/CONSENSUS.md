@@ -3,7 +3,8 @@
 **Status: draft, unimplemented.** This is a specification of what a mainnet would have
 to do, written down so the parameters can be argued about with numbers rather than
 intuition. Nothing here runs: `radix_testnet` mines a placeholder block with no
-difficulty target and no peers.
+difficulty target and, until recently, no peers. Both now exist; the sections that said
+otherwise are corrected in place.
 
 Normative words follow RFC 2119.
 
@@ -113,11 +114,23 @@ The genesis difficulty must be chosen from an assumed hashrate. If it is too har
 coin stalls until the clamp relaxes it; if it is too soft, thousands of blocks are mined
 in minutes by whoever starts first — an instamine in everything but name.
 
-**NOT DECIDED.** The clamp bounds the damage but does not remove it. Options are a low
-genesis difficulty with a mandatory slow start (difficulty rises on a schedule for the
-first `N` blocks regardless of measured speed), or a proof-of-work-free bootstrapping
-period. This needs a decision before launch, and it is the parameter most likely to be
-got wrong.
+**DECIDED 2026-11-10: a low genesis target with a mandatory slow start.**
+
+For the first `BOOTSTRAP_BLOCKS = 4000` blocks the target follows a fixed schedule --
+halving every `BOOTSTRAP_STEP = 100` blocks from `GENESIS_TARGET` (2^50) down to the
+hardest the chain allows (2^32) -- rather than the measured interval. The schedule is a
+**ceiling on easiness, not on hardness**: a measured target may be harder than the schedule
+and never easier, so an early miner who is honest and slow is not punished, while an early
+miner who arrives first gets no reward for arriving first.
+
+Measured: 2^50 at height 1, halving per 100 blocks, reaching the 2^32 floor after about
+1,800 blocks, and the schedule ending at 4,000. Four tests in
+`tests/test_testnet_difficulty.py`: the schedule halves, it never asks for less than the
+floor, a fast miner cannot outrun it, and the measured target takes over once the window
+closes.
+
+This was the parameter most likely to be got wrong, and the answer is that a fresh chain
+cannot be mined flat in minutes.
 
 ---
 

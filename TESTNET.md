@@ -4,7 +4,8 @@ A local harness for exercising the Candidate-B proof end to end: a wallet that
 signs a real 1024-member ring signature, a node that verifies it with the real
 verifier, and a miner that settles it in a block.
 
-> **This is not a cryptocurrency.** No value, no consensus, no peer-to-peer
+> **This is not a cryptocurrency.** No value, no security claim, and not audited.
+> It does have consensus and a peer-to-peer layer; see the status list below.
 > network, no economic layer, no security claim. One process on localhost, one
 > chain, one miner. See `STATUS.md` for where the cryptography actually stands.
 
@@ -177,7 +178,9 @@ Rings travel as **pool indices**, not keys: a depth-2 ring is 1024 lattice keys
 
 ## Limitations, stated rather than hidden
 
-* **No consensus.** One node, no peers, no fork choice.
+* **Consensus exists and is tested.** Proof of work, LWMA-90 difficulty with a slow
+  start, median-time-past, fork choice on total work, mature coinbase. What cannot be
+  measured without a real network of independent miners is propagation and orphan rate.
 * **No persistence of trust.** The chain file is trusted on load and is not
   re-verified; do not share a data directory between machines.
 * **No economic layer.** The faucet is funded at genesis from nothing.
