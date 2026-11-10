@@ -1,27 +1,36 @@
-feat: the range proof's alpha-slot terms, as functions
+feat: digit membership now lives IN the proof, and a non-binary bit is refused there
 
-Steps 3 and 4 of docs/ALPHA-SLOTS.md, factored out so they can be tested before the proof's
-arity changes. Nothing here touches the wire format.
+The range constraint is a term in the proof's equation, not a check beside it. Bit
+polynomials are committed messages, never transmitted; the verifier confirms they are binary
+from `f^2 + c*f = 0` on their rows, which needs no witness.
 
-  psi_range   = sum eta_b * a_b * (1 - 2b)
-  omega_range = sum eta_b * a_b^2
+  Keys.range_rows        one BDLOP row per packed bit polynomial
+  setup(range_count=)    samples them; width W is unchanged
+  _prove_once(range_bits=) commits them after `_head`, draws beta challenges after h and
+                          before c, and adds sum beta*a*(1-2b) / sum beta*a^2
+  verify                 draws the same betas and adds sum beta*(f^2 + c*f)
 
-The number of terms is checked rather than assumed: a silent length mismatch would drop a
-constraint, which is the kind of failure that looks like a passing proof.
+WHY W DOES NOT CHANGE: a range row is an ordinary BDLOP row of width W using the same
+randomness, so adding one costs a commitment component and nothing else -- no new mask
+position, no new Gaussian table. docs/ALPHA-SLOTS.md predicted W rising from 30 to ~50 and
+that was wrong; the measured cost is 512 bytes per bit polynomial.
 
-DELIBERATELY NOT INCLUDED: the cancellation condition. I wrote a `combined` helper computing
-`psi + c*omega` and a test that it vanishes for binary bits, and both were wrong -- the
-verifier's check is `omega - c*psi`, since the commitment's square expands to
-c^2 v(v-1) + c a(2v-1) + a^2 and with b binary the c^2 term dies leaving a^2 - c*a(1-2v).
-Rather than fix it in the remaining budget I removed both, with a note explaining why: the
-equation belongs in the verifier once, not in a helper and the verifier twice. Writing it in
-two places is exactly the class of bug this project has paid for four times.
+THE REAL BUG THIS FOUND, and it was in digits.py rather than in the proof: pack_bits wrote
+each slot's four COEFFICIENTS equal to the bit, but the ring multiplies in the CRT domain,
+where that polynomial's slot value is 405559701, not 0 or 1. So `b*b != b`, and the
+verifier's check would have certified nothing while appearing to run. pack_bits now lifts
+the bits through subring.from_constants, and there is a test asserting `b*b == b` -- the
+property the proof consumes -- instead of the coefficient-block shape, which was a proxy
+that passed while the real property failed.
 
-Two of my own test errors, both from assumptions about the ring: the first compared vectors
-of fours expecting coefficient-wise scaling when ring.mul is a convolution, and the second
-compared whole polynomials when the representation carries trailing zeros. The property is
-now tested by its centred value, which is what (1 - 2b) actually claims.
+Three of my own errors on the way, each found by running rather than reading: range
+commitments appended before `_head` so the prover and verifier absorbed different
+transcripts (symptom: a wrong challenge, no exception); _paper_to_slot not shifted for the
+insertion, which broke the same way; and `range_sum` passed as a third argument to
+ring.add, whose TypeError the broad except swallowed into a bare False.
 
-6 tests: the b = 0 and b = 1 cases give +a and -a, omega squares, the shape mismatch is
-refused, the transcript draws in order, and a shorter draw is a prefix of a longer one --
-which is what makes the challenge stream usable.
+Measured: 22,784 bytes with two range messages on a baseline of 21,760, seven tests
+including the one that matters -- a slot holding 2 is refused BY THE PROOF.
+
+Still missing for item 1: the relaxed carry bound z = R f + y, the Rust mirror, and the
+envelope wiring.

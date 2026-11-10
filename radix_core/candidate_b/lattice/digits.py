@@ -26,6 +26,7 @@ refer to and the arithmetic can be tested before the proof is wired up.
 
 from __future__ import annotations
 
+from radix_core.candidate_b.lattice import subring
 from radix_core.candidate_b.lattice.params import SMILE, SmileParameters
 
 #: Digits per amount. 4^32 > 2^64, so 32 base-4 digits represent every 64-bit amount.
@@ -93,8 +94,15 @@ def amount_of(bits: tuple[int, ...]) -> int:
 def pack_bits(bits: tuple[int, ...], parameters: SmileParameters = SMILE) -> tuple:
     """Pack bits into slot-constant polynomials, one bit per slot.
 
-    Each slot's four coefficients are set to the same bit value. That is what makes
-    `b(b-1) = 0` a per-slot constraint, which is what makes one α cover 32 bits.
+    The polynomial is built by **lifting the bit values into the CRT domain**, not by
+    writing coefficient blocks. The distinction is load-bearing and was wrong here first:
+    a polynomial whose four coefficients in a block are equal is not the same object as a
+    polynomial whose *slot* value is that bit. The ring multiplies in the CRT domain, so
+    `b*b == b` holds for the second and fails for the first -- which means the verifier's
+    `b(b-1) = 0` check would silently certify nothing.
+
+    That is why `setmembership._lift` exists for the ring selectors, and this function now
+    uses the same lift through `subring.from_constants`.
     """
     per_poly = slots(parameters)
     if len(bits) % per_poly:
@@ -107,24 +115,28 @@ def pack_bits(bits: tuple[int, ...], parameters: SmileParameters = SMILE) -> tup
 
     polynomials = []
     for start in range(0, len(bits), per_poly):
-        coefficients = []
-        for bit in bits[start : start + per_poly]:
-            coefficients.extend([bit] * SLOT_WIDTH)
-        polynomials.append(tuple(coefficients))
+        polynomials.append(
+            subring.from_constants(tuple(bits[start : start + per_poly]), parameters)
+        )
     return tuple(polynomials)
 
 
+
 def unpack_bits(polynomials: tuple, parameters: SmileParameters = SMILE) -> tuple[int, ...]:
-    """Inverse of `pack_bits`, refusing a polynomial that is not slot-constant binary."""
+    """Inverse of `pack_bits`, refusing a polynomial that is not slot-constant binary.
+
+    Read through the CRT, not through coefficient blocks: the packed polynomial is the
+    lift of the bit vector, so its slot value is the bit and its coefficients are not.
+    """
     out = []
     for poly in polynomials:
         if len(poly) != parameters.ring_degree:
             raise DigitError("a packed polynomial has the wrong degree")
         for slot in range(slots(parameters)):
-            chunk = poly[slot * SLOT_WIDTH : (slot + 1) * SLOT_WIDTH]
-            if len(set(chunk)) != 1:
-                raise DigitError(f"slot {slot} is not constant: {chunk}")
-            value = chunk[0]
+            element = subring.slots(poly, parameters)[slot]
+            if any(value != 0 for value in element[1:]):
+                raise DigitError(f"slot {slot} is not a constant: {element}")
+            value = element[0]
             if value not in (0, 1):
                 raise DigitError(f"slot {slot} holds {value}, which is not a bit")
             out.append(value)
@@ -138,11 +150,13 @@ def is_slot_binary(polynomials: tuple, parameters: SmileParameters = SMILE) -> b
     is such a field, so the check is per slot and one α covers all of them.
     """
     for poly in polynomials:
+        if len(poly) != parameters.ring_degree:
+            return False
         for slot in range(slots(parameters)):
-            chunk = poly[slot * SLOT_WIDTH : (slot + 1) * SLOT_WIDTH]
-            if len(set(chunk)) != 1:
+            element = subring.slots(poly, parameters)[slot]
+            if any(value != 0 for value in element[1:]):
                 return False
-            if chunk[0] not in (0, 1):
+            if element[0] not in (0, 1):
                 return False
     return True
 

@@ -9,7 +9,7 @@ is worth testing rather than believing.
 
 import pytest
 
-from radix_core.candidate_b.lattice import digits
+from radix_core.candidate_b.lattice import digits, ring, subring
 from radix_core.candidate_b.lattice.params import SMILE
 
 
@@ -72,27 +72,36 @@ def test_packing_round_trips():
         assert digits.unpack_bits(digits.pack_bits(bits)) == bits
 
 
-def test_every_packed_slot_is_constant_and_binary():
+def test_every_packed_slot_is_a_binary_constant_in_the_crt():
+    """The property the proof consumes, not a proxy for it.
+
+    `b*b = b` in the ring is what makes `f^2 + c*f = 0` certify binaryness, and it holds
+    only when every CRT slot value is 0 or 1. The earlier version of this test checked
+    coefficient blocks instead, which the ring does not multiply in: it passed while
+    `b*b != b`, so the verifier would have certified nothing.
+    """
     packed = digits.pack_bits(digits.bits_of(0xDEADBEEF))
     assert digits.is_slot_binary(packed)
 
     for poly in packed:
-        for slot in range(digits.slots(SMILE)):
-            chunk = poly[slot * digits.SLOT_WIDTH : (slot + 1) * digits.SLOT_WIDTH]
-            assert len(set(chunk)) == 1, f"slot {slot} is not constant"
-            assert chunk[0] in (0, 1)
+        assert ring.mul(poly, poly, SMILE) == poly, "b*b != b, so the check proves nothing"
+        for slot, element in enumerate(subring.slots(poly, SMILE)):
+            assert element[1:] == (0, 0, 0), f"slot {slot} is not a constant: {element}"
+            assert element[0] in (0, 1), f"slot {slot} holds {element[0]}"
 
 
 def test_a_non_constant_slot_is_rejected():
-    """A slot with disagreeing coefficients is not a slot-constant, so `b(b-1)=0` says
-    nothing about it and the packing is invalid."""
+    """A slot whose value is not a scalar is not binary, so `b(b-1)=0` says nothing.
+
+    Built by adding `X`, whose CRT slots are not constant, rather than by editing a
+    coefficient block -- the block representation is not where multiplication lives.
+    """
     packed = list(digits.pack_bits(digits.bits_of(42)))
-    broken = list(packed[0])
-    broken[1] = 1 - broken[1]  # make one slot disagree with itself
-    packed[0] = tuple(broken)
+    x_poly = tuple(1 if index == 1 else 0 for index in range(SMILE.ring_degree))
+    packed[0] = ring.add(packed[0], x_poly, SMILE)
 
     assert not digits.is_slot_binary(tuple(packed))
-    with pytest.raises(digits.DigitError, match="not constant"):
+    with pytest.raises(digits.DigitError, match="not a constant"):
         digits.unpack_bits(tuple(packed))
 
 

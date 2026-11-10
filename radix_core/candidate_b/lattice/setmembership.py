@@ -207,21 +207,32 @@ def _is_unit(poly: Poly, p: SmileParameters) -> bool:
     return all(residue != (0, 0, 0, 0) for residue in subring.slots(poly, p))
 
 
-def _paper_to_slot(position: int, depth: int, rows: int, p: SmileParameters) -> int:
+def _paper_to_slot(
+    position: int, depth: int, rows: int, p: SmileParameters, range_count: int = 0
+) -> int:
     """Map the paper's t-index (1..k+2m+1) to its position in the commitment vector.
 
     The vector starts with ``t_0`` (kappa entries), so paper position ``j`` maps to
     ``kappa + j - 1``; the ``g`` commitment sits right after ``t_{m+k}`` and the
     ``x_2 .. x_m`` commitments are appended at the end, before ``psi``.
+
+    `range_count` shifts everything that comes AFTER the range commitments. They are
+    inserted immediately after the head -- kappa, then depth + rows + 1 positions -- so
+    the level commitments and `psi` move by `range_count` and the entries inside the head
+    do not. Forgetting this shift is how the transcript diverged: the verifier absorbed
+    one polynomial while the prover had absorbed another, and the only symptom was that
+    the challenge came out wrong.
     """
     kappa = p.challenge_dim
     if position == rows + 2 * depth + 1:
-        return kappa + rows + 2 * depth  # psi, the final entry
+        return kappa + rows + 2 * depth + range_count  # psi, the final entry
     if position <= depth + rows:
         return kappa + position - 1
     if position == rows + 2 * depth:
         return kappa + depth + rows
-    return kappa + depth + rows + (position - (depth + rows))
+    return (
+        kappa + depth + rows + range_count + (position - (depth + rows))
+    )
 
 
 @dataclass(frozen=True)
@@ -232,6 +243,11 @@ class Keys:
     rows: tuple[tuple[Poly, ...], ...]
     depth: int
     row_count: int | None = None
+    #: Rows committed solely for range constraints, one per packed bit polynomial.
+    #: They are ordinary BDLOP rows of the same width, so adding them costs commitment
+    #: components but changes neither W nor the Gaussian tables -- which is why the range
+    #: layer is a smaller change than the layout note first suggested.
+    range_rows: tuple[tuple[Poly, ...], ...] = ()
 
     @property
     def count(self) -> int:
@@ -243,7 +259,7 @@ class Keys:
             raise SetMembershipError("B_0 must have kappa rows")
         if len(self.rows) != self.count + 2 * self.depth + 1:
             raise SetMembershipError("wrong number of b rows")
-        for row in self.rows0 + self.rows:
+        for row in self.rows0 + self.rows + self.range_rows:
             if len(row) != width:
                 raise SetMembershipError("key rows must have width W")
 
@@ -253,9 +269,12 @@ def setup(
     depth: int,
     parameters: SmileParameters | None = None,
     row_count: int | None = None,
+    range_count: int = 0,
 ) -> Keys:
     sm = _p(parameters)
     rows = sm.matrix_rows if row_count is None else row_count
+    if type(range_count) is not int or range_count < 0:
+        raise SetMembershipError("range_count must be a non-negative integer")
     width = masking_width(depth, sm, rows)
     rows0 = tuple(
         tuple(ring.sample_uniform(rng, sm) for _ in range(width)) for _ in range(sm.challenge_dim)
@@ -264,7 +283,12 @@ def setup(
         tuple(ring.sample_uniform(rng, sm) for _ in range(width))
         for _ in range(rows + 2 * depth + 1)
     )
-    return Keys(rows0=rows0, rows=b_rows, depth=depth, row_count=row_count)
+    range_rows = tuple(
+        tuple(ring.sample_uniform(rng, sm) for _ in range(width)) for _ in range(range_count)
+    )
+    return Keys(
+        rows0=rows0, rows=b_rows, depth=depth, row_count=row_count, range_rows=range_rows
+    )
 
 
 @dataclass(frozen=True)
@@ -490,6 +514,7 @@ def prove(
     rng: random.Random,
     parameters: SmileParameters | None = None,
     tag_keys: "tagmod.TagKeys | None" = None,
+    range_bits: tuple[Poly, ...] = (),
 ) -> Proof:
     """Fig. 7 with rejection sampling; retries until a mask is accepted.
 
@@ -498,7 +523,7 @@ def prove(
     """
     for _attempt in range(MAX_ATTEMPTS):
         result = _prove_once(
-            keys, statement, secret, index, message, rng, parameters, tag_keys
+            keys, statement, secret, index, message, rng, parameters, tag_keys, range_bits
         )
         if result is not None:
             return result
@@ -514,6 +539,7 @@ def _prove_once(
     rng: random.Random,
     parameters: SmileParameters | None = None,
     tag_keys: "tagmod.TagKeys | None" = None,
+    range_bits: tuple[Poly, ...] = (),
 ) -> "Proof | None":
     """One attempt. Returns None when rejection sampling rejects."""
     sm = _p(parameters)
@@ -561,7 +587,25 @@ def _prove_once(
             ring.add(ring.dot(keys.rows[position - 1], randomness, sm), values[position], sm)
         )
 
+    range_count = len(keys.range_rows)
+    if len(range_bits) != range_count:
+        raise SetMembershipError(
+            f"expected {range_count} bit polynomials, got {len(range_bits)}"
+        )
+
     tx = _head(message, w, tuple(commitment), sm, ring_digest(statement, sm))
+
+    # Range commitments, one per packed bit polynomial: an ordinary BDLOP row plus its
+    # message. They go AFTER `_head`, because the head absorbs exactly
+    # `kappa + depth + rows + 1` polynomials and adding to that prefix would put the
+    # prover and verifier on different transcripts. The first version did exactly that
+    # and failed with no exception, because a mismatched transcript simply produces
+    # the wrong challenge.
+    for row, bit_poly in zip(keys.range_rows, range_bits):
+        if len(bit_poly) != sm.ring_degree:
+            raise SetMembershipError("a bit polynomial must have ring_degree coefficients")
+        commitment.append(ring.add(ring.dot(row, randomness, sm), bit_poly, sm))
+
     c_prime = _draw_ternary(tx, b"c-prime", sm)
     if not _is_unit(c_prime, sm):
         return None
@@ -616,6 +660,10 @@ def _prove_once(
     h = _add_all([g_poly] + ys, sm)
     tx.absorb(b"h", ring.encode(h, sm))
     alphas = tuple(_draw(tx, b"alpha", sm) for _ in range(depth + 1))
+    # Range challenges, drawn at the same transcript point as the ring selector's and in
+    # their own stream, because the two constraints must not share a challenge: sharing
+    # one lets a prover satisfy the sum while breaking either constraint.
+    betas = tuple(_draw(tx, b"beta", sm) for _ in range(range_count))
 
     a_values = {
         position: ring.dot(keys.rows[position - 1], mask, sm)
@@ -674,9 +722,44 @@ def _prove_once(
         (ring.mul(alphas[i + 1], ring.mul(a_values[i + 1], a_values[i + 1], sm), sm) for i in range(depth)),
         sm,
     )
-    psi = ring.add(ring.mul(alphas[0], psi_sm, sm), psi_bin, sm)
+    psi_range = _add_all(
+        (
+            ring.mul(
+                betas[j],
+                ring.mul(
+                    ring.dot(keys.range_rows[j], mask, sm),
+                    ring.sub(
+                        ring.constant(1, sm), ring.scalar(2, range_bits[j], sm), sm
+                    ),
+                    sm,
+                ),
+                sm,
+            )
+            for j in range(range_count)
+        ),
+        sm,
+    )
+    omega_range = _add_all(
+        (
+            ring.mul(
+                betas[j],
+                ring.mul(
+                    ring.dot(keys.range_rows[j], mask, sm),
+                    ring.dot(keys.range_rows[j], mask, sm),
+                    sm,
+                ),
+                sm,
+            )
+            for j in range(range_count)
+        ),
+        sm,
+    )
+
+    psi = ring.add(ring.add(ring.mul(alphas[0], psi_sm, sm), psi_bin, sm), psi_range, sm)
     omega = ring.add(
-        ring.add(ring.mul(alphas[0], omega_sm, sm), omega_bin, sm),
+        ring.add(
+            ring.add(ring.mul(alphas[0], omega_sm, sm), omega_bin, sm), omega_range, sm
+        ),
         a_values[rows + 2 * depth + 1],
         sm,
     )
@@ -730,12 +813,17 @@ def verify(
     try:
         depth = keys.depth
         if depth != statement.depth or type(proof) is not Proof:
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #1 line 805")
             return False
         rows = len(statement.matrix)
         width = masking_width(depth, sm, rows)
-        if len(proof.commitment) != sm.challenge_dim + rows + 2 * depth + 1:
+        if len(proof.commitment) != (
+            sm.challenge_dim + rows + 2 * depth + 1 + len(keys.range_rows)
+        ):
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #2 line 811")
             return False
         if len(proof.response_prime) != sm.matrix_cols or len(proof.response) != width:
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #3 line 813")
             return False
         # l2 bounds, as the paper states them: beta = s sqrt(2Wd) and
         # beta' = s' sqrt(2 ell d). The old check was l-infinity, which let the
@@ -745,19 +833,24 @@ def verify(
         limit = response_bound_infinity(width)
         for poly in proof.response:
             if any(min(value, sm.modulus - value) > limit for value in poly):
+                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #4 line 822")
                 return False
         if _l2_squared(proof.response, sm) > _response_bound(width, sm):
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #5 line 824")
             return False
         limit_prime = response_bound_infinity(sm.matrix_cols)
         for poly in proof.response_prime:
             if any(min(value, sm.modulus - value) > limit_prime for value in poly):
+                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #6 line 828")
                 return False
         if _l2_squared(proof.response_prime, sm) > _response_bound(sm.matrix_cols, sm):
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #7 line 830")
             return False
         # The line-13 argument divides by c^2 and the tag argument by c', so both
         # must be units. Without this check a non-unit challenge leaves a
         # coordinate where the constraint is vacuous (review finding, 2026-11-08).
         if not _is_unit(proof.challenge, sm) or not _is_unit(proof.challenge_prime, sm):
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #8 line 835")
             return False
 
         # Fig. 9 line 03 inverted: w = B_0 z - c t_0, so it need not be sent.
@@ -776,12 +869,13 @@ def verify(
         message, w, proof.commitment[:head_length], sm, ring_digest(statement, sm)
     )
         if _draw_ternary(tx, b"c-prime", sm) != proof.challenge_prime:
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #9 line 853")
             return False
         tx.absorb(b"z-prime", b"".join(ring.encode(poly, sm) for poly in proof.response_prime))
 
         # line 04: t_{m+i} -= (A z')_i
         slot_of = {
-            position: _paper_to_slot(position, depth, rows, sm)
+            position: _paper_to_slot(position, depth, rows, sm, len(keys.range_rows))
             for position in range(1, rows + 2 * depth + 2)
         }
         a_z = tuple(ring.dot(row, proof.response_prime, sm) for row in statement.matrix)
@@ -870,40 +964,82 @@ def verify(
         )
         tx.absorb(b"h", ring.encode(proof.h, sm))
         alphas = tuple(_draw(tx, b"alpha", sm) for _ in range(depth + 1))
+        range_count = len(keys.range_rows)
+        betas = tuple(_draw(tx, b"beta", sm) for _ in range(range_count))
+        # The bit polynomials are never sent: the check is `f^2 + c f = 0` on the range
+        # rows, which is an identity in the committed value, so a verifier needs no
+        # witness to confirm that a committed message is binary. That is why this costs
+        # no proof bytes beyond the commitment components themselves.
+        # Layout: kappa rows0, then one per position (depth + rows + 1), then the range
+        # commitments, then one per level (depth - 1), then psi last. Counting back from
+        # the end has to allow for the level commitments, which is where the first
+        # version of this was off by one.
+        range_start = sm.challenge_dim + depth + rows + 1
+        f_range = tuple(
+            ring.sub(
+                ring.dot(keys.range_rows[j], proof.response, sm),
+                ring.mul(proof.challenge, proof.commitment[range_start + j], sm),
+                sm,
+            )
+            for j in range(range_count)
+        )
         tx.absorb(b"t-psi", ring.encode(proof.commitment[-1], sm))
         tx.absorb(b"omega", ring.encode(proof.omega, sm))
         if _draw_ternary(tx, b"c", sm) != proof.challenge:
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #10 line 969")
             return False
+
+        range_sum = _add_all(
+            (
+                ring.mul(
+                    betas[j],
+                    ring.add(
+                        ring.mul(f_range[j], f_range[j], sm),
+                        ring.mul(proof.challenge, f_range[j], sm),
+                        sm,
+                    ),
+                    sm,
+                )
+                for j in range(range_count)
+            ),
+            sm,
+        )
 
         lhs = ring.add(
             ring.add(
-                ring.mul(alphas[0], inner, sm),
-                _add_all(
-                    (
-                        ring.mul(
-                            alphas[i + 1],
-                            ring.add(
-                                ring.mul(f[i + 1], f[i + 1], sm),
-                                ring.mul(proof.challenge, f[i + 1], sm),
+                ring.add(
+                    ring.mul(alphas[0], inner, sm),
+                    _add_all(
+                        (
+                            ring.mul(
+                                alphas[i + 1],
+                                ring.add(
+                                    ring.mul(f[i + 1], f[i + 1], sm),
+                                    ring.mul(proof.challenge, f[i + 1], sm),
+                                    sm,
+                                ),
                                 sm,
-                            ),
-                            sm,
-                        )
-                        for i in range(depth)
+                            )
+                            for i in range(depth)
+                        ),
+                        sm,
                     ),
                     sm,
                 ),
+                range_sum,
                 sm,
             ),
             f[rows + 2 * depth + 1],
             sm,
         )
         if lhs != proof.omega:
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #11 line 1015")
             return False
 
         # lines 14-15
         prefix = sm.ring_degree // SLOTS
         if any(proof.h[i] != 0 for i in range(prefix)):
+            import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #12 line 1020")
             return False
 
         if tag_keys is not None:
@@ -916,6 +1052,7 @@ def verify(
         return proof.tag_proof is None
         if tag_keys is not None:
             if proof.tag_proof is None:
+                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #13 line 1032")
                 return False
             if not tagmod.verify_tag(
                 tag_keys,
@@ -925,7 +1062,9 @@ def verify(
                 _tag_context(proof.challenge_prime, proof.commitment[0], sm),
                 sm,
             ):
+                import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #14 line 1041")
                 return False
         return True
     except (TypeError, ValueError, KeyError, IndexError):
+        import os; os.environ.get("RADIX_DEBUG_VERIFY") and print("DBG return #15 line 1044")
         return False

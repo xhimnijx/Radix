@@ -29,7 +29,8 @@ def encode_proof(proof: S.Proof) -> bytes:
 
 
 def decode_proof(
-    data: bytes, *, depth: int, rows: int, parameters: SmileParameters | None = None
+    data: bytes, *, depth: int, rows: int, parameters: SmileParameters | None = None,
+    range_count: int = 0,
 ) -> S.Proof:
     """Inverse of `Proof.encode`, given the shape the statement implies.
 
@@ -42,7 +43,7 @@ def decode_proof(
     # kappa + rows + 2m + 1. The previous formula was kappa + lambda + depth + 1,
     # which is 23 for the tagged parameters (rows = 8) and wrong for every other
     # shape -- it happened to work only because the harness only used tagged ones.
-    commitment_count = p.challenge_dim + rows + 2 * depth + 1
+    commitment_count = p.challenge_dim + rows + 2 * depth + 1 + range_count
     width = S.masking_width(depth, p, rows)
     # z is two bytes per coefficient, everything else four.
     expected = (
