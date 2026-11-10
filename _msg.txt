@@ -1,0 +1,17 @@
+chore: keep the fast suite fast, and bring the test counts current
+
+The full suite now passes 622 tests against 1 known xfail, but the FAST suite had grown from 11
+minutes to 38 because three files that generate real proofs were not marked slow. Every test in
+test_candidate_b_relations, test_candidate_b_carry_proof and test_candidate_b_range_proof costs
+one to five minutes, so `-m "not slow"` was running all of them.
+
+Marked slow at module level. Nothing is skipped: they run under `-m slow` exactly as before, and
+the full count is unchanged at 622. The fast suite is back to 6.5 minutes at 606 passed.
+
+That distinction matters for this project specifically: the fast suite is what gets run before
+every commit, and a 38-minute gate is a gate people route around. A test suite that is too slow
+to run is a test suite that stops being run, which is the same failure as the Gaussian bound that
+went stale because the Rust suite was not being run.
+
+Counts updated wherever a current figure is quoted: README, CONTRIBUTING, AUDIT-PACKET,
+REVIEW-REQUEST, the paper, ROADMAP and STATUS.

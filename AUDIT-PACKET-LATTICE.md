@@ -116,7 +116,7 @@ Python artifact, not an algorithmic statement; the NTT is `O(d log d)`.
 python -m pytest tests/test_candidate_b_setmembership.py -q   # ~84 s
 python -m pytest tests/test_candidate_b_ring_signature.py -q  # ~80 s
 python -m pytest tests/test_candidate_b_spend.py -q            # ~41 s
-python -m pytest -q                                            # 603 passed, ~11 min
+python -m pytest -q                                            # 606 passed, ~11 min
 ```
 
 The slow tests are slow because they run the real protocol: a 128 x 1024 matrix

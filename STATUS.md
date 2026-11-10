@@ -392,7 +392,7 @@ own docstring rather than letting its existence imply more.
 | 3. One-time addressing | **derivation works** (7 tests); KEM and wallet integration outstanding |
 | 4. Network hardening | **complete** -- auth, multi-hop, slow start, checkpoints |
 | 5. Paper | draft, claims and limitations fixed, prose TODO |
-| 6. Green | 603 passed, 1 xfail, 70 Rust, and a cross-language range check |
+| 6. Green | 606 passed, 1 xfail, 70 Rust, and a cross-language range check |
 
 **The honest bottleneck.** Items 1 and 2 both need the proof statement to grow, and that
 is one integrated change: commitment arity, `masking_width`, the beta challenges, the psi
@@ -405,3 +405,43 @@ starts from it.
 C1's extraction argument for `[A | I_k]` and the alpha-slot soundness accounting C2
 supplied. A range proof with an unwritten soundness argument is not shippable. Building it
 is not blocked; shipping it is.
+
+
+## Where the amount path actually stands (2026-11-10, after the ninth pass)
+
+Two reviewers answered the encoding question and agreed it is **(a), coefficient-domain**. The
+slot-constant alpha-slot range layer built earlier is the wrong subspace for amounts: it proves
+`b*b = b` per CRT slot, which is a different statement from "each coefficient is a digit". Both
+agree it should be retired from the amount path rather than extended, and both agree the reusable
+half is `LinearRelation`, the coefficient-domain carry identity and the base-4 digit encoding.
+
+### What is proven sound and cross-verified
+
+- `LinearRelation`: a linear relation among committed messages, in the proof, Python and Rust.
+- The coefficient-domain carry identity `a + b + f(X-4) = c`, with a test that a perturbation
+  vanishing at `X = 4` is still rejected.
+- `m`-input carry boundedness by bit decomposition, agreed by both implementations.
+- A 2^29 supply cap enforced as a consensus rule, with 7.5x headroom under `q/2`.
+
+### What is not
+
+The **bridge**. Both routes the reviewers proposed converge on the same missing piece:
+
+- C1's coefficient-wise route needs a per-coefficient `d in {0,1,2,3}` test. That is a quartic
+  membership condition, and the alpha machinery expresses only quadratics.
+- C2's trace-pairing route needs the committed digit polynomial linked to its paired value
+  `w4*m`. The trace is not multiplicative, so the scalar form of that link is unsound -- measured,
+  not merely derived, and recorded in `REVIEW-FINDINGS.md`.
+
+C2 states why in one sentence: the bridge is `Z_q`-linear but not `R`-linear, and the only linear
+maps this proof system applies to a committed message are multiplication by a public ring element
+and pairing with a public vector, both `R`-linear. That is a property of the proof system, not of
+the encoding.
+
+### The honest consequence
+
+Amounts are **not hidden end to end yet**. The range constraint exists inside the proof and is
+cross-verified, but it proves the slot-constant statement, which both reviewers have now said is
+not the amount statement. The mainnet-ready claim in `docs/PAPER.md` section 8 says exactly this.
+Closing it means either a second proof subsystem (`[25]`'s vector layer, in both languages) or
+resolving the `R`-linearity bridge -- and neither is a device I should invent.

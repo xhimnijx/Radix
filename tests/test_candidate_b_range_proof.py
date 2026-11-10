@@ -24,6 +24,10 @@ import pytest
 from radix_core.candidate_b.lattice import digits, ring, setmembership as S, subring
 from radix_core.candidate_b.lattice.params import SMILE
 
+# Every test here produces a real proof, which costs one to five minutes each. Marked
+# slow so the fast suite stays usable: they still run under -m slow.
+pytestmark = pytest.mark.slow
+
 DEPTH = 2
 ROWS = 4
 KAPPA = SMILE.challenge_dim

@@ -178,6 +178,16 @@ nothing tied it to the data. It now derives the bound from the table's own sigma
 
 Stated plainly, because a paper that hides these is not credible.
 
+- **The amount range is proven in the wrong subspace, and two reviewers have now said so.**
+  The range constraint in this implementation proves that committed messages are constant and
+  binary *per CRT slot*. The paper's `ǎ` is a coefficient-domain polynomial whose coefficients
+  are the digits, and the balance identity is coefficient-domain. Both are sound; they do not
+  compose. Retiring the slot-constant layer from the amount path is agreed by both reviewers.
+  Closing it needs either a coefficient-wise range proof (a quartic membership condition, which
+  the quadratic α machinery does not express) or a link from the committed digit polynomial to
+  its paired value, which is `Z_q`-linear but not `R`-linear and therefore outside what this
+  proof system can apply to a committed message. That is a property of the proof system, not of
+  the encoding, and it is the honest boundary of this study.
 - **The balance relation is not provable yet, and the reason is structural.** The
   binaryness check requires messages constant in each CRT slot; the base-4 carrying identity
   requires multiplication by `(X - 4)` in the coefficient domain. Multiplying a slot-constant
@@ -215,7 +225,7 @@ Stated plainly, because a paper that hides these is not credible.
 ## 9. Reproducibility
 
 ```powershell
-python -m pytest -q -m "not slow"    # 603 passed, 1 known xfail
+python -m pytest -q -m "not slow"    # 606 passed, 1 known xfail
 cd proof_rust && cargo test          # 74 passed
 python experiments/verify_rust_proof.py
 python experiments/estimate_sis.py --check

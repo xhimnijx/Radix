@@ -86,7 +86,7 @@ The strongest claim in this repository:
 Both directions are tested and the fixtures are committed:
 
 ```powershell
-python -m pytest -q -m "not slow"                 # 603 passed, 1 xfailed (~11 min)
+python -m pytest -q -m "not slow"                 # 606 passed, 1 xfailed (~11 min)
 python -m pytest -q tests/test_testnet_end_to_end.py   # real proofs (~6 min)
 cd proof_rust && cargo test                       # 70 passed
 python experiments/verify_rust_proof.py           # Rust proof -> Python verifier

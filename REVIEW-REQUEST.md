@@ -27,7 +27,7 @@ Full history: `REVIEW-FINDINGS.md`. This page is only what is open.
 - **23,808 bytes** for a carry proof with three bit planes and a carry message.
 - Cross-language: `experiments/cross_language_range.py` and `cross_language_carry.py` both
   report AGREE. Rust **refuses a proof whose carry does not match its bits**.
-- Last full fast-suite run: **603 passed, 1 known xfail**; Rust **70 passed**. Thirteen tests
+- Last full fast-suite run: **606 passed, 1 known xfail**; Rust **70 passed**. Thirteen tests
   were added since and pass individually but have not been re-run as a whole.
 
 ---
@@ -109,7 +109,7 @@ machinery. If the answer is (b), it needs an argument I do not have.
 ## Reproducing
 
 ```powershell
-python -m pytest -q -m "not slow"          # 603 passed, 1 known xfail
+python -m pytest -q -m "not slow"          # 606 passed, 1 known xfail
 cd proof_rust && cargo test                # 70 passed
 python experiments/cross_language_range.py # AGREE
 python experiments/cross_language_carry.py # AGREE
